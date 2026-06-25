@@ -312,8 +312,8 @@ export function initDb() {
       0, // not busy
       1, // active
       futureDate,
-      950.0,
-      760.0,
+      315.0,
+      252.0,
       'Mentors',
       7,
       'English, Hindi, Gujarati',
@@ -331,6 +331,17 @@ export function initDb() {
     insertReview.run(1, 'Neha', 4, 'Very polite and knowledgeable astrologer.', now);
     insertReview.run(2, 'Rohit', 5, 'Super motivational session. Cleared my job selection dilemma.', now);
     insertReview.run(3, 'Sanya', 5, 'Loved the tarot reading, so on point!', now);
+  }
+}
+
+export function logWalletTransaction(userId: number, type: 'recharge' | 'consultation' | 'refund', amount: number, description: string) {
+  try {
+    db.prepare(`
+      INSERT INTO wallet_transactions (user_id, type, amount, description, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(userId, type, amount, description, new Date().toISOString());
+  } catch (err) {
+    console.error('Failed to log wallet transaction:', err);
   }
 }
 

@@ -4,6 +4,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script>
+      (function() {
+        try {
+          if (typeof window !== 'undefined' && window.fetch) {
+            var currentFetch = window.fetch;
+            var defineOn = function(obj) {
+              try {
+                Object.defineProperty(obj, 'fetch', {
+                  configurable: true,
+                  enumerable: true,
+                  get: function() {
+                    return currentFetch;
+                  },
+                  set: function(value) {
+                    console.warn('Intercepted and processed window.fetch override attempt.');
+                    currentFetch = value;
+                  }
+                });
+                return true;
+              } catch (err) {
+                return false;
+              }
+            };
+            var success = defineOn(window);
+            if (!success && typeof Window !== 'undefined' && Window.prototype) {
+              defineOn(Window.prototype);
+            }
+          }
+        } catch (e) {
+          console.error('Early fetch safeguard failed:', e);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
