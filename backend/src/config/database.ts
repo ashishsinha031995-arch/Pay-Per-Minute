@@ -136,7 +136,7 @@ export function initDb() {
     );
   `);
 
-  // Migrate existing users table if they are missing newer columns
+  // Migrate existing tables if they are missing newer columns
   try { db.exec("ALTER TABLE users ADD COLUMN password TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN email TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;"); } catch(_) {}
@@ -146,7 +146,6 @@ export function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN lifetime_recharge REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;"); } catch(_) {}
 
-  // Migrate existing consultants table for newer columns
   try { db.exec("ALTER TABLE consultants ADD COLUMN email TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN category TEXT DEFAULT 'Consultants';"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN experience INTEGER DEFAULT 5;"); } catch(_) {}
@@ -183,7 +182,6 @@ export function initDb() {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    // Add some initial mock consultants for the demo representing all 6 categories
     const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     
     insertConsultant.run(
@@ -324,7 +322,6 @@ export function initDb() {
       4.9
     );
 
-    // Seed default reviews
     const insertReview = db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
     insertReview.run(1, 'Aman', 5, 'Highly accurate predictions! Saved my relationship.', now);

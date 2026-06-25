@@ -1,147 +1,33 @@
-import { Router } from 'express';
-import { db } from '../db.js';
-import { sendEmail } from '../email.js';
-
-const router = Router();
+import { Request, Response } from 'express';
+import { db, logWalletTransaction } from '../config/database.js';
 
 // Get All Active Consultants (Public Listings page)
-router.get('/', (req, res) => {
+export const getActiveConsultants = (req: Request, res: Response) => {
   try {
     const consultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category FROM consultants WHERE is_active = 1').all();
     res.json(consultants);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
+};
 
 // Get Public Consultant Profile by Username
-router.get('/profile/:username', (req, res) => {
+export const getConsultantProfileByUsername = (req: Request, res: Response) => {
   try {
     const { username } = req.params;
     const consultant = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, experience, languages, specializations, average_rating FROM consultants WHERE username = ? AND is_active = 1').get(username);
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found or inactive' });
     }
-    // Fetch reviews
     const reviews = db.prepare('SELECT id, user_name, rating, text, created_at FROM reviews WHERE consultant_id = ? ORDER BY id DESC').all((consultant as any).id);
     res.json({ consultant, reviews });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// Login Consultant
-router.post('/login', (req, res) => {
-  try {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username/Email and password required' });
-    }
-    const loginCredential = username.trim().toLowerCase();
-    const consultant = db.prepare('SELECT * FROM consultants WHERE (LOWER(username) = ? OR LOWER(email) = ?) AND password = ?').get(loginCredential, loginCredential, password) as any;
-    if (!consultant) {
-      return res.status(401).json({ error: 'Invalid username/email or password' });
-    }
-    if (consultant.is_active === 0) {
-      return res.status(403).json({ error: 'Your account has been deactivated by Super Admin.' });
-    }
-    res.json({ success: true, consultant });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Purchase Plan & Generate Random Consultant Credentials (Consultant Registration)
-router.post('/register', (req, res) => {
-  try {
-    const { plan_id, display_name, initial_price_per_minute, category, email } = req.body;
-    if (!plan_id || !display_name) {
-      return res.status(400).json({ error: 'Plan and Display Name are required' });
-    }
-    if (!email) {
-      return res.status(400).json({ error: 'Email address is required so login credentials can be sent to you.' });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
-    if (existingConsultantEmail) {
-      return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another.' });
-    }
-
-    // Fetch plan details
-    const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
-    if (!plan) {
-      return res.status(404).json({ error: 'Subscription plan not found' });
-    }
-
-    // Generate random Username & Password
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const username = `expert_${display_name.toLowerCase().replace(/[^a-z0-9]/g, '')}_${randomSuffix}`;
-    const password = Math.random().toString(36).slice(-8);
-
-    // Calculate plan expiry
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
-
-    // Insert Consultant
-    const defaultPhoto = `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=300`;
-    const price = initial_price_per_minute ? parseFloat(initial_price_per_minute) : 15.0;
-    const catValue = category || 'Consultants';
-
-    const result = db.prepare(`
-      INSERT INTO consultants (
-        username, email, password, display_name, photo_url, bio, price_per_minute, 
-        is_online, is_busy, is_active, plan_expiry, category
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      username,
-      cleanEmail,
-      password,
-      display_name,
-      defaultPhoto,
-      `Hello! I am ${display_name}, a seasoned professional. Let's start mapping your growth paths together.`,
-      price,
-      1, // online
-      0, // not busy
-      1, // active
-      expiryDate.toISOString(),
-      catValue
-    );
-
-    // Trigger Simulated Email delivery
-    const subject = `Welcome to Consulting Portal! Your Consultant Login Credentials`;
-    const body = `Dear ${display_name},
-
-Thank you for registering on our platform using the ${plan.name}!
-
-Your expert account has been successfully set up. Here are your credentials to log in:
-• Username: ${username} (or you can use your email: ${cleanEmail})
-• Password: ${password}
-
-Please keep these credentials safe and change your password in your settings once logged in.
-
-Best wishes,
-Support Team`;
-    
-    sendEmail(cleanEmail, subject, body);
-
-    res.json({
-      success: true,
-      username,
-      password,
-      display_name,
-      email: cleanEmail,
-      plan_name: plan.name,
-      plan_expiry: expiryDate.toLocaleDateString(),
-      consultant_id: result.lastInsertRowid,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+};
 
 // Update Consultant Status (Online/Offline, Busy Toggles)
-router.put('/:id/status', (req, res) => {
+export const updateConsultantStatus = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { is_online, is_busy } = req.body;
@@ -158,10 +44,10 @@ router.put('/:id/status', (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
+};
 
-// Update Consultant Profile Settings (Photo, Bio, Price Per Minute)
-router.put('/:id/profile', (req, res) => {
+// Update Consultant Profile Settings
+export const updateConsultantProfile = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { photo_url, bio, price_per_minute, display_name, email, password } = req.body;
@@ -193,10 +79,10 @@ router.put('/:id/profile', (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
+};
 
 // Get Consultant wallet stats and session history
-router.get('/:id/stats', (req, res) => {
+export const getConsultantStats = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const consultant = db.prepare('SELECT wallet_today, wallet_monthly, wallet_total, wallet_withdrawable, plan_expiry FROM consultants WHERE id = ?').get(id);
@@ -212,10 +98,10 @@ router.get('/:id/stats', (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
+};
 
-// Add Review / View Reviews for Consultant
-router.get('/:id/reviews', (req, res) => {
+// Get Reviews for Consultant
+export const getConsultantReviews = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const reviews = db.prepare('SELECT id, user_name, rating, text, created_at FROM reviews WHERE consultant_id = ? ORDER BY id DESC').all(id);
@@ -223,9 +109,10 @@ router.get('/:id/reviews', (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
+};
 
-router.post('/:id/reviews', (req, res) => {
+// Add Review for Consultant
+export const addConsultantReview = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { user_name, rating, text } = req.body;
@@ -237,7 +124,6 @@ router.post('/:id/reviews', (req, res) => {
     const now = new Date().toISOString();
     db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at) VALUES (?, ?, ?, ?, ?)').run(id, user_name, rating, text || '', now);
 
-    // Recalculate average rating for the consultant
     const ratingRow = db.prepare('SELECT AVG(rating) as avgRating FROM reviews WHERE consultant_id = ?').get(id) as { avgRating: number | null };
     if (ratingRow && ratingRow.avgRating !== null) {
       db.prepare('UPDATE consultants SET average_rating = ? WHERE id = ?').run(parseFloat(ratingRow.avgRating.toFixed(1)), id);
@@ -247,10 +133,10 @@ router.post('/:id/reviews', (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
+};
 
 // Block a User
-router.post('/block', (req, res) => {
+export const blockUserByConsultant = (req: Request, res: Response) => {
   try {
     const { consultant_id, user_name } = req.body;
     if (!consultant_id || !user_name) {
@@ -268,10 +154,10 @@ router.post('/block', (req, res) => {
     console.error('Error blocking user:', err);
     res.status(500).json({ error: err.message });
   }
-});
+};
 
 // Unblock a User
-router.post('/unblock', (req, res) => {
+export const unblockUserByConsultant = (req: Request, res: Response) => {
   try {
     const { consultant_id, user_name } = req.body;
     if (!consultant_id || !user_name) {
@@ -286,10 +172,10 @@ router.post('/unblock', (req, res) => {
     console.error('Error unblocking user:', err);
     res.status(500).json({ error: err.message });
   }
-});
+};
 
 // Get Blocked Users list for a consultant
-router.get('/:id/blocked', (req, res) => {
+export const getBlockedUsersByConsultant = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const blocked = db.prepare('SELECT id, user_name, created_at FROM blocked_users WHERE consultant_id = ? ORDER BY id DESC').all(id);
@@ -298,6 +184,121 @@ router.get('/:id/blocked', (req, res) => {
     console.error('Error fetching blocked list:', err);
     res.status(500).json({ error: err.message });
   }
-});
+};
 
-export default router;
+// Get User Profile Info (Sync)
+export const getUserProfileInfo = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ success: true, user });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// User Update Profile
+export const updateUserProfile = (req: Request, res: Response) => {
+  try {
+    const { id, display_name, photo_url, dob, gender } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    db.prepare(`
+      UPDATE users 
+      SET display_name = ?, photo_url = ?, dob = ?, gender = ?
+      WHERE id = ?
+    `).run(display_name.trim(), photo_url || null, dob || null, gender || null, id);
+
+    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    res.json({ success: true, user: updatedUser });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// User Wallet Recharge
+export const rechargeUserWallet = (req: Request, res: Response) => {
+  try {
+    const { id, amount } = req.body;
+    if (!id || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid ID or recharge amount' });
+    }
+    const rechargeVal = parseFloat(amount);
+
+    db.prepare(`
+      UPDATE users 
+      SET wallet_balance = wallet_balance + ?, 
+          lifetime_recharge = lifetime_recharge + ? 
+      WHERE id = ?
+    `).run(rechargeVal, rechargeVal, id);
+
+    logWalletTransaction(
+      Number(id),
+      'recharge',
+      rechargeVal,
+      `Wallet Recharge Page (Add ₹${rechargeVal.toFixed(2)})`
+    );
+
+    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    res.json({ success: true, user: updatedUser });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get User Wallet Transactions History
+export const getUserWalletTransactions = (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const transactions = db.prepare(`
+      SELECT * FROM wallet_transactions 
+      WHERE user_id = ? 
+      ORDER BY id DESC
+    `).all(userId);
+    res.json({ success: true, transactions });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get User Past Consultation History
+export const getUserPastSessions = (req: Request, res: Response) => {
+  try {
+    const { user_name, ids } = req.query;
+    let sessionsList: any[] = [];
+
+    if (user_name) {
+      sessionsList = db.prepare(`
+        SELECT s.*, c.display_name as consultant_name 
+        FROM sessions s
+        JOIN consultants c ON s.consultant_id = c.id
+        WHERE LOWER(s.user_name) = LOWER(?)
+        ORDER BY s.id DESC
+      `).all(String(user_name).trim());
+    } else if (ids) {
+      const idArr = String(ids).split(',').map(x => x.trim()).filter(Boolean);
+      if (idArr.length > 0) {
+        const placeholders = idArr.map(() => '?').join(',');
+        sessionsList = db.prepare(`
+          SELECT s.*, c.display_name as consultant_name 
+          FROM sessions s
+          JOIN consultants c ON s.consultant_id = c.id
+          WHERE s.id IN (${placeholders})
+          ORDER BY s.id DESC
+        `).all(...idArr);
+      }
+    } else {
+      return res.json([]);
+    }
+
+    res.json(sessionsList);
+  } catch (err: any) {
+    console.error('Error fetching user past sessions:', err);
+    res.status(500).json({ error: err.message });
+  }
+};

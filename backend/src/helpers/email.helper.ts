@@ -1,4 +1,4 @@
-import { db } from './db.js';
+import { db } from '../config/database.js';
 
 export function sendEmail(toEmail: string, subject: string, body: string) {
   try {
