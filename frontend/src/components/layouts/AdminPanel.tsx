@@ -10,6 +10,7 @@ import {
   DashboardGraphs, MarketingModulePanel, CmsModulePanel, 
   SupportTicketsPanel, AuditLogsPanel, RoleManagementPanel, SettingsPanel 
 } from './AdminSubSections';
+import { downloadInvoice } from '../../utils/invoiceHelper';
 
 export function AdminPanel() {
   const [stats, setStats] = useState<AdminStats>({
@@ -50,6 +51,21 @@ export function AdminPanel() {
   const [planDuration, setPlanDuration] = useState('');
   const [planDesc, setPlanDesc] = useState('');
 
+  // User Editing Form States
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [usrDisplayName, setUsrDisplayName] = useState('');
+  const [usrEmail, setUsrEmail] = useState('');
+  const [usrPhotoUrl, setUsrPhotoUrl] = useState('');
+  const [usrDob, setUsrDob] = useState('');
+  const [usrGender, setUsrGender] = useState('Male');
+  const [usrWalletBalance, setUsrWalletBalance] = useState('0');
+  const [usrCategory, setUsrCategory] = useState('General');
+  const [usrLockedConsultantId, setUsrLockedConsultantId] = useState('');
+  const [usrAdminAllowOthers, setUsrAdminAllowOthers] = useState(0);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
   // Global settings input states
   const [commissionRateInput, setCommissionRateInput] = useState<string>('20');
   
@@ -69,10 +85,37 @@ export function AdminPanel() {
   const [viewingPastSessionMessages, setViewingPastSessionMessages] = useState<any[] | null>(null);
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
 
+  // Search & Filter state for Consultants ledger
+  const [searchCons, setSearchCons] = useState('');
+  const [filterConsCat, setFilterConsCat] = useState('all');
+  const [filterConsStatus, setFilterConsStatus] = useState('all');
+  const [filterConsRate, setFilterConsRate] = useState('all');
+
+  // Search & Filter state for Users ledger
+  const [searchUsr, setSearchUsr] = useState('');
+  const [filterUsrStatus, setFilterUsrStatus] = useState('all');
+  const [filterUsrSpend, setFilterUsrSpend] = useState('all');
+  const [filterUsrGender, setFilterUsrGender] = useState('all');
+
+  // Search & Filter state for Sessions ledger
+  const [searchSess, setSearchSess] = useState('');
+  const [filterSessStatus, setFilterSessStatus] = useState('all');
+  const [filterSessRate, setFilterSessRate] = useState('all');
+  const [filterSessDur, setFilterSessDur] = useState('all');
+
+  // Search & Filter state for Payments ledger
+  const [searchPay, setSearchPay] = useState('');
+  const [filterPayStatus, setFilterPayStatus] = useState('all');
+  const [filterPayAmt, setFilterPayAmt] = useState('all');
+  const [filterPayGateway, setFilterPayGateway] = useState('all');
+
+  // State to track manual refresh spinner animation
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // Load backend datasets
-  const loadAdminData = async () => {
+  const loadAdminData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
 
       const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes] = await Promise.all([
@@ -115,6 +158,21 @@ export function AdminPanel() {
   useEffect(() => {
     loadAdminData();
   }, []);
+
+  // Real-time background polling (updates Super Admin Panel in real-time)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadAdminData(true); // silent refresh (doesn't trigger full screen spinner)
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Manual ledger refresh function
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await loadAdminData(true);
+    setTimeout(() => setIsRefreshing(false), 800);
+  };
 
   // Update Global Commission Setting
   const handleUpdateCommission = async (e: React.FormEvent) => {
@@ -276,6 +334,128 @@ export function AdminPanel() {
     }
   };
 
+  const handleOpenEditUser = (user: any) => {
+    setEditingUser(user);
+    setUsrDisplayName(user.display_name || '');
+    setUsrEmail(user.email || '');
+    setUsrPhotoUrl(user.photo_url || '');
+    
+    let formattedDob = '';
+    if (user.dob) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(user.dob)) {
+        formattedDob = user.dob;
+      } else {
+        try {
+          const d = new Date(user.dob);
+          if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            formattedDob = `${year}-${month}-${day}`;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    setUsrDob(formattedDob);
+    setUsrGender(user.gender || 'Male');
+    setUsrWalletBalance(String(user.wallet_balance || 0));
+    setUsrCategory(user.category || 'General');
+    setUsrLockedConsultantId(user.locked_consultant_id ? String(user.locked_consultant_id) : '');
+    setUsrAdminAllowOthers(user.admin_allow_others ? 1 : 0);
+    setShowUserModal(true);
+  };
+
+  const handleUserPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size is too big. Kripya 5MB se choti image upload karein.');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        try {
+          const res = await fetch('/api/user/upload-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64String })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
+          
+          setUsrPhotoUrl(data.photo_url);
+          setSuccessMsg('Photo successfully uploaded!');
+          setTimeout(() => setSuccessMsg(null), 3000);
+        } catch (uploadErr: any) {
+          setError(uploadErr.message);
+        } finally {
+          setUploadingPhoto(false);
+        }
+      };
+      reader.onerror = () => {
+        setError('Error reading file.');
+        setUploadingPhoto(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setError(err.message);
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleSaveUserEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    if (!usrDisplayName.trim()) {
+      setError('Display Name is required.');
+      return;
+    }
+
+    try {
+      setError(null);
+      const res = await fetch(`/api/admin/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          display_name: usrDisplayName,
+          email: usrEmail,
+          photo_url: usrPhotoUrl,
+          dob: usrDob || null,
+          gender: usrGender,
+          wallet_balance: parseFloat(usrWalletBalance) || 0,
+          category: usrCategory,
+          locked_consultant_id: usrLockedConsultantId || null,
+          admin_allow_others: usrAdminAllowOthers
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save user changes');
+
+      setSuccessMsg('User profile updated successfully in real-time!');
+      setShowUserModal(false);
+      setEditingUser(null);
+      
+      // Reload admin data immediately for real-time reflection
+      loadAdminData();
+      
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   // Broadcaster tool simulation
   const handleBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,6 +465,188 @@ export function AdminPanel() {
     setBroadcastMessage('');
     setTimeout(() => setSuccessMsg(null), 4000);
   };
+
+  // --- Consultants Filtering & Search ---
+  const filteredConsultants = consultants.filter(c => {
+    const sTerm = searchCons.toLowerCase().trim();
+    const nameMatch = c.display_name.toLowerCase().includes(sTerm);
+    const userMatch = c.username.toLowerCase().includes(sTerm);
+    const emailMatch = (c.email || '').toLowerCase().includes(sTerm);
+    const idMatch = String(c.id).toLowerCase().includes(sTerm);
+    if (sTerm && !nameMatch && !userMatch && !emailMatch && !idMatch) return false;
+
+    if (filterConsCat !== 'all' && (c as any).category !== filterConsCat) return false;
+
+    if (filterConsStatus !== 'all') {
+      const activeVal = filterConsStatus === 'active' ? 1 : 0;
+      if (c.is_active !== activeVal) return false;
+    }
+
+    if (filterConsRate !== 'all') {
+      const r = c.price_per_minute;
+      if (filterConsRate === 'budget' && r > 20) return false;
+      if (filterConsRate === 'medium' && (r <= 20 || r > 50)) return false;
+      if (filterConsRate === 'premium' && r <= 50) return false;
+    }
+
+    return true;
+  });
+
+  // --- Users Filtering & Search ---
+  const filteredUsers = adminUsers.filter(u => {
+    const sTerm = searchUsr.toLowerCase().trim();
+    const nameMatch = u.display_name.toLowerCase().includes(sTerm);
+    const userMatch = u.username.toLowerCase().includes(sTerm);
+    const idMatch = String(u.id).toLowerCase().includes(sTerm);
+    if (sTerm && !nameMatch && !userMatch && !idMatch) return false;
+
+    if (filterUsrStatus !== 'all') {
+      const blockedVal = filterUsrStatus === 'blocked' ? 1 : 0;
+      if (u.is_blocked !== blockedVal) return false;
+    }
+
+    if (filterUsrSpend !== 'all') {
+      const sp = parseFloat(u.lifetime_recharge || 0);
+      if (filterUsrSpend === 'low' && sp > 500) return false;
+      if (filterUsrSpend === 'mid' && (sp <= 500 || sp > 2000)) return false;
+      if (filterUsrSpend === 'high' && sp <= 2000) return false;
+    }
+
+    if (filterUsrGender !== 'all' && (u.gender || '').toLowerCase() !== filterUsrGender.toLowerCase()) return false;
+
+    return true;
+  });
+
+  // --- Sessions Filtering & Search ---
+  const filteredSessions = sessions.filter(s => {
+    const sTerm = searchSess.toLowerCase().trim();
+    const idMatch = String(s.id).toLowerCase().includes(sTerm);
+    const userMatch = s.user_name.toLowerCase().includes(sTerm);
+    const consMatch = ((s as any).consultant_name || '').toLowerCase().includes(sTerm);
+    const userIdMatch = s.user_id ? String(s.user_id).toLowerCase().includes(sTerm) : false;
+    const consIdMatch = s.consultant_id ? String(s.consultant_id).toLowerCase().includes(sTerm) : false;
+    if (sTerm && !idMatch && !userMatch && !consMatch && !userIdMatch && !consIdMatch) return false;
+
+    if (filterSessStatus !== 'all' && s.status !== filterSessStatus) return false;
+
+    if (filterSessRate !== 'all') {
+      const r = s.commission_rate;
+      if (filterSessRate === '15' && r !== 15) return false;
+      if (filterSessRate === '20' && r !== 20) return false;
+      if (filterSessRate === '25' && r !== 25) return false;
+    }
+
+    if (filterSessDur !== 'all') {
+      const d = s.duration_minutes;
+      if (filterSessDur === 'short' && d >= 5) return false;
+      if (filterSessDur === 'medium' && (d < 5 || d > 15)) return false;
+      if (filterSessDur === 'long' && d <= 15) return false;
+    }
+
+    return true;
+  });
+
+  // --- Dynamic Payments Ledger Data ---
+  const getDynamicPaymentLogs = () => {
+    const baseLogs = [
+      { id: 'order_K8dJws92', user_id: 10001, user_name: 'Aman Kumar', amount: 500, gateway: 'Razorpay', created_at: '2026-06-25 00:05', status: 'Captured' },
+      { id: 'order_G3vKw812', user_id: 10002, user_name: 'Sanya Mehta', amount: 1000, gateway: 'Razorpay', created_at: '2026-06-24 18:30', status: 'Failed' },
+      { id: 'order_B3iLw294', user_id: 10003, user_name: 'Rahul Sharma', amount: 250, gateway: 'Razorpay', created_at: '2026-06-23 12:15', status: 'Captured' },
+    ];
+    
+    adminUsers.forEach((u, idx) => {
+      const recharge = parseFloat(u.lifetime_recharge || 0);
+      if (recharge > 0) {
+        baseLogs.push({
+          id: `order_user_${u.id}_${idx}`,
+          user_id: u.id,
+          user_name: u.display_name,
+          amount: recharge,
+          gateway: 'Razorpay',
+          created_at: new Date(u.created_at || Date.now()).toISOString().replace('T', ' ').slice(0, 16),
+          status: 'Captured'
+        });
+      }
+    });
+
+    return baseLogs;
+  };
+
+  const paymentLogs = getDynamicPaymentLogs();
+
+  const filteredPayments = paymentLogs.filter(p => {
+    const sTerm = searchPay.toLowerCase().trim();
+    const idMatch = p.id.toLowerCase().includes(sTerm);
+    const userMatch = p.user_name.toLowerCase().includes(sTerm);
+    const userIdMatch = (p as any).user_id ? String((p as any).user_id).toLowerCase().includes(sTerm) : false;
+    if (sTerm && !idMatch && !userMatch && !userIdMatch) return false;
+
+    if (filterPayStatus !== 'all' && p.status.toLowerCase() !== filterPayStatus.toLowerCase()) return false;
+
+    if (filterPayAmt !== 'all') {
+      const amt = p.amount;
+      if (filterPayAmt === 'budget' && amt >= 500) return false;
+      if (filterPayAmt === 'standard' && (amt < 500 || amt > 1000)) return false;
+      if (filterPayAmt === 'high' && amt <= 1000) return false;
+    }
+
+    if (filterPayGateway !== 'all' && p.gateway.toLowerCase() !== filterPayGateway.toLowerCase()) return false;
+
+    return true;
+  });
+
+  // --- Today's & Yesterday's Consultation Report Calculation ---
+  const getDailyConsultationReport = () => {
+    const now = new Date();
+    
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+
+    const todaySessions = sessions.filter(s => {
+      const d = new Date(s.created_at);
+      return d >= startOfToday;
+    });
+
+    const yesterdaySessions = sessions.filter(s => {
+      const d = new Date(s.created_at);
+      return d >= startOfYesterday && d < startOfToday;
+    });
+
+    const calculateStats = (sessList: Session[]) => {
+      const count = sessList.length;
+      const completedList = sessList.filter(s => s.status === 'completed');
+      const completed = completedList.length;
+      const missed = sessList.filter(s => (s.status as string) === 'cancelled' || (s.status as string) === 'missed').length;
+      const active = sessList.filter(s => s.status === 'active').length;
+      const rejected = sessList.filter(s => (s.status as string) === 'cancelled' || (s.status as string) === 'rejected').length;
+      
+      const totalPaid = sessList.reduce((acc, s) => acc + (s.total_paid || 0), 0);
+      const commission = sessList.reduce((acc, s) => acc + (s.commission_amount || 0), 0);
+      const consultantEarnings = sessList.reduce((acc, s) => acc + (s.consultant_earnings || 0), 0);
+      const duration = sessList.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+
+      return {
+        count,
+        completed,
+        missed,
+        active,
+        rejected,
+        totalPaid,
+        commission,
+        consultantEarnings,
+        duration
+      };
+    };
+
+    return {
+      today: calculateStats(todaySessions),
+      todaySessions,
+      yesterday: calculateStats(yesterdaySessions),
+      yesterdaySessions
+    };
+  };
+
+  const reportData = getDailyConsultationReport();
 
   if (loading && adminUsers.length === 0) {
     return (
@@ -474,6 +836,215 @@ export function AdminPanel() {
 
               {/* Dynamic Analytics graphs from sub-component */}
               <DashboardGraphs />
+
+              {/* 📊 Today's & Yesterday's Consultation Report Section */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pt-2">
+                
+                {/* TODAY'S REPORT */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left relative overflow-hidden shadow-xl">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div className="space-y-0.5">
+                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-mono font-black px-2.5 py-0.5 rounded border border-emerald-500/15 uppercase tracking-wide animate-pulse">
+                        Live Tracking
+                      </span>
+                      <h3 className="text-base font-black text-slate-100 mt-1">Today's Consultation Report</h3>
+                    </div>
+                    <span className="text-xs font-mono text-slate-500 font-bold">
+                      {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-slate-500 uppercase font-black block">Consultations</span>
+                      <p className="text-lg font-black text-slate-200 mt-0.5">{reportData.today.count}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">
+                        {reportData.today.completed} done • {reportData.today.active} live
+                      </span>
+                    </div>
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-slate-500 uppercase font-black block">Total Volume</span>
+                      <p className="text-lg font-black text-slate-200 mt-0.5">₹{reportData.today.totalPaid.toFixed(2)}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">Gross spends</span>
+                    </div>
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-emerald-500 uppercase font-black block">Advisor Net</span>
+                      <p className="text-lg font-black text-emerald-400 mt-0.5">₹{reportData.today.consultantEarnings.toFixed(2)}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">Earnings payout</span>
+                    </div>
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-cyan-500 uppercase font-black block">Platform Com.</span>
+                      <p className="text-lg font-black text-cyan-400 mt-0.5">₹{reportData.today.commission.toFixed(2)}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">Service share</span>
+                    </div>
+                  </div>
+
+                  {/* Inner details expander */}
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between text-[11px] font-mono">
+                      <span className="text-slate-400">Total duration: <strong>{reportData.today.duration} Mins</strong></span>
+                      <span className="text-slate-500">Success rate: <strong>{reportData.today.count > 0 ? ((reportData.today.completed / reportData.today.count) * 100).toFixed(0) : 100}%</strong></span>
+                    </div>
+
+                    {reportData.todaySessions.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic py-6 text-center bg-slate-950/20 rounded-xl border border-dashed border-slate-800">
+                        No consultations recorded today yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                        {reportData.todaySessions.map((sess) => (
+                          <div key={sess.id} className="bg-slate-950/80 border border-slate-850/60 p-3 rounded-xl flex items-center justify-between hover:border-slate-750 transition-all">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center space-x-1.5">
+                                <span className="text-xs font-black text-slate-200">{sess.user_name}</span>
+                                <span className="text-slate-600 text-[10px]">↔</span>
+                                <span className="text-xs font-black text-slate-200">{(sess as any).consultant_name || 'Expert'}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                Duration: {sess.duration_minutes} Mins • Total: ₹{sess.total_paid.toFixed(2)}
+                              </p>
+                              <div className="text-[9px] font-mono text-slate-500">
+                                Advisor: ₹{sess.consultant_earnings.toFixed(2)} • Commission: ₹{sess.commission_amount.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1.5">
+                              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded capitalize ${
+                                sess.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' :
+                                sess.status === 'active' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 animate-pulse' :
+                                'bg-slate-850 text-slate-400'
+                              }`}>
+                                {sess.status}
+                              </span>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`/api/sessions/${sess.id}`);
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      setViewingPastSessionMessages(data.messages);
+                                      setViewingPastSessionInfo(data.session);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }}
+                                className="text-[10px] text-cyan-400 hover:underline hover:text-cyan-300 font-bold transition-all"
+                              >
+                                Inspect Chat
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* YESTERDAY'S REPORT */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left relative overflow-hidden shadow-xl">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div className="space-y-0.5">
+                      <span className="bg-slate-800 text-slate-400 text-[10px] font-mono font-black px-2.5 py-0.5 rounded border border-slate-700 uppercase tracking-wide">
+                        Historical
+                      </span>
+                      <h3 className="text-base font-black text-slate-100 mt-1">Yesterday's Consultation Report</h3>
+                    </div>
+                    <span className="text-xs font-mono text-slate-500 font-bold">
+                      {(() => {
+                        const yest = new Date();
+                        yest.setDate(yest.getDate() - 1);
+                        return yest.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                      })()}
+                    </span>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-slate-500 uppercase font-black block">Consultations</span>
+                      <p className="text-lg font-black text-slate-200 mt-0.5">{reportData.yesterday.count}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">
+                        {reportData.yesterday.completed} done • {reportData.yesterday.missed} missed
+                      </span>
+                    </div>
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-slate-500 uppercase font-black block">Total Volume</span>
+                      <p className="text-lg font-black text-slate-200 mt-0.5">₹{reportData.yesterday.totalPaid.toFixed(2)}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">Gross spends</span>
+                    </div>
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-emerald-500 uppercase font-black block">Advisor Net</span>
+                      <p className="text-lg font-black text-emerald-400 mt-0.5">₹{reportData.yesterday.consultantEarnings.toFixed(2)}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">Earnings payout</span>
+                    </div>
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[9px] font-mono text-cyan-500 uppercase font-black block">Platform Com.</span>
+                      <p className="text-lg font-black text-cyan-400 mt-0.5">₹{reportData.yesterday.commission.toFixed(2)}</p>
+                      <span className="text-[9px] text-slate-500 font-medium">Service share</span>
+                    </div>
+                  </div>
+
+                  {/* Inner details expander */}
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between text-[11px] font-mono">
+                      <span className="text-slate-400">Total duration: <strong>{reportData.yesterday.duration} Mins</strong></span>
+                      <span className="text-slate-500">Success rate: <strong>{reportData.yesterday.count > 0 ? ((reportData.yesterday.completed / reportData.yesterday.count) * 100).toFixed(0) : 100}%</strong></span>
+                    </div>
+
+                    {reportData.yesterdaySessions.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic py-6 text-center bg-slate-950/20 rounded-xl border border-dashed border-slate-800">
+                        No consultations recorded yesterday.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                        {reportData.yesterdaySessions.map((sess) => (
+                          <div key={sess.id} className="bg-slate-950/80 border border-slate-850/60 p-3 rounded-xl flex items-center justify-between hover:border-slate-750 transition-all">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center space-x-1.5">
+                                <span className="text-xs font-black text-slate-200">{sess.user_name}</span>
+                                <span className="text-slate-600 text-[10px]">↔</span>
+                                <span className="text-xs font-black text-slate-200">{(sess as any).consultant_name || 'Expert'}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                Duration: {sess.duration_minutes} Mins • Total: ₹{sess.total_paid.toFixed(2)}
+                              </p>
+                              <div className="text-[9px] font-mono text-slate-500">
+                                Advisor: ₹{sess.consultant_earnings.toFixed(2)} • Commission: ₹{sess.commission_amount.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1.5">
+                              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded capitalize bg-emerald-500/10 text-emerald-400 border border-emerald-500/10`}>
+                                {sess.status}
+                              </span>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`/api/sessions/${sess.id}`);
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      setViewingPastSessionMessages(data.messages);
+                                      setViewingPastSessionInfo(data.session);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }}
+                                className="text-[10px] text-cyan-400 hover:underline hover:text-cyan-300 font-bold transition-all"
+                              >
+                                Inspect Chat
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
             </div>
           )}
 
@@ -505,6 +1076,71 @@ export function AdminPanel() {
                 </button>
               </div>
 
+              {/* Filter, Search & Refresh Controls */}
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+                <div className="flex-1 flex flex-col md:flex-row gap-3">
+                  {/* Search bar */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search experts by ID, name, email or username..."
+                      value={searchCons}
+                      onChange={e => setSearchCons(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                    />
+                  </div>
+
+                  {/* Filter 1: Category */}
+                  <select
+                    value={filterConsCat}
+                    onChange={e => setFilterConsCat(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="Astrologers">Astrologers</option>
+                    <option value="Coaches">Coaches</option>
+                    <option value="Consultants">Consultants</option>
+                    <option value="Influencers">Influencers</option>
+                    <option value="Lawyers">Lawyers</option>
+                    <option value="Mentors">Mentors</option>
+                  </select>
+
+                  {/* Filter 2: Status */}
+                  <select
+                    value={filterConsStatus}
+                    onChange={e => setFilterConsStatus(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active Accounts</option>
+                    <option value="suspended">Suspended Accounts</option>
+                  </select>
+
+                  {/* Filter 3: Rate Range */}
+                  <select
+                    value={filterConsRate}
+                    onChange={e => setFilterConsRate(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Rates</option>
+                    <option value="budget">Budget (≤ ₹20/min)</option>
+                    <option value="medium">Medium (₹21 - ₹50/min)</option>
+                    <option value="premium">{"Premium (> ₹50/min)"}</option>
+                  </select>
+                </div>
+
+                {/* Refresh Ledger Button */}
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="bg-slate-950 border border-slate-800 hover:border-slate-750 hover:bg-slate-900 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-mono font-bold flex items-center justify-center space-x-2 transition-all min-w-[110px]"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+                </button>
+              </div>
+
               {/* Consultants Ledger */}
               <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
                 <div className="overflow-x-auto">
@@ -522,7 +1158,7 @@ export function AdminPanel() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80 text-slate-300">
-                      {consultants.map(cons => (
+                      {filteredConsultants.map(cons => (
                         <tr key={cons.id} className="hover:bg-slate-950/30">
                           <td className="px-6 py-4 flex items-center space-x-3">
                             <img src={cons.photo_url} alt="" className="w-9 h-9 rounded-xl object-cover border border-slate-800" referrerPolicy="no-referrer" />
@@ -699,18 +1335,266 @@ export function AdminPanel() {
           {/* ========================================================= */}
           {/* 2.4 TAB: USER MANAGEMENT */}
           {activeTab === 'users' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden p-6 space-y-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-100">Registered Client Accounts</h3>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">Suspend user accounts or verify lifetime recharges</p>
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Registered Client Accounts</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">Suspend user accounts or verify lifetime recharges</p>
+                </div>
+              </div>
+
+              {/* Filter, Search & Refresh Controls */}
+              <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+                <div className="flex-1 flex flex-col md:flex-row gap-3">
+                  {/* Search bar */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search users by ID, name, email or username..."
+                      value={searchUsr}
+                      onChange={e => setSearchUsr(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                    />
+                  </div>
+
+                  {/* Filter 1: Status */}
+                  <select
+                    value={filterUsrStatus}
+                    onChange={e => setFilterUsrStatus(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="healthy">Healthy (Active)</option>
+                    <option value="blocked">Blocked Accounts</option>
+                  </select>
+
+                  {/* Filter 2: Spend range */}
+                  <select
+                    value={filterUsrSpend}
+                    onChange={e => setFilterUsrSpend(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Spends</option>
+                    <option value="low">Budget (≤ ₹500)</option>
+                    <option value="mid">Mid-Tier (₹501 - ₹2,000)</option>
+                    <option value="high">{"High-Spender (> ₹2,000)"}</option>
+                  </select>
+
+                  {/* Filter 3: Gender */}
+                  <select
+                    value={filterUsrGender}
+                    onChange={e => setFilterUsrGender(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Genders</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                {/* Refresh Ledger Button */}
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-950 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-mono font-bold flex items-center justify-center space-x-2 transition-all min-w-[110px]"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+                </button>
+              </div>
+              <div className="bg-slate-950 border border-slate-850 p-5 rounded-2xl space-y-4 text-left">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <h4 className="text-xs font-bold font-mono text-slate-300 uppercase flex items-center gap-2">
+                    <span className="text-emerald-400">⚡</span>
+                    <span>Bulk Actions & Category Updates</span>
+                    {selectedUserIds.length > 0 && (
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-sans font-black">
+                        {selectedUserIds.length} SELECTED
+                      </span>
+                    )}
+                  </h4>
+                  {selectedUserIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserIds([])}
+                      className="text-[10px] text-rose-400 hover:text-rose-300 font-mono font-bold"
+                    >
+                      [Clear Selection]
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Apply changes in bulk to selected users. You can filter the table, check individual checkboxes, select an entire category automatically, and bulk modify Category, Locked Consultant, Override Rules, or add Wallet Balance.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Set Category</label>
+                    <select
+                      id="bulk-category-select"
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none w-full"
+                    >
+                      <option value="">-- No Change --</option>
+                      <option value="General">General</option>
+                      <option value="Silver">Silver</option>
+                      <option value="Gold">Gold</option>
+                      <option value="VIP">VIP</option>
+                      <option value="Premium">Premium</option>
+                      <option value="Special">Special</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Set Locked Expert</label>
+                    <select
+                      id="bulk-consultant-select"
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none w-full"
+                    >
+                      <option value="">-- No Change --</option>
+                      <option value="null">-- Clear Lock (Show All) --</option>
+                      {consultants.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.display_name} (@{c.username})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Override Show Others</label>
+                    <select
+                      id="bulk-override-select"
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none w-full"
+                    >
+                      <option value="">-- No Change --</option>
+                      <option value="1">Yes (Show Others anyway)</option>
+                      <option value="0">No (Show Locked Advisor only)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Add Wallet Cash (₹)</label>
+                    <input
+                      type="number"
+                      id="bulk-wallet-input"
+                      placeholder="e.g. 500"
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none w-full font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 justify-between pt-2 border-t border-slate-900">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cat = (document.getElementById('bulk-category-select') as HTMLSelectElement)?.value;
+                        if (!cat) {
+                          alert('Kripya side me "Set Category" dropdown se koi category select karein, fir is button par click karein.');
+                          return;
+                        }
+                        const matchingUserIds = filteredUsers.filter(u => u.category === cat).map(u => u.id);
+                        if (matchingUserIds.length === 0) {
+                          alert(`Koi bhi user "${cat}" category me nahi mila.`);
+                          return;
+                        }
+                        setSelectedUserIds(Array.from(new Set([...selectedUserIds, ...matchingUserIds])));
+                      }}
+                      className="bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800 hover:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold transition-all"
+                    >
+                      🎯 Select All {`"${(document.getElementById('bulk-category-select') as HTMLSelectElement)?.value || 'Category'}"`} Users
+                    </button>
+                    {selectedUserIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUserIds([])}
+                        className="bg-slate-900 hover:bg-slate-850 text-rose-400 border border-slate-800 hover:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold transition-all"
+                      >
+                        ❌ Clear Selection
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (selectedUserIds.length === 0) {
+                        alert('Kripya bulk action apply karne ke liye niche table se target users select karein (checkboxes dwara).');
+                        return;
+                      }
+                      
+                      const categoryVal = (document.getElementById('bulk-category-select') as HTMLSelectElement)?.value || undefined;
+                      const consultantVal = (document.getElementById('bulk-consultant-select') as HTMLSelectElement)?.value || undefined;
+                      const overrideVal = (document.getElementById('bulk-override-select') as HTMLSelectElement)?.value || undefined;
+                      const walletVal = (document.getElementById('bulk-wallet-input') as HTMLInputElement)?.value || undefined;
+
+                      if (!categoryVal && !consultantVal && !overrideVal && !walletVal) {
+                        alert('Kripya bulk updates options (Category, Expert, Override, ya Wallet amount) me se kam se kam ek filter modify karein.');
+                        return;
+                      }
+
+                      if (!confirm(`Kya aap sure hain ki selected ${selectedUserIds.length} clients par ye bulk updates apply karna chahte hain?`)) {
+                        return;
+                      }
+
+                      try {
+                        const res = await fetch('/api/admin/users/bulk-update', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            userIds: selectedUserIds,
+                            category: categoryVal,
+                            locked_consultant_id: consultantVal,
+                            admin_allow_others: overrideVal,
+                            wallet_add_amount: walletVal
+                          })
+                        });
+
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Bulk update failed');
+
+                        setSuccessMsg(data.message || 'Bulk changes applied successfully!');
+                        setSelectedUserIds([]);
+                        
+                        // Clear elements
+                        if (document.getElementById('bulk-category-select')) (document.getElementById('bulk-category-select') as HTMLSelectElement).value = '';
+                        if (document.getElementById('bulk-consultant-select')) (document.getElementById('bulk-consultant-select') as HTMLSelectElement).value = '';
+                        if (document.getElementById('bulk-override-select')) (document.getElementById('bulk-override-select') as HTMLSelectElement).value = '';
+                        if (document.getElementById('bulk-wallet-input')) (document.getElementById('bulk-wallet-input') as HTMLInputElement).value = '';
+
+                        loadAdminData();
+                        setTimeout(() => setSuccessMsg(null), 3000);
+                      } catch (err: any) {
+                        setError(err.message);
+                      }
+                    }}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-4 py-2 rounded-xl text-xs font-black transition-all shadow-md shrink-0"
+                  >
+                    🚀 Apply Bulk Changes
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px]">
+                      <th className="px-4 py-3 text-center w-10">
+                        <input
+                          type="checkbox"
+                          checked={filteredUsers.length > 0 && selectedUserIds.length === filteredUsers.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedUserIds(filteredUsers.map(u => u.id));
+                            } else {
+                              setSelectedUserIds([]);
+                            }
+                          }}
+                          className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                        />
+                      </th>
                       <th className="px-4 py-3">Client details</th>
                       <th className="px-4 py-3">Username</th>
+                      <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3">Locked Expert</th>
                       <th className="px-4 py-3">Metadata</th>
                       <th className="px-4 py-3 text-emerald-400">Wallet balance</th>
                       <th className="px-4 py-3">Total Spent</th>
@@ -719,24 +1603,74 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                    {adminUsers.map(user => (
-                      <tr key={user.id} className="hover:bg-slate-950/40">
+                    {filteredUsers.map(user => (
+                      <tr key={user.id} className={`hover:bg-slate-950/40 transition-colors ${selectedUserIds.includes(user.id) ? 'bg-emerald-500/5' : ''}`}>
+                        <td className="px-4 py-3.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(user.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedUserIds([...selectedUserIds, user.id]);
+                              } else {
+                                setSelectedUserIds(selectedUserIds.filter(id => id !== user.id));
+                              }
+                            }}
+                            className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                          />
+                        </td>
                         <td className="px-4 py-3.5 flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 font-bold flex items-center justify-center">
-                            {user.display_name.slice(0, 1)}
-                          </div>
+                          {user.photo_url ? (
+                            <img 
+                              src={user.photo_url} 
+                              alt={user.display_name} 
+                              className="w-8 h-8 rounded-lg object-cover border border-slate-700 shadow-sm" 
+                              onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} 
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 font-bold flex items-center justify-center">
+                              {user.display_name.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <strong className="text-slate-100 font-bold block text-sm">{user.display_name}</strong>
-                            <span className="text-[10px] text-slate-500">ID: #{user.id}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">ID: #{user.id}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3.5 font-mono text-slate-300">{user.username}</td>
+                        <td className="px-4 py-3.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            user.category === 'VIP' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                            user.category === 'Gold' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                            user.category === 'Silver' ? 'bg-slate-300/10 text-slate-300 border-slate-300/20' :
+                            user.category === 'Premium' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
+                            user.category === 'Special' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                            'bg-slate-850/40 text-slate-400 border-slate-800'
+                          }`}>
+                            {user.category || 'General'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-300 font-mono text-[11px]">
+                          {user.locked_consultant_id ? (
+                            <div className="space-y-0.5">
+                              <span className="text-amber-400 font-bold font-sans block text-xs">
+                                {consultants.find(c => c.id === user.locked_consultant_id)?.display_name || `Expert #${user.locked_consultant_id}`}
+                              </span>
+                              <span className="block text-[9px] text-slate-500 font-medium font-sans">
+                                override: {user.admin_allow_others === 1 ? 'ALLOWED' : 'LOCKED'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-500">None (Show All)</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3.5 text-slate-400">
                           <div>DOB: {user.dob || 'Not added'}</div>
                           <div className="text-[10px]">Gender: {user.gender || 'Not added'}</div>
                         </td>
-                        <td className="px-4 py-3.5 font-mono font-bold text-emerald-400">₹{parseFloat(user.wallet_balance || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3.5 font-mono">₹{parseFloat(user.lifetime_recharge || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3.5 font-mono font-bold text-emerald-400 font-sans">₹{parseFloat(user.wallet_balance || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3.5 font-mono font-sans">₹{parseFloat(user.lifetime_recharge || 0).toFixed(2)}</td>
                         <td className="px-4 py-3.5">
                           {user.is_blocked === 1 ? (
                             <span className="bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded text-[10px] font-bold border border-rose-500/10">Blocked</span>
@@ -745,16 +1679,25 @@ export function AdminPanel() {
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <button
-                            onClick={() => handleToggleBlockUser(user.id, user.is_blocked === 1)}
-                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
-                              user.is_blocked === 1 
-                                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/10 hover:bg-emerald-500/25' 
-                                : 'bg-rose-500/15 text-rose-400 border-rose-500/10 hover:bg-rose-500/25'
-                            }`}
-                          >
-                            {user.is_blocked === 1 ? 'Unblock Account' : 'Suspend Account'}
-                          </button>
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => handleOpenEditUser(user)}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700/80 hover:border-slate-600 transition-all flex items-center space-x-1"
+                            >
+                              <Edit3 className="w-3 h-3 text-sky-400" />
+                              <span>Edit Client</span>
+                            </button>
+                            <button
+                              onClick={() => handleToggleBlockUser(user.id, user.is_blocked === 1)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                                user.is_blocked === 1 
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/10 hover:bg-emerald-500/25' 
+                                  : 'bg-rose-500/15 text-rose-400 border-rose-500/10 hover:bg-rose-500/25'
+                              }`}
+                            >
+                              {user.is_blocked === 1 ? 'Unblock' : 'Suspend'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -767,10 +1710,75 @@ export function AdminPanel() {
           {/* ========================================================= */}
           {/* 2.5 TAB: CHAT SESSION MANAGEMENT */}
           {activeTab === 'sessions' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left">
               <div>
                 <h3 className="text-base font-bold text-slate-100">Paid Chat Session Transcript Ledger</h3>
                 <p className="text-xs text-slate-400 font-mono mt-0.5">Monitor financial share split, session time durations, and chat transcripts</p>
+              </div>
+
+              {/* Filter, Search & Refresh Controls */}
+              <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+                <div className="flex-1 flex flex-col md:flex-row gap-3">
+                  {/* Search bar */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search by session ID, user/expert ID, client/expert name..."
+                      value={searchSess}
+                      onChange={e => setSearchSess(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                    />
+                  </div>
+
+                  {/* Filter 1: Status */}
+                  <select
+                    value={filterSessStatus}
+                    onChange={e => setFilterSessStatus(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="completed">Completed</option>
+                    <option value="active">Active (Live)</option>
+                    <option value="pending">Pending</option>
+                    <option value="missed">Missed</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+
+                  {/* Filter 2: Commission Rate */}
+                  <select
+                    value={filterSessRate}
+                    onChange={e => setFilterSessRate(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Commissions</option>
+                    <option value="15">15% Commission</option>
+                    <option value="20">20% Commission</option>
+                    <option value="25">25% Commission</option>
+                  </select>
+
+                  {/* Filter 3: Duration */}
+                  <select
+                    value={filterSessDur}
+                    onChange={e => setFilterSessDur(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Durations</option>
+                    <option value="short">{"Short (< 5 mins)"}</option>
+                    <option value="medium">Medium (5 - 15 mins)</option>
+                    <option value="long">{"Long (> 15 mins)"}</option>
+                  </select>
+                </div>
+
+                {/* Refresh Ledger Button */}
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-950 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-mono font-bold flex items-center justify-center space-x-2 transition-all min-w-[110px]"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+                </button>
               </div>
 
               <div className="overflow-x-auto">
@@ -788,7 +1796,7 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono text-[11px] text-slate-300">
-                    {sessions.map(sess => (
+                    {filteredSessions.map(sess => (
                       <tr key={sess.id} className="hover:bg-slate-950/40">
                         <td className="px-4 py-3.5 text-cyan-400 font-bold">{sess.id}</td>
                         <td className="px-4 py-3.5 font-sans font-medium text-slate-200">{sess.user_name}</td>
@@ -831,9 +1839,71 @@ export function AdminPanel() {
           {/* ========================================================= */}
           {/* 2.6 TAB: PAYMENT MANAGEMENT */}
           {activeTab === 'payments' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
-              <h3 className="text-base font-bold text-slate-100">Gateway Transaction Logs</h3>
-              <p className="text-xs text-slate-400 font-mono">Verify credit status, payment gateways, and failed recharge orders</p>
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left">
+              <div>
+                <h3 className="text-base font-bold text-slate-100">Gateway Transaction Logs</h3>
+                <p className="text-xs text-slate-400 font-mono">Verify credit status, payment gateways, and failed recharge orders</p>
+              </div>
+
+              {/* Filter, Search & Refresh Controls */}
+              <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+                <div className="flex-1 flex flex-col md:flex-row gap-3">
+                  {/* Search bar */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search by order ID, user ID, or client user name..."
+                      value={searchPay}
+                      onChange={e => setSearchPay(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                    />
+                  </div>
+
+                  {/* Filter 1: Status */}
+                  <select
+                    value={filterPayStatus}
+                    onChange={e => setFilterPayStatus(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="captured">Captured (Success)</option>
+                    <option value="failed">Failed Transactions</option>
+                  </select>
+
+                  {/* Filter 2: Amount Range */}
+                  <select
+                    value={filterPayAmt}
+                    onChange={e => setFilterPayAmt(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Amounts</option>
+                    <option value="budget">{"Budget (< ₹500)"}</option>
+                    <option value="standard">Standard (₹500 - ₹1,000)</option>
+                    <option value="high">{"Premium (> ₹1,000)"}</option>
+                  </select>
+
+                  {/* Filter 3: Gateway */}
+                  <select
+                    value={filterPayGateway}
+                    onChange={e => setFilterPayGateway(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Gateways</option>
+                    <option value="razorpay">Razorpay</option>
+                  </select>
+                </div>
+
+                {/* Refresh Ledger Button */}
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-950 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-mono font-bold flex items-center justify-center space-x-2 transition-all min-w-[110px]"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+                </button>
+              </div>
               
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
@@ -841,33 +1911,69 @@ export function AdminPanel() {
                     <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px]">
                       <th className="px-4 py-3">Order ID / ID</th>
                       <th className="px-4 py-3">User Client</th>
-                      <th className="px-4 py-3">Amount</th>
+                      <th className="px-4 py-3">Base (Excl. GST)</th>
+                      <th className="px-4 py-3 text-amber-500">GST (18%)</th>
+                      <th className="px-4 py-3 text-emerald-400 font-bold">Total Paid (Incl. GST)</th>
                       <th className="px-4 py-3">Gateway</th>
                       <th className="px-4 py-3">Date</th>
-                      <th className="px-4 py-3 text-right">Status</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Invoice</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono text-[11px] text-slate-300">
-                    <tr className="hover:bg-slate-950/40">
-                      <td className="px-4 py-3.5 text-cyan-400 font-bold">order_K8dJws92</td>
-                      <td className="px-4 py-3.5 font-sans font-medium text-slate-200">Aman Kumar</td>
-                      <td className="px-4 py-3.5 font-bold text-slate-100">₹500.00</td>
-                      <td className="px-4 py-3.5 text-slate-400">Razorpay</td>
-                      <td className="px-4 py-3.5 text-slate-500">2026-06-25 00:05</td>
-                      <td className="px-4 py-3.5 text-right">
-                        <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/10">Captured</span>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-slate-950/40">
-                      <td className="px-4 py-3.5 text-cyan-400 font-bold">order_G3vKw812</td>
-                      <td className="px-4 py-3.5 font-sans font-medium text-slate-200">Sanya Mehta</td>
-                      <td className="px-4 py-3.5 font-bold text-slate-100">₹1,000.00</td>
-                      <td className="px-4 py-3.5 text-slate-400">Razorpay</td>
-                      <td className="px-4 py-3.5 text-slate-500">2026-06-24 18:30</td>
-                      <td className="px-4 py-3.5 text-right">
-                        <span className="bg-rose-500/10 text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded border border-rose-500/10">Failed</span>
-                      </td>
-                    </tr>
+                    {filteredPayments.map((p, index) => {
+                      const baseAmt = p.amount / 1.18;
+                      const gstAmt = p.amount - baseAmt;
+                      return (
+                        <tr key={p.id + '-' + index} className="hover:bg-slate-950/40">
+                          <td className="px-4 py-3.5 text-cyan-400 font-bold">{p.id}</td>
+                          <td className="px-4 py-3.5 font-sans font-medium text-slate-200">{p.user_name} (ID: #{p.user_id})</td>
+                          <td className="px-4 py-3.5 text-slate-400">₹{baseAmt.toFixed(2)}</td>
+                          <td className="px-4 py-3.5 text-amber-400">₹{gstAmt.toFixed(2)}</td>
+                          <td className="px-4 py-3.5 font-bold text-emerald-400">₹{p.amount.toFixed(2)}</td>
+                          <td className="px-4 py-3.5 text-slate-400">{p.gateway}</td>
+                          <td className="px-4 py-3.5 text-slate-500">{p.created_at}</td>
+                          <td className="px-4 py-3.5">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              p.status === 'Captured' 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' 
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/10'
+                            }`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            {p.status === 'Captured' ? (
+                              <button
+                                onClick={() => {
+                                  // Construct tx record to match helper format
+                                  const txRecord = {
+                                    id: p.id,
+                                    created_at: p.created_at,
+                                    amount: baseAmt,
+                                    gst_amount: gstAmt,
+                                    total_paid: p.amount,
+                                    gst_rate: 18
+                                  };
+                                  const userRecord = {
+                                    display_name: p.user_name || `Client #${p.user_id}`,
+                                    email: (p as any).user_email || 'client@example.com',
+                                    id: p.user_id
+                                  };
+                                  downloadInvoice(txRecord, userRecord);
+                                }}
+                                className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded text-[10px] font-bold font-sans transition-all inline-flex items-center space-x-1"
+                              >
+                                <FileText className="w-3 h-3" />
+                                <span>Download</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-600 text-[10px]">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1354,6 +2460,209 @@ export function AdminPanel() {
                 className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 w-full font-bold py-2.5 rounded-xl text-xs transition-all mt-2"
               >
                 {editingConsultant ? 'Save Parameter Changes' : 'Generate Expert Credentials'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Profile Modal */}
+      {showUserModal && editingUser && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-4 my-8 shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-sky-400" />
+                <span>Modify Client Profile & Wallet</span>
+              </h3>
+              <button 
+                onClick={() => { setShowUserModal(false); setEditingUser(null); }}
+                className="text-slate-400 hover:text-white bg-slate-950/50 p-1.5 rounded-lg border border-slate-850 hover:border-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUserEdit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Display Name *</label>
+                  <input
+                    type="text"
+                    value={usrDisplayName}
+                    onChange={e => setUsrDisplayName(e.target.value)}
+                    placeholder="e.g. Rahul Kumar"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Username (Read-only)</label>
+                  <input
+                    type="text"
+                    value={editingUser.username || ''}
+                    disabled
+                    className="bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-slate-500 text-xs w-full focus:outline-none disabled:opacity-50 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={usrEmail}
+                  onChange={e => setUsrEmail(e.target.value)}
+                  placeholder="rahul@example.com"
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Date of Birth (DOB) *</label>
+                  <input
+                    type="date"
+                    value={usrDob}
+                    onChange={e => setUsrDob(e.target.value)}
+                    onClick={(e) => {
+                      try {
+                        (e.target as any).showPicker();
+                      } catch (err) {
+                        console.log("showPicker not supported", err);
+                      }
+                    }}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500 font-mono cursor-pointer"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Gender *</label>
+                  <select
+                    value={usrGender}
+                    onChange={e => setUsrGender(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500"
+                    required
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Wallet Balance (INR ₹) *</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-xs text-slate-500 font-mono font-bold">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={usrWalletBalance}
+                    onChange={e => setUsrWalletBalance(e.target.value)}
+                    placeholder="0.00"
+                    className="bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3.5 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500 font-mono font-bold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">User Category</label>
+                  <select
+                    value={usrCategory}
+                    onChange={e => setUsrCategory(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="General">General</option>
+                    <option value="Silver">Silver</option>
+                    <option value="Gold">Gold</option>
+                    <option value="VIP">VIP</option>
+                    <option value="Premium">Premium</option>
+                    <option value="Special">Special</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Locked Consultant</label>
+                  <select
+                    value={usrLockedConsultantId}
+                    onChange={e => setUsrLockedConsultantId(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="">-- No Lock (Show All) --</option>
+                    {consultants.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.display_name} (@{c.username})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 flex items-center justify-between">
+                <div className="space-y-0.5 text-left flex-1 pr-2">
+                  <span className="text-[11px] font-bold text-slate-200 block">Show Other Experts Anyway</span>
+                  <p className="text-[9px] text-slate-500 leading-normal">Super admin control: let user browse other consultants even if referred by a link lock.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={usrAdminAllowOthers === 1}
+                  onChange={e => setUsrAdminAllowOthers(e.target.checked ? 1 : 0)}
+                  className="w-4 h-4 accent-emerald-500 cursor-pointer shrink-0"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Client Profile Photo / GIF URL</label>
+                <div className="flex flex-col sm:flex-row items-stretch gap-2">
+                  <input
+                    type="text"
+                    placeholder="https://... direct link ya image/gif"
+                    value={usrPhotoUrl}
+                    onChange={e => setUsrPhotoUrl(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs flex-1 focus:outline-none focus:border-sky-500 font-mono"
+                  />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="admin-user-photo-upload"
+                      className="hidden"
+                      onChange={handleUserPhotoUpload}
+                      disabled={uploadingPhoto}
+                    />
+                    <label
+                      htmlFor="admin-user-photo-upload"
+                      className={`cursor-pointer bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 hover:border-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 shrink-0 ${uploadingPhoto ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <span>{uploadingPhoto ? 'Uploading...' : '📁 Upload Photo'}</span>
+                    </label>
+                  </div>
+                </div>
+
+                {usrPhotoUrl && (
+                  <div className="mt-2 flex items-center space-x-3 bg-slate-950/40 p-2 rounded-xl border border-slate-800/60 max-w-sm font-sans">
+                    <img 
+                      src={usrPhotoUrl} 
+                      alt="Preview" 
+                      className="w-10 h-10 rounded-lg object-cover border border-slate-800" 
+                      onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} 
+                      referrerPolicy="no-referrer" 
+                    />
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold">Live Preview</span>
+                      <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[150px]">{usrPhotoUrl}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 w-full font-bold py-2.5 rounded-xl text-xs transition-all mt-2 flex items-center justify-center space-x-2 shadow-lg"
+              >
+                <span>Save Client Changes</span>
               </button>
             </form>
           </div>

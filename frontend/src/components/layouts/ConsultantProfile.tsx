@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X } from 'lucide-react';
 import { Consultant, Review } from '../../types';
+import { downloadInvoice } from '../../utils/invoiceHelper';
+
+const formatToLocalDateString = (dateStr: any) => {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    return '';
+  }
+};
 
 interface ConsultantProfileProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
@@ -8,9 +24,10 @@ interface ConsultantProfileProps {
   currentUser: any;
   setCurrentUser: (user: any) => void;
   onOpenAuth: () => void;
+  activeSessionId?: string;
 }
 
-export function ConsultantProfile({ onSelectSession, targetUsername, currentUser, setCurrentUser, onOpenAuth }: ConsultantProfileProps) {
+export function ConsultantProfile({ onSelectSession, targetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId }: ConsultantProfileProps) {
   // Directory or profile selection
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
@@ -40,6 +57,54 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   const [editDob, setEditDob] = useState('');
   const [editGender, setEditGender] = useState('Male');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size bahot badi hai. Kripya 5MB se choti image upload karein.');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        try {
+          const res = await fetch('/api/user/upload-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64String })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
+          
+          setEditPhotoUrl(data.photo_url);
+          setSuccess('Photo successfully upload ho gayi hai!');
+          setTimeout(() => setSuccess(null), 3000);
+        } catch (uploadErr: any) {
+          setError(uploadErr.message);
+        } finally {
+          setUploadingPhoto(false);
+        }
+      };
+      reader.onerror = () => {
+        setError('File read karne me error aaya.');
+        setUploadingPhoto(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setError(err.message);
+      setUploadingPhoto(false);
+    }
+  };
 
   // Quick recharge fields
   const [rechargeAmount, setRechargeAmount] = useState('250');
@@ -85,36 +150,75 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
     if (currentUser) {
       setEditDisplayName(currentUser.display_name || '');
       setEditPhotoUrl(currentUser.photo_url || '');
-      setEditDob(currentUser.dob || '');
+      setEditDob(currentUser.dob ? formatToLocalDateString(currentUser.dob) : '');
       setEditGender(currentUser.gender || 'Male');
       fetchWalletTransactions();
     }
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
-  // Load past consultations from localStorage on mount or modal open
+  // Load past consultations from both username (if logged in) and localStorage
   const loadPastHistoryFromLocalStorage = async () => {
     try {
-      const savedIdsStr = localStorage.getItem('my_consultation_sessions');
-      if (savedIdsStr) {
-        const ids = JSON.parse(savedIdsStr);
-        if (ids && ids.length > 0) {
-          const res = await fetch(`/api/user/sessions?ids=${ids.join(',')}`);
-          if (res.ok) {
-            const data = await res.json();
-            setUserPastSessions(data);
+      const sessionMap = new Map();
+
+      // 1. Fetch by logged in user's username if available
+      if (currentUser?.username) {
+        const res = await fetch(`/api/user/sessions?user_name=${encodeURIComponent(currentUser.username)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            data.forEach(s => sessionMap.set(s.id, s));
           }
         }
       }
+
+      // 2. Fetch by saved session IDs from localStorage
+      const savedIdsStr = localStorage.getItem('my_consultation_sessions');
+      if (savedIdsStr) {
+        try {
+          const ids = JSON.parse(savedIdsStr);
+          if (ids && ids.length > 0) {
+            const res = await fetch(`/api/user/sessions?ids=${ids.join(',')}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data)) {
+                data.forEach(s => {
+                  if (!sessionMap.has(s.id)) {
+                    sessionMap.set(s.id, s);
+                  }
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing localStorage session IDs:', e);
+        }
+      }
+
+      // Convert map to list and sort by created_at DESC
+      const combined = Array.from(sessionMap.values()).sort((a, b) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      setUserPastSessions(combined);
     } catch (err) {
-      console.error('Error fetching localStorage sessions list:', err);
+      console.error('Error fetching past sessions list:', err);
     }
   };
+
+  // Automatically refresh past sessions when activeSessionId goes from active to inactive
+  useEffect(() => {
+    if (!activeSessionId) {
+      loadPastHistoryFromLocalStorage();
+    }
+  }, [activeSessionId, currentUser?.username]);
 
   // Fetch registered consultants directory
   const fetchConsultants = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/consultants');
+      const url = currentUser?.id ? `/api/consultants?userId=${currentUser.id}` : '/api/consultants';
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to load expert advisors list');
       const data = await res.json();
       setConsultants(data);
@@ -531,7 +635,15 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                   type="date"
                   value={editDob}
                   onChange={(e) => setEditDob(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full font-mono"
+                  onClick={(e) => {
+                    try {
+                      (e.target as any).showPicker();
+                    } catch (err) {
+                      console.log("showPicker not supported", err);
+                    }
+                  }}
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full font-mono cursor-pointer"
+                  style={{ colorScheme: 'dark' }}
                 />
               </div>
 
@@ -548,18 +660,46 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                 </select>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-mono text-slate-400 mb-1">Profile Photo URL</label>
-                <div className="relative">
-                  <Camera className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-3" />
-                  <input
-                    type="url"
-                    placeholder="https://example.com/photo.jpg"
-                    value={editPhotoUrl}
-                    onChange={(e) => setEditPhotoUrl(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full"
-                  />
+              <div className="md:col-span-2 space-y-2">
+                <label className="block text-[10px] font-mono text-slate-400 mb-1">Profile Photo (Upload file ya direct image link enter karein)</label>
+                <div className="flex flex-col sm:flex-row items-stretch gap-3">
+                  <div className="relative flex-1">
+                    <Camera className="w-3.5 h-3.5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Image link (e.g., https://example.com/photo.jpg) ya photo upload karein"
+                      value={editPhotoUrl}
+                      onChange={(e) => setEditPhotoUrl(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full font-mono"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="profile-photo-upload"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={uploadingPhoto}
+                    />
+                    <label
+                      htmlFor="profile-photo-upload"
+                      className={`cursor-pointer bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 hover:border-slate-600 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 w-full sm:w-auto shrink-0 ${uploadingPhoto ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <span>{uploadingPhoto ? 'Uploading...' : '📁 Upload Local Photo'}</span>
+                    </label>
+                  </div>
                 </div>
+                {editPhotoUrl && (
+                  <div className="mt-2 flex items-center space-x-3 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/60 max-w-sm font-sans">
+                    <img src={editPhotoUrl} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-slate-800" onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} referrerPolicy="no-referrer" />
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold">Live Preview</span>
+                      <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[200px]">{editPhotoUrl}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -661,12 +801,30 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                 <button
                   type="button"
                   onClick={() => handleQuickRecharge(rechargeAmount)}
-                  disabled={rechargeLoading}
+                  disabled={rechargeLoading || !rechargeAmount || parseFloat(rechargeAmount) <= 0}
                   className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-black px-4 rounded-xl text-xs transition-all shrink-0"
                 >
                   {rechargeLoading ? 'Adding...' : 'Recharge Wallet'}
                 </button>
               </div>
+
+              {/* GST breakdown helper */}
+              {rechargeAmount && parseFloat(rechargeAmount) > 0 && (
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-850/50 text-[11px] space-y-1 text-slate-400 font-mono text-left">
+                  <div className="flex justify-between">
+                    <span>Base Amount (Wallet Credit):</span>
+                    <span className="text-slate-300">₹{parseFloat(rechargeAmount).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>GST (18%):</span>
+                    <span className="text-slate-300">₹{(parseFloat(rechargeAmount) * 0.18).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-800 pt-1 text-emerald-400 font-bold">
+                    <span>Total Payable (to pay):</span>
+                    <span>₹{(parseFloat(rechargeAmount) * 1.18).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850/60 text-[10px] text-slate-400 font-mono text-left">
@@ -687,28 +845,64 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
               </div>
             ) : (
               <div className="overflow-y-auto max-h-[320px] pr-1 space-y-2">
-                {walletTransactions.map((tx) => (
-                  <div key={tx.id} className="bg-slate-950 p-3 rounded-xl border border-slate-850 flex items-center justify-between hover:border-slate-800 transition-colors">
-                    <div className="space-y-1 text-left">
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
-                          tx.type === 'recharge' ? 'text-emerald-400 bg-emerald-500/10' :
-                          tx.type === 'refund' ? 'text-blue-400 bg-blue-500/10' : 'text-rose-400 bg-rose-500/10'
-                        }`}>
-                          {tx.type.toUpperCase()}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-mono font-bold">#{tx.id}</span>
+                {walletTransactions.map((tx) => {
+                  const baseAmt = parseFloat(tx.amount || 0);
+                  const gstRateVal = tx.gst_rate || 18.0;
+                  const gstAmt = tx.gst_amount !== undefined && tx.gst_amount !== null && tx.gst_amount !== 0 ? parseFloat(tx.gst_amount) : parseFloat((baseAmt * 0.18).toFixed(2));
+                  const totalPaidVal = tx.total_paid !== undefined && tx.total_paid !== null && tx.total_paid !== 0 ? parseFloat(tx.total_paid) : parseFloat((baseAmt + gstAmt).toFixed(2));
+
+                  return (
+                    <div key={tx.id} className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-slate-800 transition-colors">
+                      <div className="space-y-1 text-left flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                            tx.type === 'recharge' ? 'text-emerald-400 bg-emerald-500/10' :
+                            tx.type === 'refund' ? 'text-blue-400 bg-blue-500/10' : 'text-rose-400 bg-rose-500/10'
+                          }`}>
+                            {tx.type.toUpperCase()}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono font-bold">#{tx.id}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 font-sans">{tx.description}</p>
+                        
+                        {tx.type === 'recharge' && (
+                          <div className="text-[10px] text-slate-400 font-mono bg-slate-900/40 p-1.5 rounded border border-slate-800/40 mt-1 max-w-sm space-y-0.5">
+                            <div className="flex justify-between">
+                              <span>Base Recharge amount:</span>
+                              <span className="text-slate-300">₹{baseAmt.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>GST Paid ({gstRateVal}%):</span>
+                              <span className="text-slate-300">₹{gstAmt.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-slate-850 pt-0.5 font-bold text-emerald-400">
+                              <span>Total Billed Amount:</span>
+                              <span>₹{totalPaidVal.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        )}
+                        <span className="text-[9px] text-slate-500 font-mono block mt-1">{new Date(tx.created_at).toLocaleString()}</span>
                       </div>
-                      <p className="text-xs text-slate-300 font-sans">{tx.description}</p>
-                      <span className="text-[9px] text-slate-500 font-mono block">{new Date(tx.created_at).toLocaleString()}</span>
+                      
+                      <div className="flex items-center justify-between md:justify-end gap-3 self-stretch md:self-auto border-t md:border-t-0 border-slate-850 pt-2 md:pt-0 shrink-0">
+                        {tx.type === 'recharge' && (
+                          <button
+                            type="button"
+                            onClick={() => downloadInvoice(tx, currentUser)}
+                            className="bg-slate-900 hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 border border-slate-800 hover:border-slate-700 px-2 py-1 rounded text-[10px] font-bold font-mono flex items-center gap-1 transition-all"
+                          >
+                            📥 Download Invoice
+                          </button>
+                        )}
+                        <div className={`font-mono text-xs font-bold ${
+                          tx.type === 'consultation' ? 'text-rose-400' : 'text-emerald-400'
+                        }`}>
+                          {tx.type === 'consultation' ? '-' : '+'}₹{baseAmt.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
-                    <div className={`font-mono text-xs font-bold shrink-0 pl-3 ${
-                      tx.type === 'consultation' ? 'text-rose-400' : 'text-emerald-400'
-                    }`}>
-                      {tx.type === 'consultation' ? '-' : '+'}₹{parseFloat(tx.amount || 0).toFixed(2)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1068,7 +1262,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                     </div>
                   </div>
 
-                  {/* Custom Input */}
+                   {/* Custom Input */}
                   <div className="space-y-2">
                     <label className="block text-[10px] font-mono text-slate-400 uppercase">Or Custom Amount (₹)</label>
                     <div className="flex space-x-2">
@@ -1096,6 +1290,24 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                         {rechargeLoading ? 'Adding...' : 'Recharge Wallet'}
                       </button>
                     </div>
+
+                    {/* GST breakdown helper */}
+                    {rechargeAmount && parseFloat(rechargeAmount) > 0 && (
+                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-850/50 text-[11px] space-y-1 text-slate-400 font-mono text-left mt-2">
+                        <div className="flex justify-between">
+                          <span>Base Amount (Wallet Credit):</span>
+                          <span className="text-slate-300">₹{parseFloat(rechargeAmount).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>GST (18%):</span>
+                          <span className="text-slate-300">₹{(parseFloat(rechargeAmount) * 0.18).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-slate-800 pt-1 text-emerald-400 font-bold">
+                          <span>Total Payable (to pay):</span>
+                          <span>₹{(parseFloat(rechargeAmount) * 1.18).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (

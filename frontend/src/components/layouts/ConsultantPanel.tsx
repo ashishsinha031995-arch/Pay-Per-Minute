@@ -5,9 +5,10 @@ import { Consultant, Plan, Session } from '../../types';
 interface ConsultantPanelProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
   onNavigateToUserView: (username: string) => void;
+  activeSessionId?: string;
 }
 
-export function ConsultantPanel({ onSelectSession, onNavigateToUserView }: ConsultantPanelProps) {
+export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId }: ConsultantPanelProps) {
   // Authentication & Session States
   const [currentConsultant, setCurrentConsultant] = useState<Consultant | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
@@ -30,6 +31,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView }: Consu
   const [photoUrl, setPhotoUrl] = useState('');
   const [bio, setBio] = useState('');
   const [pricePerMin, setPricePerMin] = useState('20');
+  const [hasInitializedProfile, setHasInitializedProfile] = useState(false);
 
   // Status Toggles
   const [isOnline, setIsOnline] = useState(false);
@@ -39,6 +41,54 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView }: Consu
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size is too big. Kripya 5MB se choti image upload karein.');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        try {
+          const res = await fetch('/api/user/upload-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64String })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
+          
+          setPhotoUrl(data.photo_url);
+          setSuccess('Profile photo successfully upload ho gayi hai!');
+          setTimeout(() => setSuccess(null), 3000);
+        } catch (uploadErr: any) {
+          setError(uploadErr.message);
+        } finally {
+          setUploadingPhoto(false);
+        }
+      };
+      reader.onerror = () => {
+        setError('File read karne me error aaya.');
+        setUploadingPhoto(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setError(err.message);
+      setUploadingPhoto(false);
+    }
+  };
 
   // Past session lookup states
   const [viewingPastSessionMessages, setViewingPastSessionMessages] = useState<any[] | null>(null);
@@ -85,6 +135,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView }: Consu
     return () => clearInterval(interval);
   }, [currentConsultant]);
 
+  // Trigger immediate refresh when a session finishes (activeSessionId transitions to falsy)
+  useEffect(() => {
+    if (currentConsultant && !activeSessionId) {
+      loadConsultantStatsAndStatus(currentConsultant.id);
+    }
+  }, [activeSessionId, currentConsultant]);
+
   // Logout handler
   function handleLogout() {
     localStorage.removeItem('consultant_session');
@@ -94,6 +151,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView }: Consu
     setCredentialsGenerated(null);
     setUsernameInput('');
     setPasswordInput('');
+    setHasInitializedProfile(false);
   }
 
   // Block User Handler
@@ -172,9 +230,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView }: Consu
         if (matching) {
           setIsOnline(matching.is_online === 1);
           setIsBusy(matching.is_busy === 1);
-          setPhotoUrl(matching.photo_url);
-          setBio(matching.bio);
-          setPricePerMin(matching.price_per_minute.toString());
+          if (!hasInitializedProfile) {
+            setPhotoUrl(matching.photo_url || '');
+            setBio(matching.bio || '');
+            setPricePerMin(matching.price_per_minute.toString());
+            setHasInitializedProfile(true);
+          }
         } else {
           // Consultant not found in current list
           handleLogout();
@@ -717,15 +778,45 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView }: Consu
               </div>
 
               <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-2">Display Profile Photo URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={photoUrl}
-                    onChange={(e) => setPhotoUrl(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono"
-                  />
+                <div className="space-y-2 text-left">
+                  <label className="block text-xs font-mono text-slate-400 mb-2">Display Profile Photo (Upload file ya direct link select karein)</label>
+                  <div className="flex flex-col sm:flex-row items-stretch gap-3">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="https://... ya direct text input"
+                        value={photoUrl}
+                        onChange={(e) => setPhotoUrl(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl pl-3 pr-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        id="consultant-photo-upload"
+                        className="hidden"
+                        onChange={handlePhotoUpload}
+                        disabled={uploadingPhoto}
+                      />
+                      <label
+                        htmlFor="consultant-photo-upload"
+                        className={`cursor-pointer bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 hover:border-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 w-full sm:w-auto shrink-0 ${uploadingPhoto ? 'opacity-50 pointer-events-none' : ''}`}
+                      >
+                        <span>{uploadingPhoto ? 'Uploading...' : '📁 Upload Photo'}</span>
+                      </label>
+                    </div>
+                  </div>
+                  {photoUrl && (
+                    <div className="mt-2 flex items-center space-x-3 bg-slate-950/40 p-2 rounded-xl border border-slate-800/60 max-w-sm font-sans">
+                      <img src={photoUrl} alt="Preview" className="w-8 h-8 rounded-lg object-cover border border-slate-800" onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} referrerPolicy="no-referrer" />
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Live Preview</span>
+                        <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[150px]">{photoUrl}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>

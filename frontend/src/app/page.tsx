@@ -100,6 +100,24 @@ export default function AppPage() {
     }
   }, [currentUser?.id]);
 
+  // Lock user to referred consultant if landing on deep link
+  useEffect(() => {
+    if (currentUser?.id && targetUsername) {
+      fetch('/api/user/lock-referral', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, consultantUsername: targetUsername })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(err => console.error('Error locking referral:', err));
+    }
+  }, [currentUser?.id, targetUsername]);
+
   // Handler to open an active real-time chat room
   const handleSelectSession = (sessionId: string, userName: string, role: 'user' | 'consultant') => {
     setActiveSession({ sessionId, userName, role });
@@ -277,6 +295,7 @@ export default function AppPage() {
                   setAuthTab('login');
                   setAuthModalOpen(true);
                 }}
+                activeSessionId={activeSession?.sessionId}
               />
             )}
 
@@ -285,6 +304,7 @@ export default function AppPage() {
               <ConsultantPanel
                 onSelectSession={handleSelectSession}
                 onNavigateToUserView={handleNavigateToUserView}
+                activeSessionId={activeSession?.sessionId}
               />
             )}
 

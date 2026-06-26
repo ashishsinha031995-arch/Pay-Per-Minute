@@ -1,9 +1,32 @@
 import { Request, Response } from 'express';
 import { db, logWalletTransaction } from '../config/database.js';
+import fs from 'fs';
+import path from 'path';
 
 // Get All Active Consultants (Public Listings page)
 export const getActiveConsultants = (req: Request, res: Response) => {
   try {
+    const { userId } = req.query;
+    let lockedConsultantId: number | null = null;
+    let adminAllowOthers = 0;
+
+    if (userId) {
+      const user = db.prepare('SELECT locked_consultant_id, admin_allow_others FROM users WHERE id = ?').get(userId) as any;
+      if (user) {
+        lockedConsultantId = user.locked_consultant_id;
+        adminAllowOthers = user.admin_allow_others;
+      }
+    }
+
+    if (lockedConsultantId && adminAllowOthers === 0) {
+      const consultants = db.prepare(`
+        SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category 
+        FROM consultants 
+        WHERE is_active = 1 AND id = ?
+      `).all(lockedConsultantId);
+      return res.json(consultants);
+    }
+
     const consultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category FROM consultants WHERE is_active = 1').all();
     res.json(consultants);
   } catch (err: any) {
@@ -208,11 +231,16 @@ export const updateUserProfile = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
+    const cleanDisplayName = (display_name || '').trim();
+    if (!cleanDisplayName) {
+      return res.status(400).json({ error: 'Display Name is required' });
+    }
+
     db.prepare(`
       UPDATE users 
       SET display_name = ?, photo_url = ?, dob = ?, gender = ?
       WHERE id = ?
-    `).run(display_name.trim(), photo_url || null, dob || null, gender || null, id);
+    `).run(cleanDisplayName, photo_url || null, dob || null, gender || null, id);
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     res.json({ success: true, user: updatedUser });
@@ -229,6 +257,9 @@ export const rechargeUserWallet = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid ID or recharge amount' });
     }
     const rechargeVal = parseFloat(amount);
+    const gstRate = 18.0; // 18% GST
+    const gstAmount = parseFloat((rechargeVal * 0.18).toFixed(2));
+    const totalPaid = parseFloat((rechargeVal + gstAmount).toFixed(2));
 
     db.prepare(`
       UPDATE users 
@@ -241,11 +272,14 @@ export const rechargeUserWallet = (req: Request, res: Response) => {
       Number(id),
       'recharge',
       rechargeVal,
-      `Wallet Recharge Page (Add ₹${rechargeVal.toFixed(2)})`
+      `Wallet Recharge of ₹${rechargeVal.toFixed(2)} (Paid ₹${totalPaid.toFixed(2)} incl. 18% GST)`,
+      gstRate,
+      gstAmount,
+      totalPaid
     );
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-    res.json({ success: true, user: updatedUser });
+    res.json({ success: true, user: updatedUser, gst_rate: gstRate, gst_amount: gstAmount, total_paid: totalPaid });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -302,3 +336,83 @@ export const getUserPastSessions = (req: Request, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// Handle profile photo upload (receives a Base64 data URL string)
+export const uploadPhoto = (req: Request, res: Response) => {
+  try {
+    const { image } = req.body;
+    if (!image) {
+      return res.status(400).json({ error: 'No image data provided' });
+    }
+
+    // Expecting "data:image/png;base64,iVBOR..."
+    const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return res.status(400).json({ error: 'Invalid Base64 image format' });
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Make sure it is actually an image mime type
+    if (!mimeType.startsWith('image/')) {
+      return res.status(400).json({ error: 'Only image files are allowed' });
+    }
+
+    // Map MIME type to file extension
+    let extension = 'png';
+    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+      extension = 'jpg';
+    } else if (mimeType === 'image/gif') {
+      extension = 'gif';
+    } else if (mimeType === 'image/webp') {
+      extension = 'webp';
+    } else if (mimeType === 'image/svg+xml') {
+      extension = 'svg';
+    }
+
+    // Define uploads directory
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const filename = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${extension}`;
+    const filepath = path.join(uploadsDir, filename);
+
+    fs.writeFileSync(filepath, buffer);
+
+    res.json({
+      success: true,
+      photo_url: `/uploads/${filename}`
+    });
+  } catch (err: any) {
+    console.error('Error uploading photo:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Lock User Referral to a specific consultant
+export const lockUserReferral = (req: Request, res: Response) => {
+  try {
+    const { userId, consultantUsername } = req.body;
+    if (!userId || !consultantUsername) {
+      return res.status(400).json({ error: 'User ID and Consultant Username are required' });
+    }
+
+    // Find consultant by username
+    const consultant = db.prepare('SELECT id FROM consultants WHERE LOWER(username) = ?').get(String(consultantUsername).toLowerCase().trim()) as any;
+    if (!consultant) {
+      return res.status(404).json({ error: 'Consultant not found' });
+    }
+
+    db.prepare('UPDATE users SET locked_consultant_id = ? WHERE id = ?').run(consultant.id, userId);
+
+    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    res.json({ success: true, user: updatedUser });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db } from '../config/database.js';
+import { db, logWalletTransaction } from '../config/database.js';
 
 export const getAdminDashboardStats = (req: Request, res: Response) => {
   try {
@@ -130,3 +130,98 @@ export const unblockUserBySuperAdmin = (req: Request, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const updateUserBySuperAdmin = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { 
+      display_name, 
+      email, 
+      photo_url, 
+      dob, 
+      gender, 
+      wallet_balance,
+      locked_consultant_id,
+      admin_allow_others,
+      category
+    } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const cleanDisplayName = (display_name || '').trim();
+    if (!cleanDisplayName) {
+      return res.status(400).json({ error: 'Display Name is required' });
+    }
+
+    db.prepare(`
+      UPDATE users 
+      SET display_name = ?, email = ?, photo_url = ?, dob = ?, gender = ?, wallet_balance = ?,
+          locked_consultant_id = ?, admin_allow_others = ?, category = ?
+      WHERE id = ?
+    `).run(
+      cleanDisplayName,
+      email || null,
+      photo_url || null,
+      dob || null,
+      gender || null,
+      parseFloat(wallet_balance) || 0,
+      (locked_consultant_id !== undefined && locked_consultant_id !== '' && locked_consultant_id !== null) ? parseInt(locked_consultant_id) : null,
+      admin_allow_others !== undefined ? parseInt(admin_allow_others) : 0,
+      category || 'General',
+      id
+    );
+
+    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    res.json({ success: true, user: updatedUser });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Bulk Update Users
+export const bulkUpdateUsersBySuperAdmin = (req: Request, res: Response) => {
+  try {
+    const { userIds, category, locked_consultant_id, admin_allow_others, wallet_add_amount } = req.body;
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'Please select at least one user for bulk update.' });
+    }
+
+    const placeholders = userIds.map(() => '?').join(',');
+
+    if (category !== undefined && category !== '') {
+      db.prepare(`UPDATE users SET category = ? WHERE id IN (${placeholders})`).run(category, ...userIds);
+    }
+
+    if (locked_consultant_id !== undefined) {
+      const val = (locked_consultant_id === 'null' || locked_consultant_id === null || locked_consultant_id === '') ? null : parseInt(locked_consultant_id);
+      db.prepare(`UPDATE users SET locked_consultant_id = ? WHERE id IN (${placeholders})`).run(val, ...userIds);
+    }
+
+    if (admin_allow_others !== undefined) {
+      const val = parseInt(admin_allow_others) || 0;
+      db.prepare(`UPDATE users SET admin_allow_others = ? WHERE id IN (${placeholders})`).run(val, ...userIds);
+    }
+
+    if (wallet_add_amount !== undefined && !isNaN(parseFloat(wallet_add_amount)) && parseFloat(wallet_add_amount) !== 0) {
+      const addAmount = parseFloat(wallet_add_amount);
+      db.prepare(`UPDATE users SET wallet_balance = wallet_balance + ? WHERE id IN (${placeholders})`).run(addAmount, ...userIds);
+      
+      // Log wallet transaction for each bulk-updated user
+      for (const userId of userIds) {
+        logWalletTransaction(
+          Number(userId),
+          'recharge',
+          addAmount,
+          `Bulk admin adjustment of ₹${addAmount.toFixed(2)}`
+        );
+      }
+    }
+
+    res.json({ success: true, message: `Successfully updated ${userIds.length} users in bulk.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+

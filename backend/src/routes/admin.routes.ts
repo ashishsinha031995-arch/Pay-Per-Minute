@@ -9,7 +9,9 @@ import {
   getAdminBlockedUsersList,
   getSuperAdminUsersList,
   blockUserBySuperAdmin,
-  unblockUserBySuperAdmin
+  unblockUserBySuperAdmin,
+  updateUserBySuperAdmin,
+  bulkUpdateUsersBySuperAdmin
 } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -24,5 +26,7 @@ router.get('/blocked', getAdminBlockedUsersList);
 router.get('/users', getSuperAdminUsersList);
 router.post('/users/block', blockUserBySuperAdmin);
 router.post('/users/unblock', unblockUserBySuperAdmin);
+router.put('/users/:id', updateUserBySuperAdmin);
+router.post('/users/bulk-update', bulkUpdateUsersBySuperAdmin);
 
 export default router;

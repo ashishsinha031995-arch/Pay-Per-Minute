@@ -156,6 +156,14 @@ export function initDb() {
   try { db.exec("ALTER TABLE consultants ADD COLUMN total_sessions INTEGER DEFAULT 0;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN average_rating REAL DEFAULT 5.0;"); } catch(_) {}
 
+  try { db.exec("ALTER TABLE users ADD COLUMN locked_consultant_id INTEGER DEFAULT NULL;"); } catch(_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN admin_allow_others INTEGER DEFAULT 0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN category TEXT DEFAULT 'General';"); } catch(_) {}
+
+  try { db.exec("ALTER TABLE wallet_transactions ADD COLUMN gst_rate REAL DEFAULT 0.0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE wallet_transactions ADD COLUMN gst_amount REAL DEFAULT 0.0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE wallet_transactions ADD COLUMN total_paid REAL DEFAULT 0.0;"); } catch(_) {}
+
   // Seed default Admin Settings
   const commissionSetting = db.prepare('SELECT * FROM admin_settings WHERE key = ?').get('commission_percentage');
   if (!commissionSetting) {
@@ -329,14 +337,85 @@ export function initDb() {
     insertReview.run(2, 'Rohit', 5, 'Super motivational session. Cleared my job selection dilemma.', now);
     insertReview.run(3, 'Sanya', 5, 'Loved the tarot reading, so on point!', now);
   }
+
+  // Migrate existing IDs < 10000 to be at least 5 digits
+  try {
+    // Turn foreign keys OFF outside transaction
+    db.pragma('foreign_keys = OFF');
+
+    db.transaction(() => {
+      // Migrate consultants
+      const lowCons = db.prepare('SELECT id FROM consultants WHERE id < 10000 ORDER BY id DESC').all() as { id: number }[];
+      for (const cons of lowCons) {
+        const oldId = cons.id;
+        const newId = oldId + 10000;
+        let targetId = newId;
+        const exists = db.prepare('SELECT id FROM consultants WHERE id = ?').get(targetId);
+        if (exists) {
+          const maxIdRow = db.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
+          targetId = Math.max(10000, maxIdRow?.maxId || 10000) + 1;
+        }
+        
+        db.prepare('UPDATE sessions SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
+        db.prepare('UPDATE reviews SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
+        db.prepare('UPDATE blocked_users SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
+        db.prepare('UPDATE consultants SET id = ? WHERE id = ?').run(targetId, oldId);
+      }
+
+      // Migrate users
+      const lowUsers = db.prepare('SELECT id FROM users WHERE id < 10000 ORDER BY id DESC').all() as { id: number }[];
+      for (const usr of lowUsers) {
+        const oldId = usr.id;
+        const newId = oldId + 10000;
+        let targetId = newId;
+        const exists = db.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+        if (exists) {
+          const maxIdRow = db.prepare('SELECT MAX(id) as maxId FROM users').get() as { maxId: number | null };
+          targetId = Math.max(10000, maxIdRow?.maxId || 10000) + 1;
+        }
+
+        db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(targetId, oldId);
+        db.prepare('UPDATE wallet_transactions SET user_id = ? WHERE user_id = ?').run(targetId, oldId);
+        db.prepare('UPDATE users SET id = ? WHERE id = ?').run(targetId, oldId);
+      }
+
+      // Update auto-increment sequence tables
+      const maxUser = db.prepare('SELECT MAX(id) as maxId FROM users').get() as { maxId: number | null };
+      const maxUserId = maxUser?.maxId || 10000;
+
+      const maxCons = db.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
+      const maxConsId = maxCons?.maxId || 10000;
+
+      db.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('users', 10000)").run();
+      db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'users'").run(Math.max(10000, maxUserId));
+
+      db.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('consultants', 10000)").run();
+      db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'consultants'").run(Math.max(10000, maxConsId));
+    })();
+
+    // Turn foreign keys ON outside transaction
+    db.pragma('foreign_keys = ON');
+    console.log('Database IDs migrated to 5-digit format successfully');
+  } catch (err) {
+    try { db.pragma('foreign_keys = ON'); } catch (_) {}
+    console.error('Error migrating IDs to 5-digit format:', err);
+  }
 }
 
-export function logWalletTransaction(userId: number, type: 'recharge' | 'consultation' | 'refund', amount: number, description: string) {
+export function logWalletTransaction(
+  userId: number,
+  type: 'recharge' | 'consultation' | 'refund',
+  amount: number,
+  description: string,
+  gstRate: number = 0.0,
+  gstAmount: number = 0.0,
+  totalPaid: number = amount
+) {
   try {
     db.prepare(`
-      INSERT INTO wallet_transactions (user_id, type, amount, description, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(userId, type, amount, description, new Date().toISOString());
+      INSERT INTO wallet_transactions (user_id, type, amount, description, gst_rate, gst_amount, total_paid, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, type, amount, description, gstRate, gstAmount, totalPaid, new Date().toISOString());
   } catch (err) {
     console.error('Failed to log wallet transaction:', err);
   }

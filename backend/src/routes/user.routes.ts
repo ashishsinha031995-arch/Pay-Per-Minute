@@ -14,7 +14,9 @@ import {
   addConsultantReview,
   blockUserByConsultant,
   unblockUserByConsultant,
-  getBlockedUsersByConsultant
+  getBlockedUsersByConsultant,
+  uploadPhoto,
+  lockUserReferral
 } from '../controllers/user.controller.js';
 
 const router = Router();
@@ -22,7 +24,9 @@ const router = Router();
 // User Actions
 router.get('/user/profile/:id', getUserProfileInfo);
 router.post('/user/update-profile', updateUserProfile);
+router.post('/user/upload-photo', uploadPhoto);
 router.post('/user/recharge', rechargeUserWallet);
+router.post('/user/lock-referral', lockUserReferral);
 router.get('/user/wallet-transactions/:userId', getUserWalletTransactions);
 router.get('/user/sessions', getUserPastSessions);
 
