@@ -8,6 +8,9 @@ export interface Plan {
   price: number;
   duration_days: number;
   description: string;
+  max_consultant_rate?: number;
+  support_hours?: string;
+  commission_rate?: number;
 }
 
 export interface Consultant {
@@ -26,6 +29,19 @@ export interface Consultant {
   wallet_total: number;
   wallet_withdrawable: number;
   plan_expiry: string | null;
+  plan_id?: number | null;
+  aadhaar_number?: string;
+  aadhaar_photo_url?: string;
+  pan_number?: string;
+  pan_photo_url?: string;
+  kyc_status?: string;
+  kyc_reject_reason?: string;
+  bank_account_holder_name?: string;
+  bank_account_number?: string;
+  bank_ifsc_code?: string;
+  bank_name?: string;
+  bank_status?: string;
+  bank_reject_reason?: string;
 }
 
 export interface User {
@@ -87,4 +103,7 @@ export interface AdminStats {
   totalConsultants: number;
   totalCommission: number;
   commissionRate: number;
+  salaryCutoffDay?: number;
+  salaryPayoutDay?: number;
+  plansStats?: any[];
 }

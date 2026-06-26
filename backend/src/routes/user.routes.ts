@@ -9,6 +9,7 @@ import {
   getConsultantProfileByUsername,
   updateConsultantStatus,
   updateConsultantProfile,
+  getConsultantProfileById,
   getConsultantStats,
   getConsultantReviews,
   addConsultantReview,
@@ -35,6 +36,7 @@ router.get('/consultants', getActiveConsultants);
 router.get('/consultants/profile/:username', getConsultantProfileByUsername);
 router.put('/consultants/:id/status', updateConsultantStatus);
 router.put('/consultants/:id/profile', updateConsultantProfile);
+router.get('/consultants/:id/profile', getConsultantProfileById);
 router.get('/consultants/:id/stats', getConsultantStats);
 
 // Review Logs

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { db, logWalletTransaction } from '../config/database.js';
+import { getSalaryCycleInfo, checkAndResetMonthlyWallets } from '../utils/salary.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -20,14 +21,14 @@ export const getActiveConsultants = (req: Request, res: Response) => {
 
     if (lockedConsultantId && adminAllowOthers === 0) {
       const consultants = db.prepare(`
-        SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category 
+        SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id 
         FROM consultants 
         WHERE is_active = 1 AND id = ?
       `).all(lockedConsultantId);
       return res.json(consultants);
     }
 
-    const consultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category FROM consultants WHERE is_active = 1').all();
+    const consultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id FROM consultants WHERE is_active = 1').all();
     res.json(consultants);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -69,6 +70,20 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
   }
 };
 
+// Get Consultant Profile Details (for logged in consultant dashboard)
+export const getConsultantProfileById = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const consultant = db.prepare('SELECT * FROM consultants WHERE id = ?').get(id);
+    if (!consultant) {
+      return res.status(404).json({ error: 'Consultant not found' });
+    }
+    res.json(consultant);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Update Consultant Profile Settings
 export const updateConsultantProfile = (req: Request, res: Response) => {
   try {
@@ -84,6 +99,30 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
     if (price_per_minute !== undefined) {
       const priceVal = parseFloat(price_per_minute);
       if (!isNaN(priceVal) && priceVal > 0) {
+        // Enforce plan-based price rate cap
+        const consultant = db.prepare('SELECT plan_id FROM consultants WHERE id = ?').get(id) as { plan_id: number | null } | undefined;
+        let maxRate = 1000.0; // fallback default
+        if (consultant) {
+          let planId = consultant.plan_id;
+          if (!planId) {
+            // Default to lowest priced plan (Free / Starter)
+            const defaultPlan = db.prepare('SELECT id, max_consultant_rate FROM plans ORDER BY price ASC LIMIT 1').get() as { id: number, max_consultant_rate: number } | undefined;
+            if (defaultPlan) {
+              planId = defaultPlan.id;
+              db.prepare('UPDATE consultants SET plan_id = ? WHERE id = ?').run(planId, id);
+              maxRate = defaultPlan.max_consultant_rate;
+            }
+          } else {
+            const plan = db.prepare('SELECT max_consultant_rate FROM plans WHERE id = ?').get(planId) as { max_consultant_rate: number } | undefined;
+            if (plan) {
+              maxRate = plan.max_consultant_rate;
+            }
+          }
+        }
+        
+        if (priceVal > maxRate) {
+          return res.status(400).json({ error: `Aapke current plan ke mutabik aap maximum ₹${maxRate}/min set kar sakte hain. Iss limit ko badhane ke liye superior plan subscribe karein.` });
+        }
         db.prepare('UPDATE consultants SET price_per_minute = ? WHERE id = ?').run(priceVal, id);
       }
     }
@@ -97,6 +136,49 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
       db.prepare('UPDATE consultants SET password = ? WHERE id = ?').run(password, id);
     }
 
+    // New KYC and Bank Details support
+    const { 
+      aadhaar_number, aadhaar_photo_url, pan_number, pan_photo_url, kyc_status, kyc_reject_reason,
+      bank_account_holder_name, bank_account_number, bank_ifsc_code, bank_name, bank_status, bank_reject_reason
+    } = req.body;
+
+    if (aadhaar_number !== undefined) {
+      db.prepare('UPDATE consultants SET aadhaar_number = ? WHERE id = ?').run(aadhaar_number, id);
+    }
+    if (aadhaar_photo_url !== undefined) {
+      db.prepare('UPDATE consultants SET aadhaar_photo_url = ? WHERE id = ?').run(aadhaar_photo_url, id);
+    }
+    if (pan_number !== undefined) {
+      db.prepare('UPDATE consultants SET pan_number = ? WHERE id = ?').run(pan_number, id);
+    }
+    if (pan_photo_url !== undefined) {
+      db.prepare('UPDATE consultants SET pan_photo_url = ? WHERE id = ?').run(pan_photo_url, id);
+    }
+    if (kyc_status !== undefined) {
+      db.prepare('UPDATE consultants SET kyc_status = ? WHERE id = ?').run(kyc_status, id);
+    }
+    if (kyc_reject_reason !== undefined) {
+      db.prepare('UPDATE consultants SET kyc_reject_reason = ? WHERE id = ?').run(kyc_reject_reason, id);
+    }
+    if (bank_account_holder_name !== undefined) {
+      db.prepare('UPDATE consultants SET bank_account_holder_name = ? WHERE id = ?').run(bank_account_holder_name, id);
+    }
+    if (bank_account_number !== undefined) {
+      db.prepare('UPDATE consultants SET bank_account_number = ? WHERE id = ?').run(bank_account_number, id);
+    }
+    if (bank_ifsc_code !== undefined) {
+      db.prepare('UPDATE consultants SET bank_ifsc_code = ? WHERE id = ?').run(bank_ifsc_code, id);
+    }
+    if (bank_name !== undefined) {
+      db.prepare('UPDATE consultants SET bank_name = ? WHERE id = ?').run(bank_name, id);
+    }
+    if (bank_status !== undefined) {
+      db.prepare('UPDATE consultants SET bank_status = ? WHERE id = ?').run(bank_status, id);
+    }
+    if (bank_reject_reason !== undefined) {
+      db.prepare('UPDATE consultants SET bank_reject_reason = ? WHERE id = ?').run(bank_reject_reason, id);
+    }
+
     const updated = db.prepare('SELECT * FROM consultants WHERE id = ?').get(id);
     res.json(updated);
   } catch (err: any) {
@@ -108,15 +190,22 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
 export const getConsultantStats = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const consultant = db.prepare('SELECT wallet_today, wallet_monthly, wallet_total, wallet_withdrawable, plan_expiry FROM consultants WHERE id = ?').get(id);
+    
+    // Check and trigger monthly wallet reset if crossed cutoff day
+    checkAndResetMonthlyWallets();
+
+    const consultant = db.prepare('SELECT wallet_today, wallet_monthly, wallet_total, wallet_withdrawable, plan_expiry, plan_id FROM consultants WHERE id = ?').get(id) as any;
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found' });
     }
 
     const sessions = db.prepare('SELECT * FROM sessions WHERE consultant_id = ? ORDER BY created_at DESC').all(id);
+    const salaryInfo = getSalaryCycleInfo(Number(id));
+
     res.json({
       wallet: consultant,
       sessions,
+      salaryInfo,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -346,30 +435,35 @@ export const uploadPhoto = (req: Request, res: Response) => {
     }
 
     // Expecting "data:image/png;base64,iVBOR..."
-    const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
+    if (!image.includes(';base64,')) {
+      return res.status(400).json({ error: 'Invalid image format, must be base64 data URL' });
+    }
+    const parts = image.split(';base64,');
+    if (parts.length !== 2) {
       return res.status(400).json({ error: 'Invalid Base64 image format' });
     }
 
-    const mimeType = matches[1];
-    const base64Data = matches[2];
+    const header = parts[0];
+    const base64Data = parts[1].replace(/\s/g, ''); // strip any newlines or spaces
     const buffer = Buffer.from(base64Data, 'base64');
 
-    // Make sure it is actually an image mime type
-    if (!mimeType.startsWith('image/')) {
-      return res.status(400).json({ error: 'Only image files are allowed' });
+    if (buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File size limit is 5MB. Kripya 5MB se choti file select karein.' });
     }
 
-    // Map MIME type to file extension
-    let extension = 'png';
+    if (!header.startsWith('data:')) {
+      return res.status(400).json({ error: 'Invalid image prefix' });
+    }
+    const mimeType = header.substring(5);
+
+    // Map MIME type to file extension, allow only png, jpg, jpeg
+    let extension = '';
     if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
       extension = 'jpg';
-    } else if (mimeType === 'image/gif') {
-      extension = 'gif';
-    } else if (mimeType === 'image/webp') {
-      extension = 'webp';
-    } else if (mimeType === 'image/svg+xml') {
-      extension = 'svg';
+    } else if (mimeType === 'image/png') {
+      extension = 'png';
+    } else {
+      return res.status(400).json({ error: 'Only PNG and JPG/JPEG files are allowed. (Sirf PNG aur JPG/JPEG format support hota hai.)' });
     }
 
     // Define uploads directory

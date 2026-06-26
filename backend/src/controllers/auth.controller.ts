@@ -121,6 +121,11 @@ export const consultantRegister = (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Subscription plan not found' });
     }
 
+    const price = initial_price_per_minute ? parseFloat(initial_price_per_minute) : 15.0;
+    if (plan.max_consultant_rate !== undefined && price > plan.max_consultant_rate) {
+      return res.status(400).json({ error: `Selected plan "${plan.name}" ke mutabik, maximum call rate ₹${plan.max_consultant_rate}/minute hi allow hai. Please select a lower rate.` });
+    }
+
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const username = `expert_${display_name.toLowerCase().replace(/[^a-z0-9]/g, '')}_${randomSuffix}`;
     const password = Math.random().toString(36).slice(-8);
@@ -129,14 +134,13 @@ export const consultantRegister = (req: Request, res: Response) => {
     expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
 
     const defaultPhoto = `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=300`;
-    const price = initial_price_per_minute ? parseFloat(initial_price_per_minute) : 15.0;
     const catValue = category || 'Consultants';
 
     const result = db.prepare(`
       INSERT INTO consultants (
         username, email, password, display_name, photo_url, bio, price_per_minute, 
-        is_online, is_busy, is_active, plan_expiry, category
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_online, is_busy, is_active, plan_expiry, category, plan_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       username,
       cleanEmail,
@@ -149,7 +153,8 @@ export const consultantRegister = (req: Request, res: Response) => {
       0, // not busy
       1, // active
       expiryDate.toISOString(),
-      catValue
+      catValue,
+      plan.id
     );
 
     const subject = `Welcome to Consulting Portal! Your Consultant Login Credentials`;

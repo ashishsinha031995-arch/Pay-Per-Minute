@@ -132,8 +132,21 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
       }
     }
 
-    const commissionSetting = db.prepare("SELECT value FROM admin_settings WHERE key = 'commission_percentage'").get() as { value: string };
-    const commission_rate = parseFloat(commissionSetting?.value || '20');
+    // Fetch consultant's plan specific commission rate
+    const consultantObj = db.prepare('SELECT plan_id FROM consultants WHERE id = ?').get(consultant_id) as { plan_id: number | null } | undefined;
+    let commission_rate = 20.0;
+    if (consultantObj && consultantObj.plan_id) {
+      const plan = db.prepare('SELECT commission_rate FROM plans WHERE id = ?').get(consultantObj.plan_id) as { commission_rate: number } | undefined;
+      if (plan && plan.commission_rate !== undefined && plan.commission_rate !== null) {
+        commission_rate = plan.commission_rate;
+      } else {
+        const commissionSetting = db.prepare("SELECT value FROM admin_settings WHERE key = 'commission_percentage'").get() as { value: string };
+        commission_rate = parseFloat(commissionSetting?.value || '20');
+      }
+    } else {
+      const commissionSetting = db.prepare("SELECT value FROM admin_settings WHERE key = 'commission_percentage'").get() as { value: string };
+      commission_rate = parseFloat(commissionSetting?.value || '20');
+    }
 
     const commission_amount = total_paid * (commission_rate / 100);
     const consultant_earnings = total_paid - commission_amount;

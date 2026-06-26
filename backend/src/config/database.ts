@@ -48,7 +48,19 @@ export function initDb() {
       verification_status TEXT DEFAULT 'Verified',
       lifetime_revenue REAL DEFAULT 0.0,
       total_sessions INTEGER DEFAULT 0,
-      average_rating REAL DEFAULT 5.0
+      average_rating REAL DEFAULT 5.0,
+      aadhaar_number TEXT,
+      aadhaar_photo_url TEXT,
+      pan_number TEXT,
+      pan_photo_url TEXT,
+      kyc_status TEXT DEFAULT 'unsubmitted',
+      kyc_reject_reason TEXT,
+      bank_account_holder_name TEXT,
+      bank_account_number TEXT,
+      bank_ifsc_code TEXT,
+      bank_name TEXT,
+      bank_status TEXT DEFAULT 'unsubmitted',
+      bank_reject_reason TEXT
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -164,6 +176,26 @@ export function initDb() {
   try { db.exec("ALTER TABLE wallet_transactions ADD COLUMN gst_amount REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE wallet_transactions ADD COLUMN total_paid REAL DEFAULT 0.0;"); } catch(_) {}
 
+  // Alter plans and consultants to support dynamic caps
+  try { db.exec("ALTER TABLE plans ADD COLUMN max_consultant_rate REAL DEFAULT 1000;"); } catch(_) {}
+  try { db.exec("ALTER TABLE plans ADD COLUMN support_hours TEXT DEFAULT '72 Hours';"); } catch(_) {}
+  try { db.exec("ALTER TABLE plans ADD COLUMN commission_rate REAL DEFAULT 20.0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN plan_id INTEGER REFERENCES plans(id);"); } catch(_) {}
+
+  // KYC and Bank Details migration
+  try { db.exec("ALTER TABLE consultants ADD COLUMN aadhaar_number TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN aadhaar_photo_url TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN pan_number TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN pan_photo_url TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN kyc_status TEXT DEFAULT 'unsubmitted';"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN kyc_reject_reason TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN bank_account_holder_name TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN bank_account_number TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN bank_ifsc_code TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN bank_name TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN bank_status TEXT DEFAULT 'unsubmitted';"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN bank_reject_reason TEXT;"); } catch(_) {}
+
   // Seed default Admin Settings
   const commissionSetting = db.prepare('SELECT * FROM admin_settings WHERE key = ?').get('commission_percentage');
   if (!commissionSetting) {
@@ -171,12 +203,40 @@ export function initDb() {
   }
 
   // Seed default Subscription Plans
-  const plansCount = db.prepare('SELECT COUNT(*) as count FROM plans').get() as { count: number };
-  if (plansCount.count === 0) {
-    const insertPlan = db.prepare('INSERT INTO plans (name, price, duration_days, description) VALUES (?, ?, ?, ?)');
-    insertPlan.run('Silver Plan', 499, 30, 'Standard profile listing on platform, access to basic statistics.');
-    insertPlan.run('Gold Plan', 999, 90, 'Featured profile listing with higher visibility, standard platform support.');
-    insertPlan.run('Platinum Plan', 1999, 180, 'Elite status profile listing with premium support and custom commission discount.');
+  const hasStarter = db.prepare("SELECT id FROM plans WHERE name LIKE '%Starter%' OR name LIKE '%Launchpad%'").get();
+  if (!hasStarter) {
+    db.exec("DELETE FROM plans;");
+    const insertPlan = db.prepare(`
+      INSERT INTO plans (name, price, duration_days, description, max_consultant_rate, support_hours, commission_rate)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertPlan.run(
+      'Starter Launchpad (30 Days Free Trial)', 
+      0.0, 
+      30, 
+      'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹25/min. 30% platform commission.',
+      25.0,
+      '72 Hours',
+      30.0
+    );
+    insertPlan.run(
+      'Professional Growth Booster', 
+      4999.0, 
+      30, 
+      'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹100/min. 25% platform commission.',
+      100.0,
+      '48 Hours',
+      25.0
+    );
+    insertPlan.run(
+      'Elite Mastermind Hub', 
+      9999.0, 
+      30, 
+      'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹500/min. 20% platform commission.',
+      500.0,
+      '24 Hours',
+      20.0
+    );
   }
 
   // Seed default Consultants

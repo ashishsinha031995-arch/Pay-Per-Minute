@@ -5,7 +5,7 @@ export function startSubscriptionExpiryJob() {
   setInterval(() => {
     try {
       const now = new Date().toISOString();
-      const expiredConsultants = db.prepare("SELECT id, username, plan_expiry FROM consultants WHERE plan_expiry IS NOT NULL AND plan_expiry < ?").all() as any[];
+      const expiredConsultants = db.prepare("SELECT id, username, plan_expiry FROM consultants WHERE plan_expiry IS NOT NULL AND plan_expiry < ?").all(now) as any[];
       
       for (const cons of expiredConsultants) {
         console.log(`[Subscription Engine] Consultant ${cons.username}'s plan expired at ${cons.plan_expiry}. Initiating graceful downgrade notification.`);

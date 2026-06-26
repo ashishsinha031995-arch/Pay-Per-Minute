@@ -45,11 +45,53 @@ export function AdminPanel() {
   const [consLanguages, setConsLanguages] = useState('English, Hindi');
   const [consSpec, setConsSpec] = useState('General Consulting');
 
-  // Plan Creator Form State
+  // Super Admin Editable KYC/Bank details
+  const [consAadhaarNumber, setConsAadhaarNumber] = useState('');
+  const [consAadhaarPhotoUrl, setConsAadhaarPhotoUrl] = useState('');
+  const [consPanNumber, setConsPanNumber] = useState('');
+  const [consPanPhotoUrl, setConsPanPhotoUrl] = useState('');
+  const [consKycStatus, setConsKycStatus] = useState('unsubmitted');
+  const [consBankHolderName, setConsBankHolderName] = useState('');
+  const [consBankAccountNumber, setConsBankAccountNumber] = useState('');
+  const [consBankIfscCode, setConsBankIfscCode] = useState('');
+  const [consBankName, setConsBankName] = useState('');
+  const [consBankStatus, setConsBankStatus] = useState('unsubmitted');
+
+  // Expanded collapsible details row tracker for advisors
+  const [expandedKycConsId, setExpandedKycConsId] = useState<number | null>(null);
+  const [kycRejectReasonInput, setKycRejectReasonInput] = useState('');
+  const [bankRejectReasonInput, setBankRejectReasonInput] = useState('');
+
+  const getProfileCompletionPercentage = (cons: Consultant) => {
+    let score = 0;
+    const totalFields = 11;
+
+    if (cons.display_name && cons.display_name.trim() !== '') score++;
+    if (cons.photo_url && cons.photo_url.trim() !== '') score++;
+    if (cons.bio && cons.bio.trim() !== '') score++;
+    if (cons.price_per_minute > 0) score++;
+
+    if ((cons as any).aadhaar_number && (cons as any).aadhaar_number.trim() !== '') score++;
+    if ((cons as any).aadhaar_photo_url && (cons as any).aadhaar_photo_url.trim() !== '') score++;
+    if ((cons as any).pan_number && (cons as any).pan_number.trim() !== '') score++;
+    if ((cons as any).pan_photo_url && (cons as any).pan_photo_url.trim() !== '') score++;
+
+    if ((cons as any).bank_account_holder_name && (cons as any).bank_account_holder_name.trim() !== '') score++;
+    if ((cons as any).bank_account_number && (cons as any).bank_account_number.trim() !== '') score++;
+    if ((cons as any).bank_ifsc_code && (cons as any).bank_ifsc_code.trim() !== '') score++;
+
+    return Math.round((score / totalFields) * 100);
+  };
+
+  // Plan Creator/Editor Form State
   const [planName, setPlanName] = useState('');
   const [planPrice, setPlanPrice] = useState('');
   const [planDuration, setPlanDuration] = useState('');
   const [planDesc, setPlanDesc] = useState('');
+  const [planMaxRate, setPlanMaxRate] = useState('25');
+  const [planSupportHours, setPlanSupportHours] = useState('72 Hours');
+  const [planCommission, setPlanCommission] = useState('30');
+  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
 
   // User Editing Form States
   const [showUserModal, setShowUserModal] = useState(false);
@@ -66,8 +108,21 @@ export function AdminPanel() {
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // Reviews Moderation State
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewSearch, setReviewSearch] = useState('');
+  const [reviewRatingFilter, setReviewRatingFilter] = useState('all');
+
+  // Reactive Bulk Update Operations Panel states
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkConsultantId, setBulkConsultantId] = useState('');
+  const [bulkOverride, setBulkOverride] = useState('');
+  const [bulkWalletAdd, setBulkWalletAdd] = useState('');
+
   // Global settings input states
   const [commissionRateInput, setCommissionRateInput] = useState<string>('20');
+  const [cutoffDayInput, setCutoffDayInput] = useState<string>('25');
+  const [payoutDayInput, setPayoutDayInput] = useState<string>('7');
   
   // Broadcast Broadcaster states
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'users' | 'consultants'>('all');
@@ -118,17 +173,18 @@ export function AdminPanel() {
       if (!silent) setLoading(true);
       setError(null);
 
-      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes] = await Promise.all([
+      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/consultants'),
         fetch('/api/admin/sessions'),
         fetch('/api/plans'),
         fetch('/api/admin/blocked'),
         fetch('/api/admin/users'),
-        fetch('/api/admin/emails')
+        fetch('/api/admin/emails'),
+        fetch('/api/admin/reviews')
       ]);
 
-      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok) {
+      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok) {
         throw new Error('Failed to load admin dataset');
       }
 
@@ -139,15 +195,19 @@ export function AdminPanel() {
       const blockedData = await blockedRes.json();
       const usersData = await usersRes.json();
       const emailsData = await emailsRes.json();
+      const reviewsData = await reviewsRes.json();
 
       setStats(statsData);
       setCommissionRateInput(statsData.commissionRate.toString());
+      if (statsData.salaryCutoffDay !== undefined) setCutoffDayInput(statsData.salaryCutoffDay.toString());
+      if (statsData.salaryPayoutDay !== undefined) setPayoutDayInput(statsData.salaryPayoutDay.toString());
       setConsultants(consData);
       setSessions(sessData);
       setPlans(plansData);
       setBlockedLogs(blockedData);
       setAdminUsers(usersData);
       setSentEmails(emailsData);
+      setReviews(reviewsData);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -174,17 +234,24 @@ export function AdminPanel() {
     setTimeout(() => setIsRefreshing(false), 800);
   };
 
-  // Update Global Commission Setting
+  // Update Global Commission & Salary Settings
   const handleUpdateCommission = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ commission_percentage: commissionRateInput }),
+        body: JSON.stringify({ 
+          commission_percentage: commissionRateInput,
+          salary_cutoff_day: cutoffDayInput,
+          salary_payout_day: payoutDayInput
+        }),
       });
-      if (!res.ok) throw new Error('Could not update commission setting');
-      setSuccessMsg('Platform commission rate updated successfully!');
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Could not update system settings');
+      }
+      setSuccessMsg('System settings (commission, cutoff, payout days) updated successfully!');
       loadAdminData();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -200,22 +267,74 @@ export function AdminPanel() {
       return;
     }
     try {
-      const res = await fetch('/api/admin/plans', {
-        method: 'POST',
+      const url = editingPlan ? `/api/admin/plans/${editingPlan.id}` : '/api/admin/plans';
+      const method = editingPlan ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: planName,
           price: parseFloat(planPrice),
           duration_days: parseInt(planDuration),
           description: planDesc,
+          max_consultant_rate: parseFloat(planMaxRate),
+          support_hours: planSupportHours,
+          commission_rate: parseFloat(planCommission),
         }),
       });
-      if (!res.ok) throw new Error('Failed to create new subscription plan');
-      setSuccessMsg(`Plan "${planName}" created successfully!`);
+      if (!res.ok) throw new Error(editingPlan ? 'Failed to update subscription plan' : 'Failed to create new subscription plan');
+      setSuccessMsg(editingPlan ? `Plan "${planName}" updated successfully!` : `Plan "${planName}" created successfully!`);
+      
+      // Clear fields
+      setEditingPlan(null);
       setPlanName('');
       setPlanPrice('');
       setPlanDuration('');
       setPlanDesc('');
+      setPlanMaxRate('25');
+      setPlanSupportHours('72 Hours');
+      setPlanCommission('30');
+      
+      loadAdminData();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const startEditingPlan = (plan: Plan) => {
+    setEditingPlan(plan);
+    setPlanName(plan.name);
+    setPlanPrice(plan.price.toString());
+    setPlanDuration(plan.duration_days.toString());
+    setPlanDesc(plan.description || '');
+    setPlanMaxRate((plan.max_consultant_rate ?? 25).toString());
+    setPlanSupportHours(plan.support_hours ?? '72 Hours');
+    setPlanCommission((plan.commission_rate ?? 30).toString());
+  };
+
+  const cancelEditingPlan = () => {
+    setEditingPlan(null);
+    setPlanName('');
+    setPlanPrice('');
+    setPlanDuration('');
+    setPlanDesc('');
+    setPlanMaxRate('25');
+    setPlanSupportHours('72 Hours');
+    setPlanCommission('30');
+  };
+
+  const handleDeletePlan = async (planId: number) => {
+    if (!window.confirm('Kya aap such mein iss subscription package ko delete karna chahte hain?')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/plans/${planId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete subscription plan');
+      setSuccessMsg('Subscription package deleted successfully!');
       loadAdminData();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -242,6 +361,16 @@ export function AdminPanel() {
         experience: parseInt(consExp),
         languages: consLanguages,
         specializations: consSpec,
+        aadhaar_number: consAadhaarNumber,
+        aadhaar_photo_url: consAadhaarPhotoUrl,
+        pan_number: consPanNumber,
+        pan_photo_url: consPanPhotoUrl,
+        kyc_status: consKycStatus,
+        bank_account_holder_name: consBankHolderName,
+        bank_account_number: consBankAccountNumber,
+        bank_ifsc_code: consBankIfscCode,
+        bank_name: consBankName,
+        bank_status: consBankStatus,
       };
 
       let endpoint = '/api/consultants/register';
@@ -277,6 +406,69 @@ export function AdminPanel() {
       setConsBio('');
       setConsRate('20');
       setConsCategory('Astrologers');
+      
+      // Reset KYC/Bank states
+      setConsAadhaarNumber('');
+      setConsAadhaarPhotoUrl('');
+      setConsPanNumber('');
+      setConsPanPhotoUrl('');
+      setConsKycStatus('unsubmitted');
+      setConsBankHolderName('');
+      setConsBankAccountNumber('');
+      setConsBankIfscCode('');
+      setConsBankName('');
+      setConsBankStatus('unsubmitted');
+
+      loadAdminData();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  // Verify & Approve KYC Status
+  const handleUpdateKycStatus = async (id: number, status: 'approved' | 'rejected', rejectReason: string) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/consultants/${id}/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kyc_status: status,
+          kyc_reject_reason: rejectReason || null
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to update KYC status.');
+      setSuccessMsg(`KYC status successfully updated to: ${status.toUpperCase()}`);
+      
+      // Clear inputs
+      setKycRejectReasonInput('');
+      
+      loadAdminData();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  // Verify & Approve Bank Details Status
+  const handleUpdateBankStatus = async (id: number, status: 'approved' | 'rejected', rejectReason: string) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/consultants/${id}/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bank_status: status,
+          bank_reject_reason: rejectReason || null
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to update Bank status.');
+      setSuccessMsg(`Bank status successfully updated to: ${status.toUpperCase()}`);
+      
+      // Clear inputs
+      setBankRejectReasonInput('');
+      
       loadAdminData();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -837,6 +1029,72 @@ export function AdminPanel() {
               {/* Dynamic Analytics graphs from sub-component */}
               <DashboardGraphs />
 
+              {/* ⚡ Subscription Packages Dynamic Dashboard */}
+              {stats.plansStats && stats.plansStats.length > 0 && (
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left relative overflow-hidden shadow-xl">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+                    <div className="space-y-0.5">
+                      <span className="bg-sky-500/10 text-sky-400 text-[10px] font-mono font-black px-2.5 py-0.5 rounded border border-sky-500/15 uppercase tracking-wide">
+                        Membership Packages
+                      </span>
+                      <h3 className="text-base font-black text-slate-100 mt-1">Dynamic Plans Overview & Revenue Splits</h3>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 font-bold bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-850 self-start sm:self-center">
+                      Auto-updates on package creation/edit
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {stats.plansStats.map((plan: any) => (
+                      <div key={plan.id} className="bg-slate-950 p-4 rounded-2xl border border-slate-850 hover:border-slate-700 transition-all flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <strong className="text-sm font-bold text-slate-100 line-clamp-1">{plan.name}</strong>
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded border border-emerald-500/15 font-bold shrink-0">
+                              ₹{plan.price}/mo
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-normal line-clamp-2">{plan.description}</p>
+                          
+                          {/* Plan Parameters Grid */}
+                          <div className="grid grid-cols-2 gap-2 pt-2 text-[10px] font-mono text-slate-400">
+                            <div className="bg-slate-900/50 p-1.5 rounded border border-slate-850">
+                              <span className="text-slate-500 block">Commission:</span>
+                              <strong className="text-slate-300">{plan.commission_rate}%</strong>
+                            </div>
+                            <div className="bg-slate-900/50 p-1.5 rounded border border-slate-850">
+                              <span className="text-slate-500 block">Max Rate:</span>
+                              <strong className="text-slate-300">₹{plan.max_consultant_rate}/min</strong>
+                            </div>
+                            <div className="bg-slate-900/50 p-1.5 rounded border border-slate-850">
+                              <span className="text-slate-500 block">SLA:</span>
+                              <strong className="text-slate-300 truncate block">{plan.support_hours}</strong>
+                            </div>
+                            <div className="bg-slate-900/50 p-1.5 rounded border border-slate-850">
+                              <span className="text-slate-500 block">Enrolled:</span>
+                              <strong className="text-sky-400">{plan.enrolledCount} active</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Financial Splits */}
+                        <div className="border-t border-slate-850 pt-3 mt-2 grid grid-cols-2 gap-2 shrink-0">
+                          <div>
+                            <span className="text-[9px] text-slate-500 font-mono block uppercase">Total Revenue</span>
+                            <strong className="text-xs text-slate-300 font-mono">₹{plan.totalRevenue.toFixed(2)}</strong>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-slate-500 font-mono block uppercase">Platform Share</span>
+                            <strong className="text-xs text-emerald-400 font-mono">₹{plan.totalCommission.toFixed(2)}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 📊 Today's & Yesterday's Consultation Report Section */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pt-2">
                 
@@ -1159,80 +1417,311 @@ export function AdminPanel() {
                     </thead>
                     <tbody className="divide-y divide-slate-800/80 text-slate-300">
                       {filteredConsultants.map(cons => (
-                        <tr key={cons.id} className="hover:bg-slate-950/30">
-                          <td className="px-6 py-4 flex items-center space-x-3">
-                            <img src={cons.photo_url} alt="" className="w-9 h-9 rounded-xl object-cover border border-slate-800" referrerPolicy="no-referrer" />
-                            <div>
-                              <strong className="text-slate-100 font-bold block text-sm">{cons.display_name}</strong>
-                              <span className="text-[10px] text-slate-500 font-mono">ID: #{cons.id}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                              {(cons as any).category || 'Consultants'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-slate-200 font-mono text-[11px]">User: {cons.username}</div>
-                            <div className="text-slate-500 font-mono text-[10px]">Pass: {cons.password}</div>
-                          </td>
-                          <td className="px-6 py-4 font-mono font-bold text-emerald-400">₹{cons.price_per_minute}/min</td>
-                          <td className="px-6 py-4">
-                            <div className="font-mono text-slate-100 font-bold">₹{cons.wallet_withdrawable.toFixed(2)}</div>
-                            <span className="text-[10px] text-slate-500 font-mono">Today: ₹{cons.wallet_today.toFixed(2)}</span>
-                          </td>
-                          <td className="px-6 py-4 font-mono">
-                            <span className="bg-cyan-500/15 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded border border-cyan-500/20">
-                              {(cons as any).verification_status || 'Verified'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            {cons.is_active === 1 ? (
-                              <span className="bg-emerald-500/10 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/20">Active</span>
-                            ) : (
-                              <span className="bg-rose-500/10 text-rose-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-500/20">Suspended</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end space-x-1.5">
-                              <button
-                                onClick={() => handleResetPassword(cons)}
-                                className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-850"
-                                title="Reset credentials"
-                              >
-                                <Key className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingConsultant(cons);
-                                  setConsName(cons.display_name);
-                                  setConsEmail(cons.email || '');
-                                  setConsUsername(cons.username);
-                                  setConsPassword(cons.password);
-                                  setConsBio(cons.bio || '');
-                                  setConsRate(cons.price_per_minute.toString());
-                                  setConsCategory((cons as any).category || 'Consultants');
-                                  setShowConsultantModal(true);
-                                }}
-                                className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-850"
-                                title="Edit parameters"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleToggleConsultant(cons.id)}
-                                className={`p-1.5 rounded-lg border transition-all ${
-                                  cons.is_active === 1 
-                                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/10 hover:bg-rose-500/25' 
-                                    : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/10 hover:bg-emerald-500/25'
-                                }`}
-                                title={cons.is_active === 1 ? 'Suspend Advisor' : 'Activate Advisor'}
-                              >
-                                {cons.is_active === 1 ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                        <React.Fragment key={cons.id}>
+                          <tr className="hover:bg-slate-950/30">
+                            <td className="px-6 py-4 flex items-center space-x-3">
+                              <div className="relative">
+                                <img src={cons.photo_url} alt="" className="w-10 h-10 rounded-xl object-cover border border-slate-800" referrerPolicy="no-referrer" />
+                                {/* Overlay circular completion graph */}
+                                <div className="absolute -bottom-1 -right-1 bg-slate-950 p-0.5 rounded-full border border-slate-800 flex items-center justify-center">
+                                  {(() => {
+                                    const pct = getProfileCompletionPercentage(cons);
+                                    const radius = 8;
+                                    const circ = 2 * Math.PI * radius;
+                                    const strokePct = ((100 - pct) / 100) * circ;
+                                    return (
+                                      <svg className="w-5 h-5 -rotate-90">
+                                        <circle r={radius} cx="10" cy="10" className="text-slate-800" strokeWidth="2.5" fill="transparent" stroke="currentColor" />
+                                        <circle r={radius} cx="10" cy="10" className="text-emerald-400" strokeWidth="2.5" fill="transparent" strokeDasharray={circ} strokeDashoffset={strokePct} strokeLinecap="round" stroke="currentColor" />
+                                        <text x="10" y="13" className="text-[6px] font-bold text-slate-200 fill-current rotate-90 origin-[10px_10px]" textAnchor="middle">{pct}%</text>
+                                      </svg>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                              <div>
+                                <strong className="text-slate-100 font-bold block text-sm">{cons.display_name}</strong>
+                                <span className="text-[10px] text-slate-500 font-mono">ID: #{cons.id}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                {(cons as any).category || 'Consultants'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-slate-200 font-mono text-[11px]">User: {cons.username}</div>
+                              <div className="text-slate-500 font-mono text-[10px]">Pass: {cons.password}</div>
+                            </td>
+                            <td className="px-6 py-4 font-mono font-bold text-emerald-400">₹{cons.price_per_minute}/min</td>
+                            <td className="px-6 py-4">
+                              <div className="font-mono text-slate-100 font-bold">₹{cons.wallet_withdrawable.toFixed(2)}</div>
+                              <span className="text-[10px] text-slate-500 font-mono">Today: ₹{cons.wallet_today.toFixed(2)}</span>
+                            </td>
+                            <td className="px-6 py-4 font-mono">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1 text-[10px]">
+                                  <span className="text-slate-500">KYC:</span>
+                                  <span className={`font-bold uppercase ${
+                                    (cons as any).kyc_status === 'approved' ? 'text-emerald-400' :
+                                    (cons as any).kyc_status === 'pending' ? 'text-amber-400 animate-pulse' :
+                                    'text-slate-500'
+                                  }`}>
+                                    {(cons as any).kyc_status || 'unsubmitted'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px]">
+                                  <span className="text-slate-500">Bank:</span>
+                                  <span className={`font-bold uppercase ${
+                                    (cons as any).bank_status === 'approved' ? 'text-emerald-400' :
+                                    (cons as any).bank_status === 'pending' ? 'text-amber-400 animate-pulse' :
+                                    'text-slate-500'
+                                  }`}>
+                                    {(cons as any).bank_status || 'unsubmitted'}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => setExpandedKycConsId(expandedKycConsId === cons.id ? null : cons.id)}
+                                  className="bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 text-[9px] px-2 py-0.5 rounded font-bold transition-all flex items-center gap-1 mt-1"
+                                >
+                                  <span>Review Documents</span>
+                                  <span className="text-[8px]">{expandedKycConsId === cons.id ? '▲' : '▼'}</span>
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {cons.is_active === 1 ? (
+                                <span className="bg-emerald-500/10 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/20">Active</span>
+                              ) : (
+                                <span className="bg-rose-500/10 text-rose-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-500/20">Suspended</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end space-x-1.5">
+                                <button
+                                  onClick={() => handleResetPassword(cons)}
+                                  className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-850"
+                                  title="Reset credentials"
+                                >
+                                  <Key className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingConsultant(cons);
+                                    setConsName(cons.display_name);
+                                    setConsEmail(cons.email || '');
+                                    setConsUsername(cons.username);
+                                    setConsPassword(cons.password);
+                                    setConsBio(cons.bio || '');
+                                    setConsRate(cons.price_per_minute.toString());
+                                    setConsCategory((cons as any).category || 'Consultants');
+                                    
+                                    // Initialize KYC and Bank details in modal inputs
+                                    setConsAadhaarNumber((cons as any).aadhaar_number || '');
+                                    setConsAadhaarPhotoUrl((cons as any).aadhaar_photo_url || '');
+                                    setConsPanNumber((cons as any).pan_number || '');
+                                    setConsPanPhotoUrl((cons as any).pan_photo_url || '');
+                                    setConsKycStatus((cons as any).kyc_status || 'unsubmitted');
+                                    setConsBankHolderName((cons as any).bank_account_holder_name || '');
+                                    setConsBankAccountNumber((cons as any).bank_account_number || '');
+                                    setConsBankIfscCode((cons as any).bank_ifsc_code || '');
+                                    setConsBankName((cons as any).bank_name || '');
+                                    setConsBankStatus((cons as any).bank_status || 'unsubmitted');
+                                    
+                                    setShowConsultantModal(true);
+                                  }}
+                                  className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-850"
+                                  title="Edit parameters"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleToggleConsultant(cons.id)}
+                                  className={`p-1.5 rounded-lg border transition-all ${
+                                    cons.is_active === 1 
+                                      ? 'bg-rose-500/15 text-rose-400 border-rose-500/10 hover:bg-rose-500/25' 
+                                      : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/10 hover:bg-emerald-500/25'
+                                  }`}
+                                  title={cons.is_active === 1 ? 'Suspend Advisor' : 'Activate Advisor'}
+                                >
+                                  {cons.is_active === 1 ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Collapsible details row for KYC and Bank Details Verification */}
+                          {expandedKycConsId === cons.id && (
+                            <tr className="bg-slate-950/40 border-b border-slate-800/60" id={`kyc-details-row-${cons.id}`}>
+                              <td colSpan={8} className="px-6 py-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-left">
+                                  {/* Aadhaar and PAN Card Column */}
+                                  <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-3">
+                                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                                      <span className="font-bold text-xs text-slate-200 uppercase tracking-wider font-mono">KYC Documents Review</span>
+                                      <span className={`text-[10px] font-extrabold uppercase font-mono px-2 py-0.5 rounded border ${
+                                        (cons as any).kyc_status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                        (cons as any).kyc_status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' :
+                                        (cons as any).kyc_status === 'rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                        'bg-slate-950 text-slate-500 border-slate-800'
+                                      }`}>
+                                        {(cons as any).kyc_status || 'unsubmitted'}
+                                      </span>
+                                    </div>
+
+                                    <div className="space-y-3 text-xs">
+                                      <div className="grid grid-cols-2 gap-3 bg-slate-950/80 p-3 rounded-xl border border-slate-850">
+                                        <div>
+                                          <span className="text-[9px] text-slate-500 font-mono uppercase block">Aadhaar Card Number</span>
+                                          <strong className="text-slate-200 font-mono text-xs">{(cons as any).aadhaar_number || 'Not provided'}</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-[9px] text-slate-500 font-mono uppercase block">PAN Card Number</span>
+                                          <strong className="text-slate-200 font-mono text-xs">{(cons as any).pan_number || 'Not provided'}</strong>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <span className="text-[9px] text-slate-500 font-mono uppercase block mb-1">Aadhaar Attachment</span>
+                                          {(cons as any).aadhaar_photo_url ? (
+                                            <a href={(cons as any).aadhaar_photo_url} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+                                              <img src={(cons as any).aadhaar_photo_url} alt="Aadhaar Attachment" className="w-full h-24 object-cover group-hover:scale-105 transition-transform" referrerPolicy="no-referrer" />
+                                              <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold text-white transition-opacity">Open Image</div>
+                                            </a>
+                                          ) : (
+                                            <span className="text-[11px] text-slate-500 italic block py-2 bg-slate-950 rounded-lg text-center border border-slate-850">Not Provided</span>
+                                          )}
+                                        </div>
+                                        <div>
+                                          <span className="text-[9px] text-slate-500 font-mono uppercase block mb-1">PAN Attachment</span>
+                                          {(cons as any).pan_photo_url ? (
+                                            <a href={(cons as any).pan_photo_url} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+                                              <img src={(cons as any).pan_photo_url} alt="PAN Attachment" className="w-full h-24 object-cover group-hover:scale-105 transition-transform" referrerPolicy="no-referrer" />
+                                              <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold text-white transition-opacity">Open Image</div>
+                                            </a>
+                                          ) : (
+                                            <span className="text-[11px] text-slate-500 italic block py-2 bg-slate-950 rounded-lg text-center border border-slate-850">Not Provided</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {(cons as any).kyc_reject_reason && (
+                                        <div className="bg-rose-500/10 border border-rose-500/20 p-2 rounded-xl text-[11px]">
+                                          <strong className="text-rose-400">Rejection Reason:</strong>
+                                          <p className="text-slate-300 mt-0.5 font-mono">{(cons as any).kyc_reject_reason}</p>
+                                        </div>
+                                      )}
+
+                                      <div className="space-y-2 pt-2 border-t border-slate-800">
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleUpdateKycStatus(cons.id, 'approved', '')}
+                                            className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wide"
+                                          >
+                                            Approve KYC
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              if (!kycRejectReasonInput.trim()) {
+                                                alert("Please write a rejection comment below first.");
+                                                return;
+                                              }
+                                              handleUpdateKycStatus(cons.id, 'rejected', kycRejectReasonInput);
+                                            }}
+                                            className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 py-1.5 rounded-lg text-[10px] font-bold transition-all uppercase tracking-wide"
+                                          >
+                                            Reject KYC
+                                          </button>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          placeholder="Type a rejection feedback reason..."
+                                          value={kycRejectReasonInput}
+                                          onChange={(e) => setKycRejectReasonInput(e.target.value)}
+                                          className="bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-slate-100 text-[10px] w-full focus:outline-none placeholder-slate-600 font-mono"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Bank Account Details Column */}
+                                  <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-3">
+                                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                                      <span className="font-bold text-xs text-slate-200 uppercase tracking-wider font-mono">Bank Account Verification</span>
+                                      <span className={`text-[10px] font-extrabold uppercase font-mono px-2 py-0.5 rounded border ${
+                                        (cons as any).bank_status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                        (cons as any).bank_status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' :
+                                        (cons as any).bank_status === 'rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                        'bg-slate-950 text-slate-500 border-slate-800'
+                                      }`}>
+                                        {(cons as any).bank_status || 'unsubmitted'}
+                                      </span>
+                                    </div>
+
+                                    <div className="space-y-3 text-xs">
+                                      <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-2 font-mono text-[11px]">
+                                        <div className="flex items-center justify-between border-b border-slate-900 pb-1">
+                                          <span className="text-slate-500">Account Holder:</span>
+                                          <strong className="text-slate-200">{(cons as any).bank_account_holder_name || 'Not provided'}</strong>
+                                        </div>
+                                        <div className="flex items-center justify-between border-b border-slate-900 pb-1">
+                                          <span className="text-slate-500">Account Number:</span>
+                                          <strong className="text-slate-200">{(cons as any).bank_account_number || 'Not provided'}</strong>
+                                        </div>
+                                        <div className="flex items-center justify-between border-b border-slate-900 pb-1">
+                                          <span className="text-slate-500">Bank IFSC Code:</span>
+                                          <strong className="text-slate-200 uppercase">{(cons as any).bank_ifsc_code || 'Not provided'}</strong>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-slate-500">Bank Name:</span>
+                                          <strong className="text-slate-200">{(cons as any).bank_name || 'Not provided'}</strong>
+                                        </div>
+                                      </div>
+
+                                      {(cons as any).bank_reject_reason && (
+                                        <div className="bg-rose-500/10 border border-rose-500/20 p-2 rounded-xl text-[11px]">
+                                          <strong className="text-rose-400">Rejection Reason:</strong>
+                                          <p className="text-slate-300 mt-0.5 font-mono">{(cons as any).bank_reject_reason}</p>
+                                        </div>
+                                      )}
+
+                                      <div className="space-y-2 pt-2 border-t border-slate-800">
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleUpdateBankStatus(cons.id, 'approved', '')}
+                                            className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wide"
+                                          >
+                                            Approve Bank
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              if (!bankRejectReasonInput.trim()) {
+                                                alert("Please write a rejection comment below first.");
+                                                return;
+                                              }
+                                              handleUpdateBankStatus(cons.id, 'rejected', bankRejectReasonInput);
+                                            }}
+                                            className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 py-1.5 rounded-lg text-[10px] font-bold transition-all uppercase tracking-wide"
+                                          >
+                                            Reject Bank
+                                          </button>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          placeholder="Type a rejection feedback reason..."
+                                          value={bankRejectReasonInput}
+                                          onChange={(e) => setBankRejectReasonInput(e.target.value)}
+                                          className="bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-slate-100 text-[10px] w-full focus:outline-none placeholder-slate-600 font-mono"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -1244,10 +1733,23 @@ export function AdminPanel() {
           {/* ========================================================= */}
           {/* 2.3 TAB: SUBSCRIPTION MANAGEMENT */}
           {activeTab === 'subscriptions' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-200">
-              {/* Creator Form */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-200 text-left">
+              {/* Creator/Editor Form */}
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4">
-                <h3 className="text-base font-bold text-slate-100">Create Subscription Package</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-slate-100">
+                    {editingPlan ? '✏️ Edit Subscription Package' : '➕ Create Subscription Package'}
+                  </h3>
+                  {editingPlan && (
+                    <button
+                      type="button"
+                      onClick={cancelEditingPlan}
+                      className="text-xs text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20"
+                    >
+                      <X className="w-3 h-3" /> Cancel Edit
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400 font-mono">Create recurring membership plans and access limits for platform experts</p>
                 <form onSubmit={handleCreatePlan} className="space-y-4">
                   <div>
@@ -1277,7 +1779,7 @@ export function AdminPanel() {
                       <label className="block text-xs font-mono text-slate-400 mb-1">Duration Days *</label>
                       <input
                         type="number"
-                        placeholder="90"
+                        placeholder="30"
                         value={planDuration}
                         onChange={e => setPlanDuration(e.target.value)}
                         className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
@@ -1285,6 +1787,44 @@ export function AdminPanel() {
                       />
                     </div>
                   </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1">Max Consultant Rate (₹/min) *</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 25"
+                        value={planMaxRate}
+                        onChange={e => setPlanMaxRate(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1">Platform Commission (%) *</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 30"
+                        value={planCommission}
+                        onChange={e => setPlanCommission(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1">Support Reply SLA *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Within 72 Hours, Under 48 Hours"
+                      value={planSupportHours}
+                      onChange={e => setPlanSupportHours(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      required
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-mono text-slate-400 mb-1">Plan Details / Description</label>
                     <textarea
@@ -1299,7 +1839,7 @@ export function AdminPanel() {
                     type="submit"
                     className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2.5 rounded-xl text-xs w-full transition-all"
                   >
-                    Generate Subscription Plan
+                    {editingPlan ? '💾 Update Subscription Plan' : '⚡ Generate Subscription Plan'}
                   </button>
                 </form>
               </div>
@@ -1307,24 +1847,58 @@ export function AdminPanel() {
               {/* Plans List */}
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4">
                 <h3 className="text-base font-bold text-slate-100">Configured Plans & Features</h3>
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
                   {plans.map(plan => (
-                    <div key={plan.id} className="bg-slate-950 p-4.5 rounded-2xl border border-slate-850 flex items-start justify-between">
-                      <div className="space-y-1">
-                        <strong className="text-sm font-bold text-slate-100">{plan.name}</strong>
-                        <p className="text-xs text-slate-400 leading-relaxed max-w-sm">{plan.description}</p>
-                        <div className="flex items-center space-x-2 pt-2">
+                    <div key={plan.id} className="bg-slate-950 p-4 rounded-2xl border border-slate-850 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <strong className="text-sm font-bold text-slate-100">{plan.name}</strong>
+                          {plan.price === 0 && (
+                            <span className="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/15 font-bold px-1.5 py-0.5 rounded">
+                              TRIAL
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">{plan.description}</p>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-900/40 p-2.5 rounded-xl border border-slate-850/50">
+                          <div>⏱️ Max Rate: <span className="text-slate-200 font-bold">₹{plan.max_consultant_rate ?? 25}/min</span></div>
+                          <div>💰 Commission: <span className="text-slate-200 font-bold">{plan.commission_rate ?? 30}%</span></div>
+                          <div>📞 Support: <span className="text-slate-200 font-bold">{plan.support_hours ?? '72 Hours'}</span></div>
+                          <div>📅 Duration: <span className="text-slate-200 font-bold">{plan.duration_days} Days</span></div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 pt-1">
                           <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded font-mono">
-                            ₹{plan.price}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            Valid: {plan.duration_days} Days
+                            Price: ₹{plan.price}
                           </span>
                         </div>
                       </div>
-                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-full border border-emerald-500/15">
-                        Active
-                      </span>
+                      
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 pt-2 sm:pt-0 border-t border-slate-850/40 sm:border-t-0">
+                        <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-full border border-emerald-500/15">
+                          Active
+                        </span>
+                        
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => startEditingPlan(plan)}
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-850 hover:text-emerald-400 transition-all"
+                            title="Edit Plan"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePlan(plan.id)}
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-850 hover:text-rose-400 transition-all"
+                            title="Delete Plan"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1433,6 +2007,8 @@ export function AdminPanel() {
                     <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Set Category</label>
                     <select
                       id="bulk-category-select"
+                      value={bulkCategory}
+                      onChange={e => setBulkCategory(e.target.value)}
                       className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none w-full"
                     >
                       <option value="">-- No Change --</option>
@@ -1448,6 +2024,8 @@ export function AdminPanel() {
                     <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Set Locked Expert</label>
                     <select
                       id="bulk-consultant-select"
+                      value={bulkConsultantId}
+                      onChange={e => setBulkConsultantId(e.target.value)}
                       className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none w-full"
                     >
                       <option value="">-- No Change --</option>
@@ -1463,6 +2041,8 @@ export function AdminPanel() {
                     <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Override Show Others</label>
                     <select
                       id="bulk-override-select"
+                      value={bulkOverride}
+                      onChange={e => setBulkOverride(e.target.value)}
                       className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none w-full"
                     >
                       <option value="">-- No Change --</option>
@@ -1476,6 +2056,8 @@ export function AdminPanel() {
                       type="number"
                       id="bulk-wallet-input"
                       placeholder="e.g. 500"
+                      value={bulkWalletAdd}
+                      onChange={e => setBulkWalletAdd(e.target.value)}
                       className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none w-full font-mono font-bold"
                     />
                   </div>
@@ -1486,21 +2068,50 @@ export function AdminPanel() {
                     <button
                       type="button"
                       onClick={() => {
-                        const cat = (document.getElementById('bulk-category-select') as HTMLSelectElement)?.value;
-                        if (!cat) {
-                          alert('Kripya side me "Set Category" dropdown se koi category select karein, fir is button par click karein.');
+                        const cat = bulkCategory;
+                        const expert = bulkConsultantId;
+                        const override = bulkOverride;
+
+                        if (!cat && !expert && !override) {
+                          alert('Kripya "Set Category", "Set Locked Expert" ya "Override Show Others" dropdown me se kam se kam ek filter value select karein, fir is button par click karein.');
                           return;
                         }
-                        const matchingUserIds = filteredUsers.filter(u => u.category === cat).map(u => u.id);
-                        if (matchingUserIds.length === 0) {
-                          alert(`Koi bhi user "${cat}" category me nahi mila.`);
+
+                        let matches = [...filteredUsers];
+                        const activeFilters: string[] = [];
+
+                        if (cat) {
+                          matches = matches.filter(u => (u.category || 'General') === cat);
+                          activeFilters.push(`Category: ${cat}`);
+                        }
+                        if (expert) {
+                          if (expert === 'null') {
+                            matches = matches.filter(u => !u.locked_consultant_id);
+                            activeFilters.push(`Locked Expert: None`);
+                          } else {
+                            matches = matches.filter(u => u.locked_consultant_id === parseInt(expert));
+                            const expertName = consultants.find(c => c.id === parseInt(expert))?.display_name || `Expert #${expert}`;
+                            activeFilters.push(`Locked Expert: ${expertName}`);
+                          }
+                        }
+                        if (override) {
+                          const overrideNum = parseInt(override);
+                          matches = matches.filter(u => (u.admin_allow_others || 0) === overrideNum);
+                          activeFilters.push(`Override: ${overrideNum === 1 ? 'Yes' : 'No'}`);
+                        }
+
+                        if (matches.length === 0) {
+                          alert(`Chune gaye criteria (${activeFilters.join(', ')}) se match karta hua koi client nahi mila.`);
                           return;
                         }
-                        setSelectedUserIds(Array.from(new Set([...selectedUserIds, ...matchingUserIds])));
+
+                        const newSelectedIds = Array.from(new Set([...selectedUserIds, ...matches.map(u => u.id)]));
+                        setSelectedUserIds(newSelectedIds);
+                        alert(`Successfully auto-selected ${matches.length} clients matching (${activeFilters.join(', ')}).`);
                       }}
-                      className="bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800 hover:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold transition-all"
+                      className="bg-slate-900 hover:bg-slate-850 text-emerald-400 border border-slate-800 hover:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-bold transition-all flex items-center gap-1.5"
                     >
-                      🎯 Select All {`"${(document.getElementById('bulk-category-select') as HTMLSelectElement)?.value || 'Category'}"`} Users
+                      <span>🎯 Auto-Select Clients by Filter(s)</span>
                     </button>
                     {selectedUserIds.length > 0 && (
                       <button
@@ -1521,10 +2132,10 @@ export function AdminPanel() {
                         return;
                       }
                       
-                      const categoryVal = (document.getElementById('bulk-category-select') as HTMLSelectElement)?.value || undefined;
-                      const consultantVal = (document.getElementById('bulk-consultant-select') as HTMLSelectElement)?.value || undefined;
-                      const overrideVal = (document.getElementById('bulk-override-select') as HTMLSelectElement)?.value || undefined;
-                      const walletVal = (document.getElementById('bulk-wallet-input') as HTMLInputElement)?.value || undefined;
+                      const categoryVal = bulkCategory || undefined;
+                      const consultantVal = bulkConsultantId || undefined;
+                      const overrideVal = bulkOverride || undefined;
+                      const walletVal = bulkWalletAdd || undefined;
 
                       if (!categoryVal && !consultantVal && !overrideVal && !walletVal) {
                         alert('Kripya bulk updates options (Category, Expert, Override, ya Wallet amount) me se kam se kam ek filter modify karein.');
@@ -1555,10 +2166,10 @@ export function AdminPanel() {
                         setSelectedUserIds([]);
                         
                         // Clear elements
-                        if (document.getElementById('bulk-category-select')) (document.getElementById('bulk-category-select') as HTMLSelectElement).value = '';
-                        if (document.getElementById('bulk-consultant-select')) (document.getElementById('bulk-consultant-select') as HTMLSelectElement).value = '';
-                        if (document.getElementById('bulk-override-select')) (document.getElementById('bulk-override-select') as HTMLSelectElement).value = '';
-                        if (document.getElementById('bulk-wallet-input')) (document.getElementById('bulk-wallet-input') as HTMLInputElement).value = '';
+                        setBulkCategory('');
+                        setBulkConsultantId('');
+                        setBulkOverride('');
+                        setBulkWalletAdd('');
 
                         loadAdminData();
                         setTimeout(() => setSuccessMsg(null), 3000);
@@ -1991,7 +2602,9 @@ export function AdminPanel() {
                 <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850">
                   <span className="text-[10px] font-mono text-slate-500 uppercase">System Net Reserve Balance</span>
                   <strong className="text-3xl text-emerald-400 mt-2 block font-mono">₹{stats.totalCommission.toFixed(2)}</strong>
-                  <span className="text-xs text-slate-500 mt-1 block leading-relaxed">Derived dynamically from {stats.commissionRate}% platform service share splits.</span>
+                  <span className="text-xs text-slate-500 mt-1 block leading-relaxed">
+                    Derived dynamically based on each expert's assigned membership plan commission rates (30%, 25%, 20%) or the fallback default rate of {stats.commissionRate}%.
+                  </span>
                 </div>
 
                 <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850">
@@ -2010,6 +2623,21 @@ export function AdminPanel() {
                     </button>
                   </div>
                 </div>
+
+                {stats.plansStats && stats.plansStats.length > 0 && (
+                  <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 md:col-span-2 space-y-3">
+                    <span className="text-[10px] font-mono text-slate-500 uppercase block">Platform Commission Contribution Breakdown By Plan</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {stats.plansStats.map((plan: any) => (
+                        <div key={plan.id} className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 hover:border-slate-700 transition-all">
+                          <span className="text-[10px] text-slate-300 font-bold block truncate">{plan.name}</span>
+                          <span className="text-[9px] text-slate-500 block mt-0.5">({plan.commission_rate}% split • {plan.enrolledCount} experts)</span>
+                          <strong className="text-base text-emerald-400 mt-1 block font-mono">₹{plan.totalCommission.toFixed(2)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2017,36 +2645,75 @@ export function AdminPanel() {
           {/* ========================================================= */}
           {/* 2.8 TAB: COMMISSION MANAGEMENT */}
           {activeTab === 'commissions' && (
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4 max-w-xl">
-              <h3 className="text-base font-bold text-slate-100">Global & Category Commission Rules</h3>
-              <p className="text-xs text-slate-400 font-mono">Update platform fee structures applied during real-time credit duration calculations</p>
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-6 max-w-xl">
+              <div>
+                <h3 className="text-base font-bold text-slate-100">Global & Payout Settings</h3>
+                <p className="text-xs text-slate-400 font-mono mt-1">Configure commission structures and official monthly salary cutoff dates.</p>
+              </div>
               
               <form onSubmit={handleUpdateCommission} className="space-y-4 pt-2">
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-2">Global Platform Share Percentage (%)</label>
-                  <div className="flex space-x-3">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-2">Global Platform Share Percentage (%)</label>
                     <input
                       type="number"
                       min="0"
                       max="100"
                       value={commissionRateInput}
                       onChange={e => setCommissionRateInput(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-mono"
                     />
-                    <button
-                      type="submit"
-                      className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
-                    >
-                      Update Rules
-                    </button>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-2">Monthly Cutoff Day (e.g. 25)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={cutoffDayInput}
+                        onChange={e => setCutoffDayInput(e.target.value)}
+                        placeholder="25"
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-mono"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">Day of month when salary is locked</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-2">Next Month Payout Day (e.g. 7)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={payoutDayInput}
+                        onChange={e => setPayoutDayInput(e.target.value)}
+                        placeholder="7"
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-mono"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">Day of next month for disbursement</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 rounded-xl text-xs font-bold transition-all"
+                  >
+                    Save All System & Payout Settings
+                  </button>
                 </div>
               </form>
 
-              <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-850 text-xs text-slate-400 space-y-2">
-                <span className="font-bold text-slate-300 block">Category Wise Commissions:</span>
-                <p>• Astrologers, Coaches, Consultants: Default Global Rate ({stats.commissionRate}%)</p>
-                <p>• Influencers, Lawyers, Mentors: Custom Rules (Standardized via plans overrides)</p>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 text-xs text-slate-400 space-y-2">
+                <span className="font-bold text-slate-300 block">Dynamic Plan Commission Overrides:</span>
+                <p className="text-[11px] text-slate-400">• Fallback (Unsubscribed / Custom): <strong className="text-slate-300">Global Rate ({stats.commissionRate}%)</strong></p>
+                {plans.map((p) => (
+                  <p key={p.id} className="text-[11px] text-slate-400">
+                    • {p.name}: <strong className="text-emerald-400">{p.commission_rate ?? stats.commissionRate}% Commission</strong> (Capped calling rate: ₹{p.max_consultant_rate ?? 25}/min, Support SLA: {p.support_hours || '72h'})
+                  </p>
+                ))}
               </div>
             </div>
           )}
@@ -2054,42 +2721,134 @@ export function AdminPanel() {
           {/* ========================================================= */}
           {/* 2.9 TAB: PAYOUT MANAGEMENT */}
           {activeTab === 'payouts' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
-              <h3 className="text-base font-bold text-slate-100">Withdrawal & Payout Clearance Panel</h3>
-              <p className="text-xs text-slate-400 font-mono">Approve or Reject pending withdrawal requests from expert wallets</p>
-              
-              <div className="space-y-3">
-                <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-850 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/15">Pending Approval</span>
-                      <span className="text-[10px] text-slate-500 font-mono">Requested: Today</span>
-                    </div>
-                    <strong className="text-sm font-bold text-slate-200 block">Withdrawal Request from Coach Rahul (#2)</strong>
-                    <p className="text-xs text-slate-400">Authorized Net Earnings: <strong className="text-emerald-400">₹2,880.00</strong> (Platform share deducted)</p>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => {
-                        setSuccessMsg('Withdrawal request successfully approved and processed!');
-                        setTimeout(() => setSuccessMsg(null), 3000);
-                      }}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-bold px-3.5 py-2 rounded-xl transition-all"
-                    >
-                      Approve Payout
-                    </button>
-                    <button
-                      onClick={() => {
-                        setError('Withdrawal request rejected.');
-                        setTimeout(() => setError(null), 3000);
-                      }}
-                      className="bg-slate-800 hover:bg-slate-750 text-slate-400 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-700 transition-all"
-                    >
-                      Reject
-                    </button>
-                  </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Consultant Salary & Payouts Ledger</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-1">
+                    Calculate and approve monthly payouts based on the configured {stats.salaryCutoffDay || 25}th cutoff and next-month {stats.salaryPayoutDay || 7}th payout schedule.
+                  </p>
                 </div>
+                <div className="flex items-center space-x-2 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-slate-850">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    Cycle cutoff: <strong>{stats.salaryCutoffDay || 25}th of Month</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Ledger Spreadsheet list */}
+              <div className="overflow-x-auto bg-slate-950 rounded-2xl border border-slate-850">
+                <table className="w-full text-left border-collapse font-sans">
+                  <thead>
+                    <tr className="border-b border-slate-850 text-[10px] text-slate-450 uppercase font-mono bg-slate-900/40">
+                      <th className="py-3.5 px-4 font-semibold text-slate-400">Consultant / ID</th>
+                      <th className="py-3.5 px-4 font-semibold text-slate-400 text-right">Lifetime Earnings</th>
+                      <th className="py-3.5 px-4 font-semibold text-slate-400 text-right">Withdrawable Bal</th>
+                      <th className="py-3.5 px-4 font-semibold text-emerald-450 text-right bg-emerald-500/[0.02]">Expected Payout (Prev Cycle)</th>
+                      <th className="py-3.5 px-4 font-semibold text-slate-450 text-right">Ongoing Cycle (Unbilled)</th>
+                      <th className="py-3.5 px-4 font-semibold text-slate-400">Target Date</th>
+                      <th className="py-3.5 px-4 font-semibold text-slate-400 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-850 text-xs">
+                    {consultants.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-slate-500 font-mono text-[11px] italic">
+                          No consultants found to calculate payouts.
+                        </td>
+                      </tr>
+                    ) : (
+                      consultants.map((c: any) => {
+                        const sInfo = c.salary_info || {
+                          prevCycleEarnings: 0,
+                          currentCycleEarnings: 0,
+                          payoutDate: new Date().toISOString(),
+                          payoutMonthName: 'next month'
+                        };
+
+                        return (
+                          <tr key={c.id} className="hover:bg-slate-900/40 transition-colors">
+                            {/* Consultant Info */}
+                            <td className="py-4 px-4">
+                              <div className="flex items-center space-x-3">
+                                <img 
+                                  src={c.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'} 
+                                  alt={c.display_name} 
+                                  className="w-8 h-8 rounded-lg object-cover border border-slate-800"
+                                  onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div>
+                                  <strong className="text-slate-200 block font-semibold">{c.display_name}</strong>
+                                  <span className="text-[10px] text-slate-500 font-mono">ID: #{c.id} • @{c.username}</span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Lifetime Earnings */}
+                            <td className="py-4 px-4 text-right font-mono font-bold text-slate-350">
+                              ₹{(c.wallet_total || 0).toFixed(2)}
+                            </td>
+
+                            {/* Withdrawable Balance */}
+                            <td className="py-4 px-4 text-right font-mono font-bold text-slate-350">
+                              ₹{(c.wallet_withdrawable || 0).toFixed(2)}
+                            </td>
+
+                            {/* Expected Payout (Previous Cycle) */}
+                            <td className="py-4 px-4 text-right font-mono font-extrabold text-emerald-400 bg-emerald-500/[0.02]">
+                              ₹{(sInfo.prevCycleEarnings || 0).toFixed(2)}
+                            </td>
+
+                            {/* Ongoing Cycle (Unbilled) */}
+                            <td className="py-4 px-4 text-right font-mono font-bold text-slate-400">
+                              ₹{(sInfo.currentCycleEarnings || 0).toFixed(2)}
+                            </td>
+
+                            {/* Payout Target Date */}
+                            <td className="py-4 px-4 font-mono text-[11px] text-slate-400">
+                              <div>{sInfo.payoutDay || 7}th {sInfo.payoutMonthName || 'next month'}</div>
+                              <span className="text-[9px] text-slate-500 block">Due: {new Date(sInfo.payoutDate).toLocaleDateString()}</span>
+                            </td>
+
+                            {/* Actions / Clearance */}
+                            <td className="py-4 px-4 text-center">
+                              {sInfo.prevCycleEarnings > 0 ? (
+                                <button
+                                  onClick={() => {
+                                    setSuccessMsg(`Salary of ₹${sInfo.prevCycleEarnings.toFixed(2)} cleared successfully for ${c.display_name}!`);
+                                    setTimeout(() => setSuccessMsg(null), 3500);
+                                  }}
+                                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all"
+                                >
+                                  Disburse Payout
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 bg-slate-900 border border-slate-850 px-2 py-1 rounded font-mono">
+                                  No Payout Due
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 text-[11px] text-slate-400 space-y-2 leading-relaxed">
+                <span className="font-bold text-slate-300 block">💡 How Salary Disbursement Calculations Work:</span>
+                <p>
+                  1. <strong>Cutoff Day ({stats.salaryCutoffDay || 25}th of Month):</strong> Total consultant earnings completed before midnight on the {stats.salaryCutoffDay || 25}th of the month are locked and aggregated under "Expected Payout (Prev Cycle)".
+                </p>
+                <p>
+                  2. <strong>Payout Day ({stats.salaryPayoutDay || 7}th of Next Month):</strong> Locked previous cycle payouts are disbursed to consultants by the {stats.salaryPayoutDay || 7}th.
+                </p>
+                <p>
+                  3. <strong>Ongoing Cycle:</strong> Any sessions completed after the {stats.salaryCutoffDay || 25}th of the current month are automatically catalogued for the next month's payoff cycle.
+                </p>
               </div>
             </div>
           )}
@@ -2128,52 +2887,224 @@ export function AdminPanel() {
 
           {/* ========================================================= */}
           {/* 2.11 TAB: RATING & REVIEWS */}
-          {activeTab === 'ratings' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left animate-in fade-in duration-200">
-              <h3 className="text-base font-bold text-slate-100">Platform Reviews & Moderation Hub</h3>
-              <p className="text-xs text-slate-400 font-mono">Approve, hide, or delete user feedback given to platform experts</p>
+          {activeTab === 'ratings' && (() => {
+            const totalCount = reviews.length;
+            const avgRating = totalCount > 0 
+              ? (reviews.reduce((acc, r) => acc + r.rating, 0) / totalCount).toFixed(1) 
+              : '0.0';
+            
+            const fiveStars = reviews.filter(r => r.rating === 5).length;
+            const fourStars = reviews.filter(r => r.rating === 4).length;
+            const threeStars = reviews.filter(r => r.rating === 3).length;
+            const twoStars = reviews.filter(r => r.rating === 2).length;
+            const oneStar = reviews.filter(r => r.rating === 1).length;
+
+            const pct5 = totalCount > 0 ? Math.round((fiveStars / totalCount) * 100) : 0;
+            const pct4 = totalCount > 0 ? Math.round((fourStars / totalCount) * 100) : 0;
+            const pct3 = totalCount > 0 ? Math.round(((threeStars + twoStars + oneStar) / totalCount) * 100) : 0;
+
+            // Apply search & star filters
+            const filteredReviews = reviews.filter(r => {
+              const matchesSearch = 
+                r.user_name?.toLowerCase().includes(reviewSearch.toLowerCase()) ||
+                r.text?.toLowerCase().includes(reviewSearch.toLowerCase()) ||
+                (r.consultant_name || '').toLowerCase().includes(reviewSearch.toLowerCase()) ||
+                (r.consultant_username || '').toLowerCase().includes(reviewSearch.toLowerCase());
               
-              <div className="space-y-3.5 pt-2">
-                <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-850 flex items-start justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-1 text-amber-400">
-                      {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-3.5 h-3.5 fill-amber-400" />)}
-                      <span className="text-[10px] text-slate-500 font-mono ml-2">By Aman for Astro Pandit</span>
+              if (reviewRatingFilter === 'all') return matchesSearch;
+              return matchesSearch && r.rating === parseInt(reviewRatingFilter);
+            });
+
+            return (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {/* Analytics Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {/* Avg Rating Card */}
+                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 font-mono text-[10px] uppercase block mb-1">Average Rating</span>
+                      <strong className="text-3xl text-amber-400 font-bold tracking-tight block">{avgRating}</strong>
+                      <div className="flex items-center space-x-1 mt-1 text-amber-400">
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <Star 
+                            key={s} 
+                            className={`w-3.5 h-3.5 ${s <= Math.round(parseFloat(avgRating)) ? 'fill-amber-400 text-amber-400' : 'text-slate-800'}`} 
+                          />
+                        ))}
+                        <span className="text-[10px] text-slate-500 font-mono ml-1">Platform-wide</span>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-200 font-medium">"Highly accurate predictions! Saved my relationship."</p>
+                    <div className="bg-amber-400/5 text-amber-400 p-4 rounded-2xl border border-amber-400/10">
+                      <Star className="w-8 h-8 fill-amber-400" />
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => {
-                      setSuccessMsg('Review content archived and hidden.');
-                      setTimeout(() => setSuccessMsg(null), 3000);
-                    }}
-                    className="text-xs text-rose-400 hover:underline font-bold transition-all"
-                  >
-                    Hide Review
-                  </button>
+
+                  {/* Volume Card */}
+                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 font-mono text-[10px] uppercase block mb-1">Total Moderated</span>
+                      <strong className="text-3xl text-emerald-400 font-bold tracking-tight block">{totalCount}</strong>
+                      <span className="text-[11px] text-slate-500 mt-1 block">Submitted client experiences</span>
+                    </div>
+                    <div className="bg-emerald-400/5 text-emerald-400 p-4 rounded-2xl border border-emerald-400/10">
+                      <span className="text-2xl font-black font-mono">#</span>
+                    </div>
+                  </div>
+
+                  {/* Distribution Bar Charts Card */}
+                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-2.5">
+                    <span className="text-slate-400 font-mono text-[10px] uppercase block">Rating Distribution</span>
+                    
+                    {/* 5 Star bar */}
+                    <div className="flex items-center text-xs text-slate-400 font-mono gap-2">
+                      <span className="w-12">5 Star</span>
+                      <div className="flex-1 bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-850">
+                        <div className="bg-amber-400 h-full rounded-full" style={{ width: `${pct5}%` }}></div>
+                      </div>
+                      <span className="w-8 text-right font-bold text-slate-300">{pct5}%</span>
+                    </div>
+
+                    {/* 4 Star bar */}
+                    <div className="flex items-center text-xs text-slate-400 font-mono gap-2">
+                      <span className="w-12">4 Star</span>
+                      <div className="flex-1 bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-850">
+                        <div className="bg-amber-400/80 h-full rounded-full" style={{ width: `${pct4}%` }}></div>
+                      </div>
+                      <span className="w-8 text-right font-bold text-slate-300">{pct4}%</span>
+                    </div>
+
+                    {/* 3 Star & lower bar */}
+                    <div className="flex items-center text-xs text-slate-400 font-mono gap-2">
+                      <span className="w-12">≤3 Star</span>
+                      <div className="flex-1 bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-850">
+                        <div className="bg-rose-500/80 h-full rounded-full" style={{ width: `${pct3}%` }}></div>
+                      </div>
+                      <span className="w-8 text-right font-bold text-slate-300">{pct3}%</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-850 flex items-start justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-1 text-amber-400">
-                      {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-3.5 h-3.5 fill-amber-400" />)}
-                      <span className="text-[10px] text-slate-500 font-mono ml-2">By Rohit for Coach Rahul</span>
+                {/* Moderation Panel with Filters */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-100">Reviews & Feedback Moderation</h3>
+                      <p className="text-xs text-slate-400 font-mono">Permanently remove ratings to instantly refresh the consultant's average score</p>
                     </div>
-                    <p className="text-xs text-slate-200 font-medium">"Super motivational session. Cleared my job selection dilemma."</p>
+
+                    {/* Live Filters */}
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      {/* Search */}
+                      <input 
+                        type="text"
+                        placeholder="Search text, user, expert..."
+                        value={reviewSearch}
+                        onChange={e => setReviewSearch(e.target.value)}
+                        className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500 w-full sm:w-48"
+                      />
+                      {/* Star Filter */}
+                      <select
+                        value={reviewRatingFilter}
+                        onChange={e => setReviewRatingFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="all">All Stars</option>
+                        <option value="5">5 Star</option>
+                        <option value="4">4 Star</option>
+                        <option value="3">3 Star</option>
+                        <option value="2">2 Star</option>
+                        <option value="1">1 Star</option>
+                      </select>
+                      {(reviewSearch || reviewRatingFilter !== 'all') && (
+                        <button
+                          onClick={() => {
+                            setReviewSearch('');
+                            setReviewRatingFilter('all');
+                          }}
+                          className="bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => {
-                      setSuccessMsg('Review content archived and hidden.');
-                      setTimeout(() => setSuccessMsg(null), 3000);
-                    }}
-                    className="text-xs text-rose-400 hover:underline font-bold transition-all"
-                  >
-                    Hide Review
-                  </button>
+
+                  {/* Reviews List */}
+                  <div className="space-y-3.5 pt-2">
+                    {filteredReviews.length === 0 ? (
+                      <div className="bg-slate-950 rounded-2xl border border-slate-850 p-12 text-center space-y-2">
+                        <p className="text-slate-400 text-xs font-mono">No matching reviews found on the platform.</p>
+                        <p className="text-slate-600 text-[11px]">Try clearing search words or selecting "All Stars" to view active feedback.</p>
+                      </div>
+                    ) : (
+                      filteredReviews.map((r) => {
+                        const starsArray = [1, 2, 3, 4, 5];
+                        return (
+                          <div key={r.id} className="bg-slate-950 p-4.5 rounded-2xl border border-slate-850 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 hover:border-slate-700 transition-colors">
+                            <div className="space-y-2 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-center space-x-0.5 text-amber-400">
+                                  {starsArray.map(starIndex => (
+                                    <Star 
+                                      key={starIndex} 
+                                      className={`w-3.5 h-3.5 ${starIndex <= r.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-800'}`} 
+                                    />
+                                  ))}
+                                </div>
+                                <span className="text-[10px] text-slate-500 font-mono">•</span>
+                                <span className="text-[10px] text-slate-400 font-medium font-sans">
+                                  By <strong className="text-slate-200">{r.user_name}</strong>
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono">for</span>
+                                <span className="text-[11px] bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-sky-400 font-black font-sans">
+                                  {r.consultant_name || `Expert #${r.consultant_id}`} (@{r.consultant_username || 'unknown'})
+                                </span>
+                              </div>
+                              
+                              <p className="text-xs text-slate-200 font-medium italic pr-4 bg-slate-900/40 p-2.5 rounded-xl border border-slate-900/80 leading-normal">
+                                "{r.text || 'No written comment provided.'}"
+                              </p>
+                              
+                              <div className="text-[9px] text-slate-500 font-mono">
+                                Submitted at: {r.created_at}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-end shrink-0">
+                              <button 
+                                onClick={async () => {
+                                  if (!confirm(`Kya aap sure hain ki client "${r.user_name}" ka ye review delete karna chahte hain? Isse expert ki average rating automatic update ho jayegi.`)) {
+                                    return;
+                                  }
+                                  try {
+                                    const res = await fetch(`/api/admin/reviews/${r.id}`, {
+                                      method: 'DELETE'
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data.error || 'Failed to delete review');
+                                    
+                                    setSuccessMsg(data.message || 'Review deleted successfully!');
+                                    loadAdminData();
+                                    setTimeout(() => setSuccessMsg(null), 3000);
+                                  } catch (err: any) {
+                                    setError(err.message);
+                                    setTimeout(() => setError(null), 4000);
+                                  }
+                                }}
+                                className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3 py-2 rounded-xl text-xs font-mono font-bold transition-all flex items-center space-x-1.5"
+                              >
+                                <span>Delete Feedback</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ========================================================= */}
           {/* 2.12 TAB: MARKETING MODULE */}
@@ -2453,6 +3384,106 @@ export function AdminPanel() {
                   rows={2}
                   className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none resize-none"
                 />
+              </div>
+
+              {/* Extra KYC & Bank Information Section */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3">
+                <h4 className="text-[11px] font-bold text-slate-300 font-mono uppercase tracking-wider border-b border-slate-850 pb-1.5 flex items-center justify-between">
+                  <span>KYC & Bank overrides</span>
+                  <span className="text-[9px] text-emerald-400 font-sans normal-case font-normal font-mono">Optional</span>
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Aadhaar Card Number</label>
+                    <input
+                      type="text"
+                      value={consAadhaarNumber}
+                      onChange={e => setConsAadhaarNumber(e.target.value)}
+                      placeholder="e.g. 123456789012"
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">PAN Card Number</label>
+                    <input
+                      type="text"
+                      value={consPanNumber}
+                      onChange={e => setConsPanNumber(e.target.value)}
+                      placeholder="e.g. ABCDE1234F"
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Aadhaar Photo URL</label>
+                    <input
+                      type="text"
+                      value={consAadhaarPhotoUrl}
+                      onChange={e => setConsAadhaarPhotoUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">PAN Photo URL</label>
+                    <input
+                      type="text"
+                      value={consPanPhotoUrl}
+                      onChange={e => setConsPanPhotoUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Account Holder Name</label>
+                    <input
+                      type="text"
+                      value={consBankHolderName}
+                      onChange={e => setConsBankHolderName(e.target.value)}
+                      placeholder="Acharya Sharma"
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Account Number</label>
+                    <input
+                      type="text"
+                      value={consBankAccountNumber}
+                      onChange={e => setConsBankAccountNumber(e.target.value)}
+                      placeholder="9876543210"
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Bank Name</label>
+                    <input
+                      type="text"
+                      value={consBankName}
+                      onChange={e => setConsBankName(e.target.value)}
+                      placeholder="State Bank of India"
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Bank IFSC Code</label>
+                    <input
+                      type="text"
+                      value={consBankIfscCode}
+                      onChange={e => setConsBankIfscCode(e.target.value)}
+                      placeholder="SBIN0001234"
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none uppercase"
+                    />
+                  </div>
+                </div>
               </div>
 
               <button
