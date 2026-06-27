@@ -3060,7 +3060,8 @@ export function AdminPanel() {
   );
 };
 
-export default AdminPanel;          {/* ========================================================= */}
+export default AdminPanel;
+        {/* ========================================================= */}
           {/* 2.8 TAB: COMMISSION MANAGEMENT */}
           {activeTab === 'commissions' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-6 max-w-xl">
