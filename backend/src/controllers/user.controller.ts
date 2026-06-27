@@ -8,28 +8,33 @@ import path from 'path';
 export const getActiveConsultants = (req: Request, res: Response) => {
   try {
     const { userId } = req.query;
-    let lockedConsultantId: number | null = null;
+    let lockedConsultantIds: number[] = [];
     let adminAllowOthers = 0;
 
     if (userId) {
       const user = db.prepare('SELECT locked_consultant_id, admin_allow_others FROM users WHERE id = ?').get(userId) as any;
       if (user) {
-        lockedConsultantId = user.locked_consultant_id;
         adminAllowOthers = user.admin_allow_others;
+        const lockedStr = user.locked_consultant_id;
+        if (lockedStr !== null && lockedStr !== undefined && String(lockedStr).trim() !== '') {
+          lockedConsultantIds = String(lockedStr)
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s !== '')
+            .map(s => parseInt(s, 10))
+            .filter(n => !isNaN(n));
+        }
       }
     }
 
-    if (lockedConsultantId && adminAllowOthers === 0) {
-      const consultants = db.prepare(`
-        SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id 
-        FROM consultants 
-        WHERE is_active = 1 AND id = ?
-      `).all(lockedConsultantId);
-      return res.json(consultants);
+    const allConsultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id FROM consultants WHERE is_active = 1').all();
+
+    if (adminAllowOthers === 0 && lockedConsultantIds.length > 0) {
+      const filtered = allConsultants.filter((c: any) => lockedConsultantIds.includes(c.id));
+      return res.json(filtered);
     }
 
-    const consultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id FROM consultants WHERE is_active = 1').all();
-    res.json(consultants);
+    res.json(allConsultants);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -201,11 +206,13 @@ export const getConsultantStats = (req: Request, res: Response) => {
 
     const sessions = db.prepare('SELECT * FROM sessions WHERE consultant_id = ? ORDER BY created_at DESC').all(id);
     const salaryInfo = getSalaryCycleInfo(Number(id));
+    const manualAdjustments = db.prepare("SELECT * FROM manual_wallet_adjustments WHERE target_type = 'consultant' AND target_id = ? ORDER BY id DESC").all(id);
 
     res.json({
       wallet: consultant,
       sessions,
       salaryInfo,
+      manualAdjustments,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -216,7 +223,17 @@ export const getConsultantStats = (req: Request, res: Response) => {
 export const getConsultantReviews = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const reviews = db.prepare('SELECT id, user_name, rating, text, created_at FROM reviews WHERE consultant_id = ? ORDER BY id DESC').all(id);
+    const { role, viewer_id } = req.query;
+
+    // If it's the consultant themselves viewing, allow showing hidden ones. Otherwise hide them.
+    const isRecipient = (role === 'consultant' && String(viewer_id) === String(id));
+
+    let reviews;
+    if (isRecipient) {
+      reviews = db.prepare('SELECT id, user_name, rating, text, created_at, is_hidden, session_id FROM reviews WHERE consultant_id = ? ORDER BY id DESC').all(id);
+    } else {
+      reviews = db.prepare('SELECT id, user_name, rating, text, created_at, is_hidden, session_id FROM reviews WHERE consultant_id = ? AND (is_hidden IS NULL OR is_hidden = 0) ORDER BY id DESC').all(id);
+    }
     res.json(reviews);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -227,16 +244,32 @@ export const getConsultantReviews = (req: Request, res: Response) => {
 export const addConsultantReview = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { user_name, rating, text } = req.body;
+    const { user_name, rating, text, session_id } = req.body;
 
     if (!user_name || !rating) {
       return res.status(400).json({ error: 'User name and Rating are required' });
     }
 
-    const now = new Date().toISOString();
-    db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at) VALUES (?, ?, ?, ?, ?)').run(id, user_name, rating, text || '', now);
+    if (!session_id) {
+      return res.status(400).json({ error: 'Session ID is required to submit a review' });
+    }
 
-    const ratingRow = db.prepare('SELECT AVG(rating) as avgRating FROM reviews WHERE consultant_id = ?').get(id) as { avgRating: number | null };
+    // Check if session exists
+    const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND consultant_id = ?').get(session_id, id);
+    if (!session) {
+      return res.status(403).json({ error: 'You must have a valid session with this consultant to leave a review.' });
+    }
+
+    // Check if already reviewed for this session
+    const existing = db.prepare('SELECT id FROM reviews WHERE session_id = ?').get(session_id);
+    if (existing) {
+      return res.status(400).json({ error: 'You have already submitted a review for this session.' });
+    }
+
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at, session_id, is_hidden) VALUES (?, ?, ?, ?, ?, ?, 0)').run(id, user_name, rating, text || '', now, session_id);
+
+    const ratingRow = db.prepare('SELECT AVG(rating) as avgRating FROM reviews WHERE consultant_id = ? AND (is_hidden IS NULL OR is_hidden = 0)').get(id) as { avgRating: number | null };
     if (ratingRow && ratingRow.avgRating !== null) {
       db.prepare('UPDATE consultants SET average_rating = ? WHERE id = ?').run(parseFloat(ratingRow.avgRating.toFixed(1)), id);
     }
@@ -315,7 +348,7 @@ export const getUserProfileInfo = (req: Request, res: Response) => {
 // User Update Profile
 export const updateUserProfile = (req: Request, res: Response) => {
   try {
-    const { id, display_name, photo_url, dob, gender } = req.body;
+    const { id, display_name, photo_url, dob, gender, location, languages } = req.body;
     if (!id) {
       return res.status(400).json({ error: 'User ID is required' });
     }
@@ -327,9 +360,9 @@ export const updateUserProfile = (req: Request, res: Response) => {
 
     db.prepare(`
       UPDATE users 
-      SET display_name = ?, photo_url = ?, dob = ?, gender = ?
+      SET display_name = ?, photo_url = ?, dob = ?, gender = ?, location = ?, languages = ?
       WHERE id = ?
-    `).run(cleanDisplayName, photo_url || null, dob || null, gender || null, id);
+    `).run(cleanDisplayName, photo_url || null, dob || null, gender || null, location || null, languages || null, id);
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     res.json({ success: true, user: updatedUser });
@@ -505,6 +538,19 @@ export const lockUserReferral = (req: Request, res: Response) => {
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
     res.json({ success: true, user: updatedUser });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get Global & Category-specific Hero settings
+export const getHeroSettings = (req: Request, res: Response) => {
+  try {
+    const row = db.prepare("SELECT value FROM admin_settings WHERE key = 'hero_settings'").get() as { value: string } | undefined;
+    if (row) {
+      return res.json(JSON.parse(row.value));
+    }
+    return res.status(404).json({ error: 'Hero settings not found' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

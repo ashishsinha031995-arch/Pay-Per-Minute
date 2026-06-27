@@ -13,6 +13,8 @@ export const getAdminDashboardStats = (req: Request, res: Response) => {
     const cutoffDayRow = db.prepare("SELECT value FROM admin_settings WHERE key = 'salary_cutoff_day'").get() as { value: string } | undefined;
     const payoutDayRow = db.prepare("SELECT value FROM admin_settings WHERE key = 'salary_payout_day'").get() as { value: string } | undefined;
 
+    const totalRefundedRow = db.prepare("SELECT SUM(refunded_amount) as total FROM sessions").get() as { total: number | null };
+
     // Fetch all plans dynamically and calculate enrolment + earnings metrics
     const plansList = db.prepare('SELECT * FROM plans').all() as any[];
     const plansWithStats = plansList.map((plan: any) => {
@@ -43,6 +45,7 @@ export const getAdminDashboardStats = (req: Request, res: Response) => {
       totalSessions: totalSessionsRow.count,
       totalConsultants: totalConsRow.count,
       totalCommission: totalCommissionRow.total || 0,
+      totalRefunded: totalRefundedRow.total || 0,
       commissionRate: parseFloat(commRateRow.value || '20'),
       salaryCutoffDay: cutoffDayRow ? parseInt(cutoffDayRow.value) : 25,
       salaryPayoutDay: payoutDayRow ? parseInt(payoutDayRow.value) : 7,
@@ -325,7 +328,9 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
       wallet_balance,
       locked_consultant_id,
       admin_allow_others,
-      category
+      category,
+      location,
+      languages
     } = req.body;
     
     if (!id) {
@@ -340,7 +345,7 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
     db.prepare(`
       UPDATE users 
       SET display_name = ?, email = ?, photo_url = ?, dob = ?, gender = ?, wallet_balance = ?,
-          locked_consultant_id = ?, admin_allow_others = ?, category = ?
+          locked_consultant_id = ?, admin_allow_others = ?, category = ?, location = ?, languages = ?
       WHERE id = ?
     `).run(
       cleanDisplayName,
@@ -349,9 +354,11 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
       dob || null,
       gender || null,
       parseFloat(wallet_balance) || 0,
-      (locked_consultant_id !== undefined && locked_consultant_id !== '' && locked_consultant_id !== null) ? parseInt(locked_consultant_id) : null,
+      (locked_consultant_id !== undefined && locked_consultant_id !== '' && locked_consultant_id !== null) ? String(locked_consultant_id) : null,
       admin_allow_others !== undefined ? parseInt(admin_allow_others) : 0,
       category || 'General',
+      location || null,
+      languages || null,
       id
     );
 
@@ -378,7 +385,7 @@ export const bulkUpdateUsersBySuperAdmin = (req: Request, res: Response) => {
     }
 
     if (locked_consultant_id !== undefined) {
-      const val = (locked_consultant_id === 'null' || locked_consultant_id === null || locked_consultant_id === '') ? null : parseInt(locked_consultant_id);
+      const val = (locked_consultant_id === 'null' || locked_consultant_id === null || locked_consultant_id === '') ? null : String(locked_consultant_id);
       db.prepare(`UPDATE users SET locked_consultant_id = ? WHERE id IN (${placeholders})`).run(val, ...cleanUserIds);
     }
 
@@ -443,6 +450,28 @@ export const deleteReviewBySuperAdmin = (req: Request, res: Response) => {
     }
 
     res.json({ success: true, message: 'Review deleted and average rating recalculated.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Toggle Hidden status for reviews
+export const toggleReviewHiddenStatusBySuperAdmin = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const review = db.prepare('SELECT is_hidden, consultant_id FROM reviews WHERE id = ?').get(id) as { is_hidden: number; consultant_id: number } | undefined;
+    if (!review) {
+      return res.status(404).json({ error: 'Review not found' });
+    }
+    const newHidden = review.is_hidden === 1 ? 0 : 1;
+    db.prepare('UPDATE reviews SET is_hidden = ? WHERE id = ?').run(newHidden, id);
+
+    // Recalculate average rating of the consultant based on non-hidden reviews
+    const ratingRow = db.prepare('SELECT AVG(rating) as avgRating FROM reviews WHERE consultant_id = ? AND (is_hidden IS NULL OR is_hidden = 0)').get(review.consultant_id) as { avgRating: number | null };
+    const avg = ratingRow.avgRating ? Math.round(ratingRow.avgRating * 10) / 10 : 0;
+    db.prepare('UPDATE consultants SET average_rating = ? WHERE id = ?').run(avg, review.consultant_id);
+
+    res.json({ success: true, is_hidden: newHidden, message: `Review visibility toggled. Consultant average rating recalculated to ${avg}.` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -562,6 +591,209 @@ export const deletePlanBySuperAdmin = (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'Subscription plan deleted successfully.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update Global & Category-specific Hero settings
+export const updateHeroSettings = (req: Request, res: Response) => {
+  try {
+    const { hero_settings } = req.body;
+    if (!hero_settings) {
+      return res.status(400).json({ error: 'Hero settings are required' });
+    }
+    db.prepare('INSERT OR REPLACE INTO admin_settings (key, value) VALUES (?, ?)').run('hero_settings', JSON.stringify(hero_settings));
+    res.json({ success: true, hero_settings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Refund session by super admin
+export const refundSessionBySuperAdmin = (req: Request, res: Response) => {
+  try {
+    const { id: session_id } = req.params;
+    const { minutes } = req.body;
+
+    const parsedMinutes = parseInt(minutes, 10);
+    if (isNaN(parsedMinutes) || parsedMinutes <= 0) {
+      return res.status(400).json({ error: 'Please enter a valid positive number of minutes to refund.' });
+    }
+
+    const result = db.transaction(() => {
+      const sess = db.prepare('SELECT * FROM sessions WHERE id = ?').get(session_id) as any;
+      if (!sess) {
+        throw new Error('Session not found.');
+      }
+
+      if (sess.status !== 'completed' && sess.status !== 'active') {
+        throw new Error('Can only refund completed or active sessions.');
+      }
+
+      const refunded_minutes = sess.refunded_minutes || 0;
+
+      if (refunded_minutes + parsedMinutes > sess.duration_minutes) {
+        throw new Error(`Cannot refund ${parsedMinutes} minutes. Only ${sess.duration_minutes - refunded_minutes} remaining minutes are eligible for refund.`);
+      }
+
+      const refund_amount = parsedMinutes * sess.price_per_minute;
+
+      // Update Session
+      db.prepare(`
+        UPDATE sessions 
+        SET refunded_minutes = refunded_minutes + ?,
+            refunded_amount = refunded_amount + ?,
+            consultant_earnings = MAX(0.0, consultant_earnings - ?)
+        WHERE id = ?
+      `).run(parsedMinutes, refund_amount, refund_amount, session_id);
+
+      // Refund User Wallet
+      if (sess.user_id) {
+        db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(refund_amount, sess.user_id);
+        logWalletTransaction(
+          Number(sess.user_id),
+          'refund',
+          refund_amount,
+          `Refund: ${parsedMinutes} mins for Chat Session #${session_id}`
+        );
+      }
+
+      // Deduct from Consultant Wallet
+      db.prepare(`
+        UPDATE consultants 
+        SET wallet_today = wallet_today - ?,
+            wallet_monthly = wallet_monthly - ?,
+            wallet_total = wallet_total - ?,
+            wallet_withdrawable = wallet_withdrawable - ?
+        WHERE id = ?
+      `).run(refund_amount, refund_amount, refund_amount, refund_amount, sess.consultant_id);
+
+      return { refund_amount, parsedMinutes, user_id: sess.user_id, consultant_id: sess.consultant_id };
+    })();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('wallet:updated', { 
+        userId: result.user_id, 
+        consultantId: result.consultant_id,
+        refundAmount: result.refund_amount,
+        sessionId: session_id 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully refunded ${result.parsedMinutes} minutes (₹${result.refund_amount.toFixed(2)}) to the user's wallet.`,
+      refund_amount: result.refund_amount,
+      refunded_minutes: result.parsedMinutes
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Manually Add Money to User or Consultant Wallet
+export const addMoneyToWallet = (req: Request, res: Response) => {
+  try {
+    const { target_type, target_id, amount, reason } = req.body;
+
+    if (!target_type || !['user', 'consultant'].includes(target_type)) {
+      return res.status(400).json({ error: 'Invalid target type. Must be user or consultant.' });
+    }
+
+    const numId = Number(target_id);
+    const numAmount = parseFloat(amount);
+
+    if (isNaN(numId) || numId <= 0) {
+      return res.status(400).json({ error: 'Invalid target ID.' });
+    }
+
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Amount must be greater than zero.' });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Reason is required for manual adjustments.' });
+    }
+
+    const trimmedReason = reason.trim();
+    const now = new Date().toISOString();
+
+    let targetName = '';
+
+    if (target_type === 'user') {
+      const user = db.prepare('SELECT display_name, id FROM users WHERE id = ?').get(numId) as any;
+      if (!user) {
+        return res.status(404).json({ error: 'User not found.' });
+      }
+      targetName = user.display_name;
+
+      // Update User Wallet
+      db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(numAmount, numId);
+
+      // Insert transaction into wallet_transactions for user dashboard ledger
+      db.prepare(`
+        INSERT INTO wallet_transactions (user_id, type, amount, description, gst_rate, gst_amount, total_paid, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(numId, 'admin_credit', numAmount, `Special Admin Credit: ${trimmedReason}`, 0, 0, numAmount, now);
+
+    } else {
+      const consultant = db.prepare('SELECT display_name, id FROM consultants WHERE id = ?').get(numId) as any;
+      if (!consultant) {
+        return res.status(404).json({ error: 'Consultant not found.' });
+      }
+      targetName = consultant.display_name;
+
+      // Update Consultant Wallet
+      db.prepare(`
+        UPDATE consultants 
+        SET wallet_withdrawable = wallet_withdrawable + ?,
+            wallet_total = wallet_total + ?,
+            wallet_monthly = wallet_monthly + ?
+        WHERE id = ?
+      `).run(numAmount, numAmount, numAmount, numId);
+    }
+
+    // Insert into manual adjustments log table
+    db.prepare(`
+      INSERT INTO manual_wallet_adjustments (target_type, target_id, target_name, amount, reason, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(target_type, numId, targetName, numAmount, trimmedReason, now);
+
+    // Emit live update
+    const io = req.app.get('io');
+    if (io) {
+      if (target_type === 'user') {
+        io.emit('wallet:updated', { userId: numId, amount: numAmount });
+      } else {
+        io.emit('wallet:updated', { consultantId: numId, amount: numAmount });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully credited ₹${numAmount.toFixed(2)} to ${target_type === 'user' ? 'Client' : 'Expert'} "${targetName}" wallet.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Fetch list of all Manual Wallet Adjustments with summary counts
+export const getManualWalletAdjustments = (req: Request, res: Response) => {
+  try {
+    const adjustments = db.prepare('SELECT * FROM manual_wallet_adjustments ORDER BY id DESC').all() as any[];
+    
+    const userSumResult = db.prepare("SELECT SUM(amount) as total FROM manual_wallet_adjustments WHERE target_type = 'user'").get() as { total: number | null };
+    const consultantSumResult = db.prepare("SELECT SUM(amount) as total FROM manual_wallet_adjustments WHERE target_type = 'consultant'").get() as { total: number | null };
+
+    res.json({
+      success: true,
+      adjustments,
+      totalAddedToUsers: userSumResult?.total || 0,
+      totalAddedToConsultants: consultantSumResult?.total || 0
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

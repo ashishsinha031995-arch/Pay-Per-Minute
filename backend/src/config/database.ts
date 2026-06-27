@@ -146,9 +146,57 @@ export function initDb() {
       body TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_type TEXT NOT NULL, -- 'user' or 'consultant'
+      sender_id INTEGER NOT NULL,
+      sender_name TEXT NOT NULL,
+      session_id TEXT, -- nullable
+      subject TEXT NOT NULL,
+      message TEXT NOT NULL,
+      status TEXT DEFAULT 'open', -- 'open', 'resolved', 'closed'
+      admin_reply TEXT,
+      replied_at TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS support_ticket_replies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id INTEGER NOT NULL,
+      sender_type TEXT NOT NULL, -- 'admin', 'user', 'consultant'
+      sender_id INTEGER NOT NULL,
+      sender_name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (ticket_id) REFERENCES support_tickets (id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS manual_wallet_adjustments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      target_type TEXT NOT NULL, -- 'user' or 'consultant'
+      target_id INTEGER NOT NULL,
+      target_name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // Migrate existing tables if they are missing newer columns
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS manual_wallet_adjustments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        target_type TEXT NOT NULL,
+        target_id INTEGER NOT NULL,
+        target_name TEXT NOT NULL,
+        amount REAL NOT NULL,
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+  } catch (_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN password TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN email TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;"); } catch(_) {}
@@ -157,6 +205,11 @@ export function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN wallet_balance REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN lifetime_recharge REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN location TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN languages TEXT DEFAULT 'Hindi';"); } catch(_) {}
+
+  try { db.exec("ALTER TABLE reviews ADD COLUMN is_hidden INTEGER DEFAULT 0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE reviews ADD COLUMN session_id TEXT;"); } catch(_) {}
 
   try { db.exec("ALTER TABLE consultants ADD COLUMN email TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN category TEXT DEFAULT 'Consultants';"); } catch(_) {}
@@ -196,10 +249,58 @@ export function initDb() {
   try { db.exec("ALTER TABLE consultants ADD COLUMN bank_status TEXT DEFAULT 'unsubmitted';"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN bank_reject_reason TEXT;"); } catch(_) {}
 
+  try { db.exec("ALTER TABLE sessions ADD COLUMN refunded_minutes INTEGER DEFAULT 0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE sessions ADD COLUMN refunded_amount REAL DEFAULT 0.0;"); } catch(_) {}
+
   // Seed default Admin Settings
   const commissionSetting = db.prepare('SELECT * FROM admin_settings WHERE key = ?').get('commission_percentage');
   if (!commissionSetting) {
     db.prepare('INSERT INTO admin_settings (key, value) VALUES (?, ?)').run('commission_percentage', '20');
+  }
+
+  // Seed default Hero Settings
+  const heroSetting = db.prepare('SELECT * FROM admin_settings WHERE key = ?').get('hero_settings');
+  if (!heroSetting) {
+    const defaultHeroJson = JSON.stringify({
+      global: {
+        headline: "Consult with India's Elite Specialists & Advisors",
+        description: "Secure, real-time live chat sessions with top-tier consultants, astrologers, coaches, and legal mentors. Start instantly.",
+        tagline: "⚡ LIVE CHAT CONSULTATION PORTAL"
+      },
+      categories: {
+        Astrologers: {
+          headline: "Unlock Your Cosmic Destiny with Vedic Astrologers",
+          description: "Receive accurate planetary advice, matchmaking guidance, and kundli readings with India's premium astrologers.",
+          tagline: "✨ COSMIC VEDIC ASTROLOGY"
+        },
+        Influencers: {
+          headline: "Collaborate with Elite Creators & Digital Influencers",
+          description: "Get direct advice on personal branding, audience growth, social media strategy, and campaign curation.",
+          tagline: "📱 CREATOR & INFLUENCER HUB"
+        },
+        Coaches: {
+          headline: "Achieve Peak Performance with Elite Life Coaches",
+          description: "Unlock your maximum potential, build daily discipline, conquer anxiety, and restructure your lifestyle.",
+          tagline: "🌱 DISCIPLINE & LIFE COACHES"
+        },
+        Consultants: {
+          headline: "Consult with India's Top Growth Specialists",
+          description: "Resolve corporate blockades, accelerate business development, and streamline workflows with elite experts.",
+          tagline: "💼 GROWTH CONSULTATION SERVICES"
+        },
+        Lawyers: {
+          headline: "Get Secured Professional Legal Mentorship",
+          description: "Direct, confidential legal advice, contract consultations, and regulatory frameworks with senior advocates.",
+          tagline: "⚖️ SECURED LEGAL MENTORSHIP"
+        },
+        Mentors: {
+          headline: "Accelerate Your Tech & Career Growth Path",
+          description: "Get career direction, resume feedback, coding mentorship, and placement guidance from FAANG architects.",
+          tagline: "🎓 FAANG TECH & CAREER MENTORS"
+        }
+      }
+    });
+    db.prepare('INSERT INTO admin_settings (key, value) VALUES (?, ?)').run('hero_settings', defaultHeroJson);
   }
 
   // Seed default Subscription Plans

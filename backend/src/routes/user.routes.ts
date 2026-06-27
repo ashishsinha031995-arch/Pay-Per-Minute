@@ -17,10 +17,14 @@ import {
   unblockUserByConsultant,
   getBlockedUsersByConsultant,
   uploadPhoto,
-  lockUserReferral
+  lockUserReferral,
+  getHeroSettings
 } from '../controllers/user.controller.js';
 
 const router = Router();
+
+// Public Settings
+router.get('/settings/hero', getHeroSettings);
 
 // User Actions
 router.get('/user/profile/:id', getUserProfileInfo);

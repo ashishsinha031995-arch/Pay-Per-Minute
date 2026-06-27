@@ -3,7 +3,7 @@ import {
   DollarSign, ShieldAlert, Sparkles, Plus, Settings, Users, Percent, ListCollapse, 
   ToggleLeft, ToggleRight, MessageSquare, Search, UserCheck, X, Calendar, BookOpen, 
   Award, CreditCard, Wallet, Landmark, BarChart3, Star, Megaphone, Bell, FileText, 
-  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard
+  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock
 } from 'lucide-react';
 import { Plan, Consultant, Session, AdminStats } from '../../types';
 import { 
@@ -105,6 +105,8 @@ export function AdminPanel() {
   const [usrCategory, setUsrCategory] = useState('General');
   const [usrLockedConsultantId, setUsrLockedConsultantId] = useState('');
   const [usrAdminAllowOthers, setUsrAdminAllowOthers] = useState(0);
+  const [usrLocation, setUsrLocation] = useState('');
+  const [usrLanguages, setUsrLanguages] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
@@ -167,13 +169,28 @@ export function AdminPanel() {
   // State to track manual refresh spinner animation
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Refund states
+  const [refundingSessionId, setRefundingSessionId] = useState<string | null>(null);
+  const [refundMinutes, setRefundMinutes] = useState<number>(1);
+  const [isRefundingInProgress, setIsRefundingInProgress] = useState<boolean>(false);
+
+  // Manual wallet adjustments states
+  const [manualTargetType, setManualTargetType] = useState<'user' | 'consultant'>('user');
+  const [manualTargetId, setManualTargetId] = useState<string>('');
+  const [manualAmount, setManualAmount] = useState<string>('');
+  const [manualReason, setManualReason] = useState<string>('');
+  const [manualAdjustments, setManualAdjustments] = useState<any[]>([]);
+  const [totalManualUsers, setTotalManualUsers] = useState<number>(0);
+  const [totalManualConsultants, setTotalManualConsultants] = useState<number>(0);
+  const [submittingManualAdjust, setSubmittingManualAdjust] = useState<boolean>(false);
+
   // Load backend datasets
   const loadAdminData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       setError(null);
 
-      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes] = await Promise.all([
+      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/consultants'),
         fetch('/api/admin/sessions'),
@@ -181,10 +198,11 @@ export function AdminPanel() {
         fetch('/api/admin/blocked'),
         fetch('/api/admin/users'),
         fetch('/api/admin/emails'),
-        fetch('/api/admin/reviews')
+        fetch('/api/admin/reviews'),
+        fetch('/api/admin/wallet/adjustments')
       ]);
 
-      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok) {
+      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok || !adjRes.ok) {
         throw new Error('Failed to load admin dataset');
       }
 
@@ -196,6 +214,7 @@ export function AdminPanel() {
       const usersData = await usersRes.json();
       const emailsData = await emailsRes.json();
       const reviewsData = await reviewsRes.json();
+      const adjData = await adjRes.json();
 
       setStats(statsData);
       setCommissionRateInput(statsData.commissionRate.toString());
@@ -208,6 +227,11 @@ export function AdminPanel() {
       setAdminUsers(usersData);
       setSentEmails(emailsData);
       setReviews(reviewsData);
+      if (adjData.success) {
+        setManualAdjustments(adjData.adjustments || []);
+        setTotalManualUsers(adjData.totalAddedToUsers || 0);
+        setTotalManualConsultants(adjData.totalAddedToConsultants || 0);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -232,6 +256,89 @@ export function AdminPanel() {
     setIsRefreshing(true);
     await loadAdminData(true);
     setTimeout(() => setIsRefreshing(false), 800);
+  };
+
+  const handleApplyManualAdjustment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualTargetId) {
+      setError('Please select a target ' + (manualTargetType === 'user' ? 'client' : 'expert') + '.');
+      return;
+    }
+    const parsedAmt = parseFloat(manualAmount);
+    if (isNaN(parsedAmt) || parsedAmt <= 0) {
+      setError('Please enter a valid amount greater than ₹0.');
+      return;
+    }
+    if (!manualReason.trim()) {
+      setError('Please enter a reason for adding money.');
+      return;
+    }
+
+    try {
+      setSubmittingManualAdjust(true);
+      setError(null);
+      setSuccessMsg(null);
+
+      const res = await fetch('/api/admin/wallet/add-money', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_type: manualTargetType,
+          target_id: Number(manualTargetId),
+          amount: parsedAmt,
+          reason: manualReason.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to apply manual wallet credit.');
+      }
+
+      setSuccessMsg(data.message || 'Credit applied successfully!');
+      setManualAmount('');
+      setManualReason('');
+      setManualTargetId('');
+      
+      // Refresh datasets
+      await loadAdminData(true);
+
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSubmittingManualAdjust(false);
+    }
+  };
+
+  const handleExecuteRefund = async (sessionId: string) => {
+    try {
+      setIsRefundingInProgress(true);
+      setError(null);
+      setSuccessMsg(null);
+
+      const res = await fetch(`/api/admin/sessions/${sessionId}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes: refundMinutes }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to process refund.');
+      }
+
+      setSuccessMsg(data.message || `Successfully refunded ${refundMinutes} minutes.`);
+      setRefundingSessionId(null);
+      setRefundMinutes(1);
+      
+      await loadAdminData(true);
+    } catch (err: any) {
+      setError(err.message);
+      console.error('Refund error:', err);
+    } finally {
+      setIsRefundingInProgress(false);
+    }
   };
 
   // Update Global Commission & Salary Settings
@@ -556,6 +663,8 @@ export function AdminPanel() {
     setUsrCategory(user.category || 'General');
     setUsrLockedConsultantId(user.locked_consultant_id ? String(user.locked_consultant_id) : '');
     setUsrAdminAllowOthers(user.admin_allow_others ? 1 : 0);
+    setUsrLocation(user.location || '');
+    setUsrLanguages(user.languages || '');
     setShowUserModal(true);
   };
 
@@ -628,7 +737,9 @@ export function AdminPanel() {
           wallet_balance: parseFloat(usrWalletBalance) || 0,
           category: usrCategory,
           locked_consultant_id: usrLockedConsultantId || null,
-          admin_allow_others: usrAdminAllowOthers
+          admin_allow_others: usrAdminAllowOthers,
+          location: usrLocation,
+          languages: usrLanguages
         })
       });
 
@@ -1023,6 +1134,11 @@ export function AdminPanel() {
                   <p className="text-[10px] font-mono text-slate-400 uppercase">Completed Sessions</p>
                   <p className="text-2xl font-black mt-1 text-slate-100">{stats.totalSessions}</p>
                   <span className="text-[9px] text-slate-500 font-mono">Avg dur: 12.5 mins</span>
+                </div>
+                <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-sm relative overflow-hidden">
+                  <p className="text-[10px] font-mono text-slate-400 uppercase">Total Refunded</p>
+                  <p className="text-2xl font-black mt-1 text-rose-400">₹{((stats as any).totalRefunded || 0).toFixed(2)}</p>
+                  <span className="text-[9px] text-rose-400/80 font-mono">Real-time stats</span>
                 </div>
               </div>
 
@@ -1868,9 +1984,15 @@ export function AdminPanel() {
                           <div>📅 Duration: <span className="text-slate-200 font-bold">{plan.duration_days} Days</span></div>
                         </div>
 
-                        <div className="flex items-center space-x-2 pt-1">
+                        <div className="flex flex-wrap gap-2 pt-1">
                           <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded font-mono">
-                            Price: ₹{plan.price}
+                            Base: ₹{plan.price}
+                          </span>
+                          <span className="text-[10px] bg-amber-500/10 text-amber-400 font-bold px-2 py-0.5 rounded font-mono">
+                            +18% GST: ₹{(plan.price * 0.18).toFixed(2)}
+                          </span>
+                          <span className="text-[10px] bg-sky-500/10 text-sky-400 font-bold px-2 py-0.5 rounded font-mono">
+                            Total: ₹{(plan.price * 1.18).toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -2263,18 +2385,32 @@ export function AdminPanel() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-slate-300 font-mono text-[11px]">
-                          {user.locked_consultant_id ? (
-                            <div className="space-y-0.5">
-                              <span className="text-amber-400 font-bold font-sans block text-xs">
-                                {consultants.find(c => c.id === user.locked_consultant_id)?.display_name || `Expert #${user.locked_consultant_id}`}
-                              </span>
-                              <span className="block text-[9px] text-slate-500 font-medium font-sans">
-                                override: {user.admin_allow_others === 1 ? 'ALLOWED' : 'LOCKED'}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-slate-500">None (Show All)</span>
-                          )}
+                          {(() => {
+                            const lockedStr = user.locked_consultant_id;
+                            if (lockedStr !== null && lockedStr !== undefined && String(lockedStr).trim() !== '') {
+                              const ids = String(lockedStr)
+                                .split(',')
+                                .map(s => s.trim())
+                                .filter(s => s !== '')
+                                .map(s => parseInt(s, 10))
+                                .filter(n => !isNaN(n));
+                              
+                              if (ids.length > 0) {
+                                const names = ids.map(id => consultants.find(c => c.id === id)?.display_name || `#${id}`).join(', ');
+                                return (
+                                  <div className="space-y-0.5">
+                                    <span className="text-amber-400 font-bold font-sans block text-xs line-clamp-2">
+                                      {names}
+                                    </span>
+                                    <span className="block text-[9px] text-slate-500 font-medium font-sans">
+                                      override: {user.admin_allow_others === 1 ? 'ALLOWED' : 'LOCKED'}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                            }
+                            return <span className="text-slate-500">None (Show All)</span>;
+                          })()}
                         </td>
                         <td className="px-4 py-3.5 text-slate-400">
                           <div>DOB: {user.dob || 'Not added'}</div>
@@ -2407,40 +2543,159 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono text-[11px] text-slate-300">
-                    {filteredSessions.map(sess => (
-                      <tr key={sess.id} className="hover:bg-slate-950/40">
-                        <td className="px-4 py-3.5 text-cyan-400 font-bold">{sess.id}</td>
-                        <td className="px-4 py-3.5 font-sans font-medium text-slate-200">{sess.user_name}</td>
-                        <td className="px-4 py-3.5 font-sans font-medium text-slate-200">{(sess as any).consultant_name || 'Expert'}</td>
-                        <td className="px-4 py-3.5 font-sans">{sess.duration_minutes} Mins</td>
-                        <td className="px-4 py-3.5 font-bold text-slate-100">₹{sess.total_paid.toFixed(2)}</td>
-                        <td className="px-4 py-3.5 text-amber-500">₹{sess.commission_amount.toFixed(2)} ({sess.commission_rate}%)</td>
-                        <td className="px-4 py-3.5">
-                          <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/10">
-                            {sess.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-sans">
-                          <button
-                            onClick={async () => {
-                              try {
-                                const res = await fetch(`/api/sessions/${sess.id}`);
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  setViewingPastSessionMessages(data.messages);
-                                  setViewingPastSessionInfo(data.session);
-                                }
-                              } catch (err) {
-                                console.error(err);
-                              }
-                            }}
-                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/15 rounded text-[10px] px-2 py-1 font-bold transition-all"
-                          >
-                            Inspect Call
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredSessions.flatMap(sess => {
+                      const maxRefundable = sess.duration_minutes - (sess.refunded_minutes || 0);
+                      const rows = [
+                        <tr key={sess.id} className="hover:bg-slate-950/40">
+                          <td className="px-4 py-3.5 text-cyan-400 font-bold">{sess.id}</td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex flex-col">
+                              <span className="font-sans font-semibold text-slate-200">{sess.user_name}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">User ID: {sess.user_id}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex flex-col">
+                              <span className="font-sans font-semibold text-slate-200">{(sess as any).consultant_name || 'Expert'}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">Consultant ID: {sess.consultant_id}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 font-sans">
+                            <div className="flex flex-col">
+                              <span>{sess.duration_minutes} Mins</span>
+                              {(sess.refunded_minutes || 0) > 0 && (
+                                <span className="text-[10px] text-rose-400">Refunded {sess.refunded_minutes} Mins</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 font-bold text-slate-100">
+                            <div className="flex flex-col">
+                              <span>₹{sess.total_paid.toFixed(2)}</span>
+                              {(sess.refunded_amount || 0) > 0 && (
+                                <span className="text-[10px] text-rose-400 font-bold mt-0.5" title="Refunded amount">
+                                  Refunded: ₹{sess.refunded_amount?.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-amber-500">₹{sess.commission_amount.toFixed(2)} ({sess.commission_rate}%)</td>
+                          <td className="px-4 py-3.5">
+                            <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/10">
+                              {sess.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-sans">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`/api/sessions/${sess.id}`);
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      setViewingPastSessionMessages(data.messages);
+                                      setViewingPastSessionInfo(data.session);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }}
+                                className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/15 rounded text-[10px] px-2 py-1 font-bold transition-all"
+                              >
+                                Inspect Call
+                              </button>
+
+                              {(sess.status === 'completed' || sess.status === 'active') && maxRefundable > 0 ? (
+                                <button
+                                  onClick={() => {
+                                    if (refundingSessionId === sess.id) {
+                                      setRefundingSessionId(null);
+                                    } else {
+                                      setRefundingSessionId(sess.id);
+                                      setRefundMinutes(1);
+                                    }
+                                  }}
+                                  className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 rounded text-[10px] px-2 py-1 font-bold transition-all"
+                                >
+                                  {refundingSessionId === sess.id ? 'Cancel' : 'Refund'}
+                                </button>
+                              ) : (sess.refunded_amount || 0) > 0 && maxRefundable === 0 ? (
+                                <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 border border-rose-500/20 rounded px-2 py-1">
+                                  Fully Refunded
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ];
+
+                      if (refundingSessionId === sess.id) {
+                        rows.push(
+                          <tr key={`${sess.id}-refund`} className="bg-slate-950/40">
+                            <td colSpan={8} className="px-6 py-4 border-t border-b border-slate-800">
+                              <div className="max-w-xl space-y-3 text-left">
+                                <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                                  <ShieldAlert className="w-4 h-4 text-rose-400" />
+                                  Issue Refund for Chat Session #{sess.id}
+                                </h4>
+                                <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
+                                  Select the number of minutes to refund to <strong className="text-slate-200">{sess.user_name}</strong>. 
+                                  The refund amount will be credited back to the user's wallet balance and deducted from 
+                                  the consultant's earnings. The super admin's commission remains untouched.
+                                </p>
+                                
+                                <div className="flex items-center gap-4 flex-wrap bg-slate-900/50 p-3 rounded-xl border border-slate-800">
+                                  <div className="flex flex-col gap-1">
+                                    <label className="text-[9px] text-slate-500 uppercase font-mono font-bold tracking-wider">Refund Minutes</label>
+                                    <select
+                                      value={refundMinutes}
+                                      onChange={(e) => setRefundMinutes(Number(e.target.value))}
+                                      className="bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:ring-1 focus:ring-rose-500 focus:outline-none"
+                                    >
+                                      {Array.from({ length: maxRefundable }, (_, i) => i + 1).map((m) => (
+                                        <option key={m} value={m}>{m} {m === 1 ? 'Minute' : 'Minutes'}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1 font-mono">
+                                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Refund Amount</span>
+                                    <strong className="text-xs text-rose-400 font-sans font-extrabold">₹{(refundMinutes * sess.price_per_minute).toFixed(2)}</strong>
+                                  </div>
+                                  
+                                  <div className="flex flex-col gap-1 font-mono">
+                                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Deducted from Consultant</span>
+                                    <strong className="text-xs text-rose-400 font-sans font-extrabold">₹{(refundMinutes * sess.price_per_minute).toFixed(2)}</strong>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1 font-mono">
+                                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Rate per min</span>
+                                    <span className="text-xs text-slate-300 font-sans">₹{sess.price_per_minute}/min</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1">
+                                  <button
+                                    onClick={() => handleExecuteRefund(sess.id)}
+                                    disabled={isRefundingInProgress}
+                                    className="bg-rose-500 hover:bg-rose-600 active:scale-95 text-slate-950 font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md disabled:opacity-50"
+                                  >
+                                    {isRefundingInProgress ? 'Processing...' : 'Confirm & Refund Wallet'}
+                                  </button>
+                                  <button
+                                    onClick={() => setRefundingSessionId(null)}
+                                    className="bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800 text-xs px-3 py-2 rounded-xl font-bold transition-all"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return rows;
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2594,45 +2849,206 @@ export function AdminPanel() {
           {/* ========================================================= */}
           {/* 2.7 TAB: WALLET MANAGEMENT */}
           {activeTab === 'wallets' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left">
-              <h3 className="text-base font-bold text-slate-100">Platform & Expert Wallet Ledger</h3>
-              <p className="text-xs text-slate-400 font-mono">Perform adjustment debits/credits or auditing system net reserves</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6 text-left">
+              <div>
+                <h3 className="text-base font-bold text-slate-100">Platform Wallet Management & Manual Adjustments</h3>
+                <p className="text-xs text-slate-400 font-mono">Manually add money to user and consultant wallets with reason tracking</p>
+              </div>
+
+              {/* Statistics Overview Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">System Net Reserve Balance</span>
-                  <strong className="text-3xl text-emerald-400 mt-2 block font-mono">₹{stats.totalCommission.toFixed(2)}</strong>
-                  <span className="text-xs text-slate-500 mt-1 block leading-relaxed">
-                    Derived dynamically based on each expert's assigned membership plan commission rates (30%, 25%, 20%) or the fallback default rate of {stats.commissionRate}%.
-                  </span>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Total Manually Added (Users)</span>
+                  <strong className="text-2xl text-emerald-400 mt-2 block font-mono">₹{totalManualUsers.toFixed(2)}</strong>
+                  <span className="text-[10px] text-slate-500 block mt-1">Total manual balance credited to clients</span>
                 </div>
 
                 <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">Adjust Expert Wallet Credit/Debit</span>
-                  <div className="flex gap-2 mt-3">
-                    <input type="text" placeholder="Consultant ID" className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-100 focus:outline-none w-24" />
-                    <input type="number" placeholder="Amount" className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-100 focus:outline-none w-24" />
-                    <button 
-                      onClick={() => {
-                        setSuccessMsg('Manual wallet adjustment executed successfully.');
-                        setTimeout(() => setSuccessMsg(null), 3000);
-                      }}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs"
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Total Manually Added (Consultants)</span>
+                  <strong className="text-2xl text-amber-400 mt-2 block font-mono">₹{totalManualConsultants.toFixed(2)}</strong>
+                  <span className="text-[10px] text-slate-500 block mt-1">Total manual balance credited to experts</span>
+                </div>
+
+                <div className="bg-slate-950 p-5 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-slate-950 to-emerald-950/10">
+                  <span className="text-[10px] font-mono text-emerald-400 uppercase block">Total Cumulative Manual Additions</span>
+                  <strong className="text-2xl text-emerald-400 mt-2 block font-mono">₹{(totalManualUsers + totalManualConsultants).toFixed(2)}</strong>
+                  <span className="text-[10px] text-slate-400 block mt-1">Sum of all administrative wallet credits</span>
+                </div>
+              </div>
+
+              {/* Form and Ledger Split */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                {/* Form to Add Money */}
+                <form onSubmit={handleApplyManualAdjustment} className="lg:col-span-5 bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+                  <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-300 border-b border-slate-850 pb-2 flex items-center gap-1.5">
+                    <Coins className="w-4 h-4 text-emerald-400" />
+                    <span>Add Money to Wallet</span>
+                  </h4>
+
+                  {/* Target Type Picker Tab Buttons */}
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-2">Select Target Audience</label>
+                    <div className="grid grid-cols-2 gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualTargetType('user');
+                          setManualTargetId('');
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          manualTargetType === 'user'
+                            ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Client / User
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualTargetType('consultant');
+                          setManualTargetId('');
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          manualTargetType === 'consultant'
+                            ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Expert / Advisor
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Target Account Selector */}
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1.5">
+                      Select {manualTargetType === 'user' ? 'Client' : 'Expert'} Account
+                    </label>
+                    <select
+                      value={manualTargetId}
+                      onChange={(e) => setManualTargetId(e.target.value)}
+                      required
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
                     >
-                      Apply
-                    </button>
+                      <option value="">-- Choose Account --</option>
+                      {manualTargetType === 'user' ? (
+                        adminUsers.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.display_name} (ID: {u.id} • Bal: ₹{(u.wallet_balance || 0).toFixed(2)})
+                          </option>
+                        ))
+                      ) : (
+                        consultants.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.display_name} (ID: {c.id} • Bal: ₹{(c.wallet_withdrawable || 0).toFixed(2)})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {/* Amount Input */}
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1.5">Amount to Add (INR)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-slate-500 font-bold font-mono">₹</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        placeholder="0.00"
+                        value={manualAmount}
+                        onChange={(e) => setManualAmount(e.target.value)}
+                        required
+                        className="bg-slate-900 border border-slate-800 rounded-xl pl-7 pr-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reason Textarea */}
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1.5">Reason / Remarks</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Enter the reason (e.g. Welcome bonus, Dispute compensation, special incentive, etc.)"
+                      value={manualReason}
+                      onChange={(e) => setManualReason(e.target.value)}
+                      required
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full leading-relaxed resize-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submittingManualAdjust}
+                    className={`w-full font-extrabold py-2.5 rounded-xl text-xs transition-all uppercase tracking-wider text-center flex items-center justify-center space-x-2 ${
+                      manualTargetType === 'user'
+                        ? 'bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950'
+                        : 'bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950'
+                    }`}
+                  >
+                    {submittingManualAdjust ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Applying...</span>
+                      </>
+                    ) : (
+                      <span>Add Money to {manualTargetType === 'user' ? 'Client' : 'Expert'} Wallet</span>
+                    )}
+                  </button>
+                </form>
+
+                {/* Ledger & History Log */}
+                <div className="lg:col-span-7 bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+                  <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-300 border-b border-slate-850 pb-2 flex items-center justify-between">
+                    <span>📋 Manual Adjustments History Log</span>
+                    <span className="text-[10px] text-slate-500 font-normal lowercase">{manualAdjustments.length} log records</span>
+                  </h4>
+
+                  <div className="space-y-3 overflow-y-auto max-h-[420px] pr-1">
+                    {manualAdjustments.length === 0 ? (
+                      <div className="text-center py-16 text-slate-500 text-xs">
+                        No manual wallet additions logged yet. Use the left form to credit funds.
+                      </div>
+                    ) : (
+                      manualAdjustments.map((adj) => (
+                        <div
+                          key={adj.id}
+                          className="bg-slate-900/40 border border-slate-850/60 p-3.5 rounded-xl flex items-start justify-between gap-4 hover:border-slate-800 transition-colors"
+                        >
+                          <div className="space-y-1.5 text-left flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                adj.target_type === 'user'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/15'
+                              }`}>
+                                {adj.target_type === 'user' ? 'Client' : 'Expert'}
+                              </span>
+                              <span className="text-[10px] text-slate-300 font-bold truncate">
+                                {adj.target_name}
+                              </span>
+                              <span className="text-[9px] font-mono text-slate-500">ID: #{adj.target_id}</span>
+                            </div>
+                            <p className="text-xs text-slate-200 font-sans leading-relaxed break-words">{adj.reason}</p>
+                            <span className="text-[9px] text-slate-500 font-mono block">
+                              {new Date(adj.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-sm font-black font-mono text-emerald-400">+₹{adj.amount.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
-                {stats.plansStats && stats.plansStats.length > 0 && (
-                  <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 md:col-span-2 space-y-3">
-                    <span className="text-[10px] font-mono text-slate-500 uppercase block">Platform Commission Contribution Breakdown By Plan</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {stats.plansStats.map((plan: any) => (
-                        <div key={plan.id} className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 hover:border-slate-700 transition-all">
-                          <span className="text-[10px] text-slate-300 font-bold block truncate">{plan.name}</span>
-                          <span className="text-[9px] text-slate-500 block mt-0.5">({plan.commission_rate}% split • {plan.enrolledCount} experts)</span>
-                          <strong className="text-base text-emerald-400 mt-1 block font-mono">₹{plan.totalCommission.toFixed(2)}</strong>
+              </div>
+            </div>
+          )}>
                         </div>
                       ))}
                     </div>
@@ -3070,7 +3486,33 @@ export function AdminPanel() {
                               </div>
                             </div>
                             
-                            <div className="flex items-center justify-end shrink-0">
+                            <div className="flex items-center justify-end shrink-0 gap-2">
+                              <button 
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`/api/admin/reviews/${r.id}/toggle-hidden`, {
+                                      method: 'PUT'
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data.error || 'Failed to toggle review visibility');
+                                    
+                                    setSuccessMsg(data.message || 'Review visibility toggled!');
+                                    loadAdminData();
+                                    setTimeout(() => setSuccessMsg(null), 3000);
+                                  } catch (err: any) {
+                                    setError(err.message);
+                                    setTimeout(() => setError(null), 4000);
+                                  }
+                                }}
+                                className={`${
+                                  r.is_hidden === 1
+                                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20'
+                                    : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700'
+                                } px-3 py-2 rounded-xl text-xs font-mono font-bold transition-all flex items-center space-x-1.5`}
+                              >
+                                <span>{r.is_hidden === 1 ? 'Unhide (Hidden)' : 'Hide Review'}</span>
+                              </button>
+
                               <button 
                                 onClick={async () => {
                                   if (!confirm(`Kya aap sure hain ki client "${r.user_name}" ka ye review delete karna chahte hain? Isse expert ki average rating automatic update ho jayegi.`)) {
@@ -3582,6 +4024,29 @@ export function AdminPanel() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Current Location</label>
+                  <input
+                    type="text"
+                    value={usrLocation}
+                    onChange={e => setUsrLocation(e.target.value)}
+                    placeholder="e.g. New Delhi, India"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500 font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Languages (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={usrLanguages}
+                    onChange={e => setUsrLanguages(e.target.value)}
+                    placeholder="e.g. Hindi, English"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500 font-sans"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[11px] text-slate-400 font-mono mb-1">Wallet Balance (INR ₹) *</label>
                 <div className="relative">
@@ -3598,7 +4063,7 @@ export function AdminPanel() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <div>
                   <label className="block text-[11px] text-slate-400 font-mono mb-1">User Category</label>
                   <select
@@ -3614,34 +4079,97 @@ export function AdminPanel() {
                     <option value="Special">Special</option>
                   </select>
                 </div>
+
                 <div>
-                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Locked Consultant</label>
-                  <select
-                    value={usrLockedConsultantId}
-                    onChange={e => setUsrLockedConsultantId(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500"
-                  >
-                    <option value="">-- No Lock (Show All) --</option>
-                    {consultants.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.display_name} (@{c.username})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] text-slate-400 font-mono">
+                      Locked Consultants (Referral Basis / Checkbox Select)
+                    </label>
+                    {usrLockedConsultantId ? (
+                      <button
+                        type="button"
+                        onClick={() => setUsrLockedConsultantId('')}
+                        className="text-[10px] text-rose-400 hover:text-rose-300 underline font-mono"
+                      >
+                        Clear All Locks
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="border border-slate-800 rounded-xl bg-slate-950 p-3 max-h-48 overflow-y-auto space-y-2">
+                    {consultants.length === 0 ? (
+                      <span className="text-[11px] text-slate-500 block text-center font-mono py-2">No consultants found</span>
+                    ) : (
+                      consultants.map(c => {
+                        const selectedIds = usrLockedConsultantId
+                          ? usrLockedConsultantId.split(',').map(s => s.trim()).filter(s => s !== '')
+                          : [];
+                        const isChecked = selectedIds.includes(String(c.id));
+                        return (
+                          <label
+                            key={c.id}
+                            className="flex items-center space-x-3 p-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800/40 hover:border-slate-800 cursor-pointer select-none transition-colors text-left"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const currentIds = usrLockedConsultantId
+                                  ? usrLockedConsultantId.split(',').map(s => s.trim()).filter(s => s !== '')
+                                  : [];
+                                let newIds: string[];
+                                if (currentIds.includes(String(c.id))) {
+                                  newIds = currentIds.filter(item => item !== String(c.id));
+                                } else {
+                                  newIds = [...currentIds, String(c.id)];
+                                }
+                                setUsrLockedConsultantId(newIds.join(','));
+                              }}
+                              className="w-4 h-4 accent-emerald-500 rounded border-slate-700 bg-slate-950"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-slate-200">{c.display_name}</span>
+                              <span className="text-[10px] font-mono text-slate-500">@{c.username} • {c.category}</span>
+                            </div>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 flex items-center justify-between">
-                <div className="space-y-0.5 text-left flex-1 pr-2">
-                  <span className="text-[11px] font-bold text-slate-200 block">Show Other Experts Anyway</span>
-                  <p className="text-[9px] text-slate-500 leading-normal">Super admin control: let user browse other consultants even if referred by a link lock.</p>
+              {/* Locked Consultant Details & Advisor Access Checkbox */}
+              <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800/80 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1 text-left flex-1 pr-3">
+                    <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>🔒 Locked Consultant Access Rules</span>
+                    </span>
+                    <p className="text-[10px] text-slate-300 leading-relaxed">
+                      By default, jis link/referral se user register hua hai, wahi consultant use show hoga aur baaki saare lock/hide rahenge.
+                    </p>
+                    <p className="text-[10px] text-emerald-400 leading-relaxed font-medium">
+                      Check input niche toggle karein: Select kiye hue consultant ke alawa baaki advisors tabhi show honge jab aap is checkbox ko <strong>Enable</strong> karenge, warna block rahenge!
+                    </p>
+                  </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={usrAdminAllowOthers === 1}
-                  onChange={e => setUsrAdminAllowOthers(e.target.checked ? 1 : 0)}
-                  className="w-4 h-4 accent-emerald-500 cursor-pointer shrink-0"
-                />
+
+                <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/60 flex items-center justify-between">
+                  <div className="space-y-0.5 text-left flex-1 pr-2">
+                    <span className="text-[11px] font-bold text-slate-200 block">Show Other Advisors? (Allow Others)</span>
+                    <p className="text-[9px] text-slate-400 leading-normal">
+                      Enabled = User can browse all other advisors. Disabled = Remaining advisors are locked/hidden.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={usrAdminAllowOthers === 1}
+                    onChange={e => setUsrAdminAllowOthers(e.target.checked ? 1 : 0)}
+                    className="w-5 h-5 accent-emerald-500 cursor-pointer shrink-0 rounded border-slate-800 bg-slate-950"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

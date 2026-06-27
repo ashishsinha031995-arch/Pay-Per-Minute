@@ -7,6 +7,7 @@ import userRoutes from './routes/user.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import subscriptionRoutes from './routes/subscription.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import supportRoutes from './routes/support.routes.js';
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/api', authRoutes);
 app.use('/api', userRoutes);
 app.use('/api', chatRoutes);
 app.use('/api', subscriptionRoutes);
+app.use('/api', supportRoutes);
 app.use('/api/admin', adminRoutes);
 
 export default app;

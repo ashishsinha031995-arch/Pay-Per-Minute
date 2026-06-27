@@ -313,15 +313,19 @@ export const rejectSession = (req: Request, res: Response) => {
       return res.status(400).json({ error: `Session is already ${sess.status}` });
     }
 
-    db.prepare("UPDATE sessions SET status = 'rejected' WHERE id = ?").run(session_id);
-    db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(sess.consultant_id);
+    const userId = sess.user_id;
+    const totalPaid = sess.total_paid;
+    const consultantId = sess.consultant_id;
 
-    if (sess.user_id && sess.total_paid > 0) {
-      db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(sess.total_paid, sess.user_id);
+    db.prepare("UPDATE sessions SET status = 'rejected', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(session_id);
+    db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
+
+    if (userId && totalPaid > 0) {
+      db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
       logWalletTransaction(
-        Number(sess.user_id),
+        Number(userId),
         'refund',
-        sess.total_paid,
+        totalPaid,
         `Refund: Consultation request rejected by advisor`
       );
     }
@@ -355,37 +359,52 @@ export const endSessionManually = (req: Request, res: Response) => {
       return res.json({ success: true, status: sess.status, message: 'Session is already inactive.' });
     }
 
-    const msgs = db.prepare('SELECT sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
+    const msgs = db.prepare('SELECT sender_type, sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
     const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text}`).join('\n');
 
+    const consultantMsgs = msgs.filter(m => m.sender_type === 'consultant');
+
     let actualMinutes = sess.duration_minutes;
-    if (sess.started_at) {
-      const start = new Date(sess.started_at);
-      const now = new Date();
-      const diffMs = now.getTime() - start.getTime();
-      const actualSeconds = Math.max(0, Math.floor(diffMs / 1000));
-      actualMinutes = Math.min(sess.duration_minutes, Math.max(1, Math.ceil(actualSeconds / 60)));
-    } else {
+    let actualCost = sess.price_per_minute * actualMinutes;
+    let refundAmount = 0;
+    let actual_commission = 0;
+    let actual_consultant_earnings = 0;
+    let finalStatus = 'completed';
+
+    if (consultantMsgs.length === 0) {
+      // Consultant did not reply or participate at all! Refund user 100%!
       actualMinutes = 0;
+      actualCost = 0.0;
+      refundAmount = sess.total_paid;
+      actual_commission = 0.0;
+      actual_consultant_earnings = 0.0;
+      finalStatus = 'missed';
+    } else {
+      if (sess.started_at) {
+        const start = new Date(sess.started_at);
+        const now = new Date();
+        const diffMs = now.getTime() - start.getTime();
+        const actualSeconds = Math.max(0, Math.floor(diffMs / 1000));
+        actualMinutes = Math.min(sess.duration_minutes, Math.max(1, Math.ceil(actualSeconds / 60)));
+      } else {
+        actualMinutes = 0;
+      }
+      actualCost = sess.price_per_minute * actualMinutes;
+      refundAmount = Math.max(0, sess.total_paid - actualCost);
+      actual_commission = actualCost * (sess.commission_rate / 100);
+      actual_consultant_earnings = actualCost - actual_commission;
     }
-
-    const price_per_minute = sess.price_per_minute;
-    const actualCost = price_per_minute * actualMinutes;
-    const refundAmount = Math.max(0, sess.total_paid - actualCost);
-
-    const actual_commission = actualCost * (sess.commission_rate / 100);
-    const actual_consultant_earnings = actualCost - actual_commission;
 
     db.prepare(`
       UPDATE sessions 
-      SET status = 'completed', 
+      SET status = ?, 
           duration_minutes = ?,
           total_paid = ?,
           commission_amount = ?,
           consultant_earnings = ?,
           transcript = ? 
       WHERE id = ?
-    `).run(actualMinutes, actualCost, actual_commission, actual_consultant_earnings, transcript, sess.id);
+    `).run(finalStatus, actualMinutes, actualCost, actual_commission, actual_consultant_earnings, transcript, sess.id);
 
     if (sess.user_id && refundAmount > 0) {
       db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(refundAmount, sess.user_id);
@@ -393,7 +412,9 @@ export const endSessionManually = (req: Request, res: Response) => {
         Number(sess.user_id),
         'refund',
         refundAmount,
-        `Refund: Remaining balance after completing ${actualMinutes} mins consultation`
+        consultantMsgs.length === 0
+          ? `Refund: Consultation session missed/ignored by advisor (No messages received)`
+          : `Refund: Remaining balance after completing ${actualMinutes} mins consultation`
       );
     }
 
@@ -408,15 +429,22 @@ export const endSessionManually = (req: Request, res: Response) => {
       WHERE id = ?
     `).run(actual_consultant_earnings, actual_consultant_earnings, actual_consultant_earnings, actual_consultant_earnings, cid);
 
-    console.log(`[REST Manual End] Session ${sess.id} marked as completed by manual request. Talked: ${actualMinutes} mins, Cost: ${actualCost}, Refund: ${refundAmount}`);
+    console.log(`[REST Manual End] Session ${sess.id} marked as ${finalStatus} by manual request. Talked: ${actualMinutes} mins, Cost: ${actualCost}, Refund: ${refundAmount}`);
 
     const io = req.app.get('io');
     if (io) {
-      io.to(sess.id).emit('session:expired', {
-        session_id: sess.id,
-        transcript,
-        message: `Session was manually ended. Talked for ${actualMinutes} mins.`
-      });
+      if (consultantMsgs.length === 0) {
+        io.to(sess.id).emit('session:missed', {
+          session_id: sess.id,
+          message: 'Session has ended as advisor failed to participate.'
+        });
+      } else {
+        io.to(sess.id).emit('session:expired', {
+          session_id: sess.id,
+          transcript,
+          message: `Session was manually ended. Talked for ${actualMinutes} mins.`
+        });
+      }
     }
 
     res.json({ success: true, status: 'completed', transcript, actualMinutes, actualCost, refundAmount });

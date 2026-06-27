@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
+import { IncomingRequestNotification } from '../IncomingRequestNotification';
 
 interface ConsultantPanelProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
@@ -28,6 +29,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [wallet, setWallet] = useState<any>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [salaryInfo, setSalaryInfo] = useState<any>(null);
+  const [manualAdjustments, setManualAdjustments] = useState<any[]>([]);
 
   // Profile Form States
   const [photoUrl, setPhotoUrl] = useState('');
@@ -73,7 +75,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   // Tab Navigation & Mobile Drawer States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support'>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Status Toggles
@@ -181,6 +183,64 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
   // Blocked users state
   const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
+
+  // Support ticket states
+  const [consultantTickets, setConsultantTickets] = useState<any[]>([]);
+  const [loadingConsultantTickets, setLoadingConsultantTickets] = useState(false);
+  const [consultantReplyDrafts, setConsultantReplyDrafts] = useState<{[ticketId: number]: string}>({});
+
+  const fetchConsultantTickets = async () => {
+    if (!currentConsultant?.id) return;
+    try {
+      setLoadingConsultantTickets(true);
+      const res = await fetch(`/api/tickets?sender_type=consultant&sender_id=${currentConsultant.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setConsultantTickets(data.tickets);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch consultant support tickets:', err);
+    } finally {
+      setLoadingConsultantTickets(false);
+    }
+  };
+
+  const handleConsultantReplySubmit = async (e: React.FormEvent, ticketId: number) => {
+    e.preventDefault();
+    const replyText = consultantReplyDrafts[ticketId] || '';
+    if (!replyText.trim()) return;
+
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_type: 'consultant',
+          sender_id: currentConsultant?.id,
+          sender_name: currentConsultant?.name || 'Consultant',
+          message: replyText
+        })
+      });
+
+      if (res.ok) {
+        setConsultantReplyDrafts(prev => ({ ...prev, [ticketId]: '' }));
+        fetchConsultantTickets();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to submit reply');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error submitting reply');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'support' && currentConsultant?.id) {
+      fetchConsultantTickets();
+    }
+  }, [activeTab, currentConsultant?.id]);
 
   // Load plans on mount
   useEffect(() => {
@@ -306,6 +366,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setWallet(data.wallet);
         setSessions(data.sessions);
         setSalaryInfo(data.salaryInfo);
+        setManualAdjustments(data.manualAdjustments || []);
       } else if (res.status === 404 || res.status === 401) {
         // Stale session, clean it up!
         handleLogout();
@@ -1216,20 +1277,46 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             <form onSubmit={handleRegister} className="space-y-6">
               
               {/* Plan Selection Summary badge */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 flex items-center justify-between">
-                <div>
-                  <span className="text-[9px] text-slate-500 font-mono uppercase block">Active Choice:</span>
-                  <strong className="text-sm font-bold text-slate-200">
-                    {plans.find(p => p.id === selectedPlanId)?.name || 'Loading Subscription Plan...'}
-                  </strong>
-                </div>
-                <div className="text-right">
-                  <span className="text-[9px] text-slate-500 font-mono block">Simulated Price:</span>
-                  <strong className="text-lg font-black text-emerald-400">
-                    ₹{plans.find(p => p.id === selectedPlanId)?.price || 0}
-                  </strong>
-                </div>
-              </div>
+              {(() => {
+                const selectedPlan = plans.find(p => p.id === selectedPlanId);
+                const basePrice = selectedPlan?.price || 0;
+                const gstAmount = basePrice * 0.18;
+                const totalPrice = basePrice + gstAmount;
+                return (
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] text-slate-500 font-mono uppercase block">Active Choice:</span>
+                        <strong className="text-sm font-bold text-slate-200">
+                          {selectedPlan?.name || 'Loading Subscription Plan...'}
+                        </strong>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-slate-500 font-mono block">Base Price:</span>
+                        <strong className="text-sm font-black text-slate-300 font-mono">
+                          ₹{basePrice.toFixed(2)}
+                        </strong>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-900 pt-2 text-xs">
+                      <div className="text-slate-400">
+                        GST (Exclusive 18%)
+                      </div>
+                      <div className="text-amber-500 font-mono">
+                        +₹{gstAmount.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-900 pt-2">
+                      <div className="text-xs font-bold text-slate-300">
+                        Total Amount Payable
+                      </div>
+                      <div className="text-base font-black text-emerald-400 font-mono">
+                        ₹{totalPrice.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Form Input fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1483,61 +1570,36 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             
             if (pendingRequest) {
               return (
-                <motion.div 
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-amber-500/10 border-2 border-amber-500/30 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-amber-500/5"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-amber-500/20 p-2 rounded-xl animate-pulse">
-                      <Flame className="w-5 h-5 text-amber-400" />
-                    </div>
-                    <div className="text-left">
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">🚨 ACTION REQUIRED</span>
-                      <h4 className="text-sm font-bold text-amber-200">Incoming Consultation Request from {pendingRequest.user_name}</h4>
-                      <p className="text-xs text-slate-400 font-mono">Duration: {pendingRequest.duration_minutes} mins @ ₹{pendingRequest.price_per_minute}/min</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const res = await fetch(`/api/sessions/${pendingRequest.id}/accept`, { method: 'POST' });
-                          if (res.ok) {
-                            loadConsultantStatsAndStatus(currentConsultant.id);
-                            onSelectSession(pendingRequest.id, currentConsultant.display_name, 'consultant');
-                          } else {
-                            const data = await res.json();
-                            alert(data.error || 'Failed to accept request');
-                          }
-                        } catch (err) {
-                          console.error('Accept error:', err);
-                        }
-                      }}
-                      className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md"
-                    >
-                      Accept & Start Chat
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const res = await fetch(`/api/sessions/${pendingRequest.id}/reject`, { method: 'POST' });
-                          if (res.ok) {
-                            loadConsultantStatsAndStatus(currentConsultant.id);
-                          } else {
-                            const data = await res.json();
-                            alert(data.error || 'Failed to reject request');
-                          }
-                        } catch (err) {
-                          console.error('Reject error:', err);
-                        }
-                      }}
-                      className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold text-xs px-4 py-2 rounded-xl transition-all border border-rose-500/25"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </motion.div>
+                <IncomingRequestNotification
+                  request={pendingRequest}
+                  onAccept={async () => {
+                    try {
+                      const res = await fetch(`/api/sessions/${pendingRequest.id}/accept`, { method: 'POST' });
+                      if (res.ok) {
+                        loadConsultantStatsAndStatus(currentConsultant.id);
+                        onSelectSession(pendingRequest.id, currentConsultant.display_name, 'consultant');
+                      } else {
+                        const data = await res.json();
+                        alert(data.error || 'Failed to accept request');
+                      }
+                    } catch (err) {
+                      console.error('Accept error:', err);
+                    }
+                  }}
+                  onReject={async () => {
+                    try {
+                      const res = await fetch(`/api/sessions/${pendingRequest.id}/reject`, { method: 'POST' });
+                      if (res.ok) {
+                        loadConsultantStatsAndStatus(currentConsultant.id);
+                      } else {
+                        const data = await res.json();
+                        alert(data.error || 'Failed to reject request');
+                      }
+                    } catch (err) {
+                      console.error('Reject error:', err);
+                    }
+                  }}
+                />
               );
             }
             
@@ -1646,6 +1708,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               >
                 <FileText className="w-4 h-4" />
                 <span>💬 Consultations & Blocklist</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('support'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
+              >
+                <HelpCircle className="w-4 h-4" />
+                <span>🙋 Help & Customer Support</span>
               </button>
               
               <div className="border-t border-slate-800/80 pt-2 mt-2">
@@ -1803,6 +1873,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <span>💬 Consultation History</span>
                 </button>
 
+                <button
+                  onClick={() => setActiveTab('support')}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                >
+                  <HelpCircle className="w-4 h-4 shrink-0" />
+                  <span>🙋 Help & Customer Support</span>
+                </button>
+
                 <div className="border-t border-slate-800/80 pt-4 mt-4">
                   <button
                     onClick={handleLogout}
@@ -1910,7 +1988,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </div>
 
                     {/* Simple Statistics Grid */}
-                    <div className="lg:col-span-5 grid grid-cols-2 gap-4">
+                    <div className="lg:col-span-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                       
                       <motion.div 
                         whileHover={{ y: -3 }}
@@ -1951,9 +2029,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       >
                         <div>
                           <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest block">Consultations</span>
-                          <span className="text-2xl font-black text-emerald-400 mt-2 block font-sans">{sessions.length}</span>
+                          <span className="text-2xl font-black text-emerald-400 mt-2 block font-sans">{sessions.filter((s: any) => s.status === 'completed').length}</span>
                         </div>
                         <span className="text-[9px] text-slate-500 font-mono block mt-4">Completed chats</span>
+                      </motion.div>
+
+                      <motion.div 
+                        whileHover={{ y: -3 }}
+                        className="bg-slate-900 border border-slate-800 p-4.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all"
+                      >
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest block">Total Refunded</span>
+                          <span className="text-2xl font-black text-rose-400 mt-2 block font-sans">₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}</span>
+                        </div>
+                        <span className="text-[9px] text-rose-400/80 font-mono block mt-4">Deducted from balance</span>
                       </motion.div>
 
                     </div>
@@ -2109,6 +2198,40 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       )}
                     </div>
                   </div>
+
+                  {/* Special Admin Wallet Additions */}
+                  {manualAdjustments && manualAdjustments.length > 0 && (
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 text-left">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center space-x-2">
+                          <Coins className="w-5 h-5 text-amber-400" />
+                          <h3 className="font-bold text-sm uppercase tracking-wider text-slate-200">🎁 Special Admin Credits</h3>
+                        </div>
+                        <span className="text-xs text-amber-400 font-mono font-bold">
+                          Total: ₹{manualAdjustments.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0).toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                        {manualAdjustments.map((adj) => (
+                          <div key={adj.id} className="bg-slate-950 border border-slate-850 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:border-slate-800 transition-colors">
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-bold font-mono">
+                                  CREDITED BY SUPER ADMIN
+                                </span>
+                                <span className="text-[9px] font-mono text-slate-500">{new Date(adj.created_at).toLocaleString()}</span>
+                              </div>
+                              <p className="text-slate-200 font-semibold text-xs mt-1.5">{adj.reason}</p>
+                            </div>
+                            <div className="text-right sm:self-center shrink-0">
+                              <span className="text-emerald-400 font-mono text-base font-black">+₹{adj.amount.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -2410,6 +2533,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 <div className="text-[11px] text-emerald-400 font-mono">
                                   Net Earnings: <strong>₹{sess.consultant_earnings.toFixed(2)}</strong> (after platform commission)
                                 </div>
+                                {sess.refunded_amount > 0 && (
+                                  <div className="text-[11px] text-rose-400 font-mono font-bold mt-1">
+                                    ⚠ Refund Deducted: -₹{sess.refunded_amount.toFixed(2)} ({sess.refunded_minutes} Mins)
+                                  </div>
+                                )}
                                 <span className="text-[9px] text-slate-600 font-mono block">
                                   Date: {new Date(sess.created_at).toLocaleString()}
                                 </span>
@@ -2418,7 +2546,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t border-slate-900 sm:border-0 pt-2 sm:pt-0">
                                 {sess.status === 'completed' && (
                                   <div className="flex flex-col items-end space-y-1">
-                                    <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold">Completed</span>
+                                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                      <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold">Completed</span>
+                                      {sess.refunded_amount > 0 && (
+                                        <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[9px] font-bold">Refunded</span>
+                                      )}
+                                    </div>
                                     <button
                                       onClick={async () => {
                                         try {
@@ -2855,6 +2988,242 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
                     )}
                   </form>
+                </motion.div>
+              )}
+
+              {/* TAB 7: Consultant Support & Helpdesk */}
+              {activeTab === 'support' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                  id="consultant-support-tab"
+                >
+                  <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
+                    <HelpCircle className="w-5 h-5 text-emerald-400" />
+                    <h3 className="font-bold text-slate-100 font-sans">Consultant Helpdesk & Customer Support</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Left side: Raise ticket form */}
+                    <div className="space-y-4">
+                      <h4 className="font-bold text-xs text-emerald-400 uppercase tracking-widest">Raise a Support Ticket</h4>
+                      <p className="text-xs text-slate-400">
+                        Aapko payout, chat request, ya kisi customer se related koi samasya hai? Kripya ticket raise karein. Hamari admin team ise jald se jald handle karegi.
+                      </p>
+
+                      <form onSubmit={async (e) => {
+                        e.preventDefault();
+                        const form = e.target as HTMLFormElement;
+                        const subject = (form.elements.namedItem('subject') as HTMLInputElement).value;
+                        const message = (form.elements.namedItem('message') as HTMLTextAreaElement).value;
+                        const session_id = (form.elements.namedItem('session_id') as HTMLSelectElement).value;
+
+                        try {
+                          const res = await fetch('/api/tickets', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              sender_type: 'consultant',
+                              sender_id: currentConsultant?.id,
+                              sender_name: currentConsultant?.display_name,
+                              session_id: session_id || null,
+                              subject,
+                              message
+                            })
+                          });
+
+                          if (res.ok) {
+                            setSuccess('Support ticket submitted successfully!');
+                            form.reset();
+                            fetchConsultantTickets();
+                          } else {
+                            const data = await res.json();
+                            setError(data.error || 'Failed to submit support ticket');
+                          }
+                        } catch (err: any) {
+                          setError(err.message || 'Error sending support ticket');
+                        }
+                      }} className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Subject / Topic *</label>
+                          <input
+                            type="text"
+                            name="subject"
+                            required
+                            placeholder="Brief title of your query..."
+                            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-750 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Select Chat Reference (Optional)</label>
+                          <select
+                            name="session_id"
+                            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-mono"
+                          >
+                            <option value="">-- No Specific Chat Reference --</option>
+                            {sessions.map(s => (
+                              <option key={s.id} value={s.id}>
+                                Session #{s.id} with {s.user_name} ({new Date(s.created_at || '').toLocaleDateString()})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Message / Explanation *</label>
+                          <textarea
+                            name="message"
+                            required
+                            rows={4}
+                            placeholder="Provide precise details of the issue..."
+                            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-750 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full resize-none"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black py-2.5 px-4 rounded-xl transition-all shadow-md w-full uppercase tracking-wider"
+                        >
+                          Submit Helpdesk Ticket
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Right side: Tickets List */}
+                    <div className="space-y-4">
+                      <h4 className="font-bold text-xs text-emerald-400 uppercase tracking-widest">Your Raised Tickets</h4>
+                      
+                      {loadingConsultantTickets ? (
+                        <div className="text-center py-12 text-slate-500 text-xs font-mono animate-pulse">Loading helpdesk tickets...</div>
+                      ) : consultantTickets.length === 0 ? (
+                        <div className="text-center py-12 text-slate-500 text-xs font-mono bg-slate-950/40 rounded-2xl border border-dashed border-slate-800/80">
+                          Aapne abhi tak koi support ticket raise nahi kiya hai.
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
+                          {consultantTickets.map((t: any) => (
+                            <div key={t.id} className="bg-slate-950 border border-slate-850 p-4 rounded-xl space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-200">{t.subject}</span>
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ${
+                                  t.status === 'closed'
+                                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                    : t.status === 'resolved' 
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                }`}>
+                                  {t.status}
+                                </span>
+                              </div>
+
+                              {t.session_id && (
+                                <div className="text-[10px] text-emerald-400 font-mono">
+                                  Reference Session ID: <strong className="text-slate-300 font-bold">#{t.session_id}</strong>
+                                </div>
+                              )}
+
+                              <p className="text-xs text-slate-400 leading-relaxed bg-slate-900/50 p-2.5 rounded-lg border border-slate-850/50">
+                                {t.message}
+                              </p>
+
+                              {/* Conversation Thread history for Consultant */}
+                              {t.replies && t.replies.length > 0 ? (
+                                <div className="space-y-2 mt-2 pt-2 border-t border-slate-850/70">
+                                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Conversation History:</span>
+                                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                    {t.replies.map((reply: any) => (
+                                      <div 
+                                        key={reply.id} 
+                                        className={`p-2.5 rounded-xl text-xs space-y-0.5 ${
+                                          reply.sender_type === 'admin'
+                                            ? 'bg-emerald-950/15 border border-emerald-900/10 text-left'
+                                            : 'bg-slate-900 border border-slate-850 text-right ml-6'
+                                        }`}
+                                      >
+                                        <div className={`flex items-center gap-1 text-[9px] text-slate-500 font-mono ${reply.sender_type === 'admin' ? 'justify-start' : 'justify-end'}`}>
+                                          <span className={reply.sender_type === 'admin' ? 'text-emerald-400 font-bold' : 'text-purple-400 font-bold'}>
+                                            {reply.sender_type === 'admin' ? '🛡 Admin Support' : '🙋 You'}
+                                          </span>
+                                          <span>•</span>
+                                          <span>{new Date(reply.created_at).toLocaleString()}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                          {reply.message}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : t.admin_reply ? (
+                                <div className="bg-emerald-950/20 border border-emerald-800/30 rounded-lg p-3 space-y-1">
+                                  <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold">
+                                    <span>🛡 Support Administrator Reply:</span>
+                                    <span className="font-mono text-slate-500 font-normal">{new Date(t.replied_at).toLocaleString()}</span>
+                                  </div>
+                                  <p className="text-xs text-emerald-200 leading-relaxed font-medium">
+                                    {t.admin_reply}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  Waiting for administrator response...
+                                </div>
+                              )}
+
+                              {/* Consultant Reply Back Option */}
+                              {t.status !== 'closed' && (
+                                (() => {
+                                  const lastReplyIsAdmin = t.replies && t.replies.length > 0
+                                    ? t.replies[t.replies.length - 1].sender_type === 'admin'
+                                    : !!t.admin_reply;
+                                  
+                                  if (lastReplyIsAdmin) {
+                                    return (
+                                      <form onSubmit={(e) => handleConsultantReplySubmit(e, t.id)} className="mt-3 pt-3 border-t border-slate-850/60 flex items-center gap-2">
+                                        <input
+                                          type="text"
+                                          required
+                                          placeholder="Type a follow-up reply..."
+                                          value={consultantReplyDrafts[t.id] || ''}
+                                          onChange={(e) => setConsultantReplyDrafts(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                          className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
+                                        />
+                                        <button
+                                          type="submit"
+                                          className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs transition-all uppercase tracking-wider flex items-center gap-1 shrink-0"
+                                        >
+                                          Reply
+                                        </button>
+                                      </form>
+                                    );
+                                  } else {
+                                    return (
+                                      <div className="mt-3 pt-3 border-t border-slate-850/60 text-slate-500 text-[10px] font-mono italic">
+                                        ⏳ Waiting for administrator reply before you can send another follow-up.
+                                      </div>
+                                    );
+                                  }
+                                })()
+                              )}
+                              
+                              {t.status === 'closed' && (
+                                <div className="bg-slate-900/50 border border-slate-850 rounded-xl p-2.5 text-center text-[10px] text-slate-500 font-mono">
+                                  🔒 Closed. No further replies allowed.
+                                </div>
+                              )}
+
+                              <div className="text-[9px] text-slate-600 font-mono pt-1">
+                                Raised At: {new Date(t.created_at).toLocaleString()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </motion.div>
               )}
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
 
@@ -56,8 +57,30 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   const [editPhotoUrl, setEditPhotoUrl] = useState('');
   const [editDob, setEditDob] = useState('');
   const [editGender, setEditGender] = useState('Male');
+  const [editLocation, setEditLocation] = useState('');
+  const [editLanguages, setEditLanguages] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // 3D Perspective Tilt and Hamburger states
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const [heroSettings, setHeroSettings] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchHeroSettings = async () => {
+      try {
+        const res = await fetch('/api/settings/hero');
+        if (res.ok) {
+          const data = await res.json();
+          setHeroSettings(data);
+        }
+      } catch (err) {
+        console.error('Failed to load hero configurations:', err);
+      }
+    };
+    fetchHeroSettings();
+  }, []);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -122,9 +145,68 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
 
   // Client tabs navigation state
-  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history'>('advisors');
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history' | 'support'>('advisors');
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+  // Support ticket states
+  const [userTickets, setUserTickets] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [userReplyDrafts, setUserReplyDrafts] = useState<{[ticketId: number]: string}>({});
+
+  const fetchUserTickets = async () => {
+    if (!currentUser?.id) return;
+    try {
+      setLoadingTickets(true);
+      const res = await fetch(`/api/tickets?sender_type=user&sender_id=${currentUser.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setUserTickets(data.tickets);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch support tickets:', err);
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
+  const handleUserReplySubmit = async (e: React.FormEvent, ticketId: number) => {
+    e.preventDefault();
+    const replyText = userReplyDrafts[ticketId] || '';
+    if (!replyText.trim()) return;
+
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_type: 'user',
+          sender_id: currentUser?.id,
+          sender_name: currentUser?.display_name || currentUser?.username || 'User',
+          message: replyText
+        })
+      });
+
+      if (res.ok) {
+        setUserReplyDrafts(prev => ({ ...prev, [ticketId]: '' }));
+        fetchUserTickets();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to submit reply');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error submitting reply');
+    }
+  };
+
+  useEffect(() => {
+    if (activeDashboardTab === 'support' && currentUser?.id) {
+      fetchUserTickets();
+      loadPastHistoryFromLocalStorage();
+    }
+  }, [activeDashboardTab, currentUser?.id]);
 
   // Fetch Wallet Transaction Log
   const fetchWalletTransactions = async () => {
@@ -152,6 +234,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       setEditPhotoUrl(currentUser.photo_url || '');
       setEditDob(currentUser.dob ? formatToLocalDateString(currentUser.dob) : '');
       setEditGender(currentUser.gender || 'Male');
+      setEditLocation(currentUser.location || '');
+      setEditLanguages(currentUser.languages || '');
       fetchWalletTransactions();
     }
   }, [currentUser?.id]);
@@ -271,7 +355,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
           display_name: editDisplayName,
           photo_url: editPhotoUrl,
           dob: editDob,
-          gender: editGender
+          gender: editGender,
+          location: editLocation,
+          languages: editLanguages
         })
       });
       const data = await res.json();
@@ -546,65 +632,140 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
         </div>
       )}
 
-      {/* 🟢 CUSTOM USER DASHBOARD TAB SELECTOR */}
+      {/* 🟢 DYNAMIC HAMBURGER NAVIGATION DRAWER */}
       {currentUser && !selectedConsultant && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
+        <div className="fixed bottom-6 right-6 z-50">
           <button
-            onClick={() => setActiveDashboardTab('advisors')}
-            className={`flex items-center space-x-2 py-2.5 px-5 rounded-xl text-xs font-bold transition-all ${
-              activeDashboardTab === 'advisors'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/10'
-                : 'text-slate-400 hover:text-white bg-slate-900/40 border border-slate-800 hover:border-slate-700'
-            }`}
+            onClick={() => setHamburgerOpen(!hamburgerOpen)}
+            className="bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 border border-emerald-300/30 flex items-center justify-center group relative"
+            id="hamburger-menu-btn"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>🔍 Browse Advisors</span>
-          </button>
-          
-          <button
-            id="user-profile-tab"
-            onClick={() => setActiveDashboardTab('profile')}
-            className={`flex items-center space-x-2 py-2.5 px-5 rounded-xl text-xs font-bold transition-all ${
-              activeDashboardTab === 'profile'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/10'
-                : 'text-slate-400 hover:text-white bg-slate-900/40 border border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            <span>👤 My Profile Details</span>
+            {hamburgerOpen ? (
+              <X className="w-6 h-6 transition-transform group-hover:rotate-90 duration-300" />
+            ) : (
+              <Menu className="w-6 h-6 transition-transform duration-300" />
+            )}
+            <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center animate-bounce shadow">
+              ⚡
+            </span>
           </button>
 
-          <button
-            id="wallet-recharge-tab"
-            onClick={() => {
-              setActiveDashboardTab('wallet');
-              fetchWalletTransactions();
-            }}
-            className={`flex items-center space-x-2 py-2.5 px-5 rounded-xl text-xs font-bold transition-all ${
-              activeDashboardTab === 'wallet'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/10'
-                : 'text-slate-400 hover:text-white bg-slate-900/40 border border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <DollarSign className="w-4 h-4" />
-            <span>💳 Wallet Recharge & Ledger</span>
-          </button>
+          {/* Hamburger slide-out drawer */}
+          <AnimatePresence>
+            {hamburgerOpen && (
+              <>
+                {/* Backdrop overlay */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setHamburgerOpen(false)}
+                  className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40"
+                />
 
-          <button
-            id="chat-history-tab"
-            onClick={() => {
-              setActiveDashboardTab('history');
-              loadPastHistoryFromLocalStorage();
-            }}
-            className={`flex items-center space-x-2 py-2.5 px-5 rounded-xl text-xs font-bold transition-all ${
-              activeDashboardTab === 'history'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/10'
-                : 'text-slate-400 hover:text-white bg-slate-900/40 border border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>📜 Past Consultation Chats</span>
-          </button>
+                {/* Animated Drawer Box */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 50, x: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 50, x: 20 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                  className="absolute bottom-16 right-0 w-72 bg-slate-900/95 border border-slate-800 rounded-3xl p-5 shadow-2xl z-50 space-y-4 backdrop-blur-md text-left"
+                >
+                  <div className="border-b border-slate-800/80 pb-3">
+                    <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block font-bold">CallMint Menu</span>
+                    <strong className="text-slate-200 text-sm font-bold block mt-1">{currentUser.display_name}</strong>
+                    <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-slate-400">
+                      <span>Wallet Balance:</span>
+                      <span className="text-emerald-400 font-bold font-mono">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col space-y-1">
+                    <button
+                      onClick={() => {
+                        setActiveDashboardTab('advisors');
+                        setHamburgerOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeDashboardTab === 'advisors'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4 shrink-0" />
+                      <span>🔍 Browse Advisors</span>
+                    </button>
+
+                    <button
+                      id="user-profile-tab"
+                      onClick={() => {
+                        setActiveDashboardTab('profile');
+                        setHamburgerOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeDashboardTab === 'profile'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <User className="w-4 h-4 shrink-0" />
+                      <span>👤 My Profile Details</span>
+                    </button>
+
+                    <button
+                      id="wallet-recharge-tab"
+                      onClick={() => {
+                        setActiveDashboardTab('wallet');
+                        fetchWalletTransactions();
+                        setHamburgerOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeDashboardTab === 'wallet'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <DollarSign className="w-4 h-4 shrink-0" />
+                      <span>💳 Wallet Recharge & Ledger</span>
+                    </button>
+
+                    <button
+                      id="chat-history-tab"
+                      onClick={() => {
+                        setActiveDashboardTab('history');
+                        loadPastHistoryFromLocalStorage();
+                        setHamburgerOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeDashboardTab === 'history'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <Clock className="w-4 h-4 shrink-0" />
+                      <span>📜 Past Consultation Chats</span>
+                    </button>
+
+                    <button
+                      id="support-tickets-tab"
+                      onClick={() => {
+                        setActiveDashboardTab('support');
+                        setHamburgerOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeDashboardTab === 'support'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <HelpCircle className="w-4 h-4 shrink-0" />
+                      <span>🙋 Help & Customer Support</span>
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
@@ -658,6 +819,28 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono text-slate-400 mb-1">Current Location</label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  placeholder="e.g. Mumbai, Maharashtra"
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono text-slate-400 mb-1">Languages Spoken</label>
+                <input
+                  type="text"
+                  value={editLanguages}
+                  onChange={(e) => setEditLanguages(e.target.value)}
+                  placeholder="e.g. Hindi, English, Marathi"
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full"
+                />
               </div>
 
               <div className="md:col-span-2 space-y-2">
@@ -857,9 +1040,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                         <div className="flex items-center space-x-2">
                           <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
                             tx.type === 'recharge' ? 'text-emerald-400 bg-emerald-500/10' :
+                            tx.type === 'admin_credit' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' :
                             tx.type === 'refund' ? 'text-blue-400 bg-blue-500/10' : 'text-rose-400 bg-rose-500/10'
                           }`}>
-                            {tx.type.toUpperCase()}
+                            {tx.type === 'admin_credit' ? 'SPECIAL CREDIT' : tx.type.toUpperCase()}
                           </span>
                           <span className="text-[10px] text-slate-500 font-mono font-bold">#{tx.id}</span>
                         </div>
@@ -975,7 +1159,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                           <p className="text-[10px] text-slate-500 font-sans">
                             Date: {new Date(sess.created_at).toLocaleString()} • Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
                           </p>
-                          <span className="block text-[10px] text-slate-400 font-mono mt-1">Paid: ₹{parseFloat(sess.total_paid || 0).toFixed(2)} ({sess.duration_minutes} mins)</span>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className="text-[10px] bg-rose-500/10 text-rose-400 font-bold px-2 py-0.5 rounded-md font-mono">
+                              Deducted: ₹{parseFloat(sess.total_paid || 0).toFixed(2)}
+                            </span>
+                            <span className="text-[10px] bg-slate-900 text-slate-400 font-bold px-2 py-0.5 rounded-md font-mono">
+                              Duration: {sess.duration_minutes} mins
+                            </span>
+                          </div>
                         </div>
                         
                         <button
@@ -1042,6 +1233,238 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {currentUser && !selectedConsultant && activeDashboardTab === 'support' && (
+        <div className="bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80 space-y-6 text-left" id="user-support-panel">
+          <div className="flex items-center space-x-2 pb-2 border-b border-slate-850">
+            <HelpCircle className="w-4 h-4 text-emerald-400" />
+            <h3 className="font-bold text-sm text-slate-200">Customer Support & Assistance Panel</h3>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left: Raise a Ticket */}
+            <div className="space-y-4">
+              <h4 className="font-bold text-xs text-emerald-400 uppercase tracking-widest">Raise a New Support Ticket</h4>
+              <p className="text-xs text-slate-400">
+                Aapka koi sawal hai ya koi problem aayi hai? Kripya neeche form bharein, hamari support team jald hi respond karegi.
+              </p>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const subject = (form.elements.namedItem('subject') as HTMLInputElement).value;
+                const message = (form.elements.namedItem('message') as HTMLTextAreaElement).value;
+                const session_id = (form.elements.namedItem('session_id') as HTMLSelectElement).value;
+
+                try {
+                  const res = await fetch('/api/tickets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      sender_type: 'user',
+                      sender_id: currentUser.id,
+                      sender_name: currentUser.display_name,
+                      session_id: session_id || null,
+                      subject,
+                      message
+                    })
+                  });
+
+                  if (res.ok) {
+                    setSuccess('Ticket raised successfully!');
+                    form.reset();
+                    fetchUserTickets();
+                  } else {
+                    const data = await res.json();
+                    setError(data.error || 'Failed to raise support ticket');
+                  }
+                } catch (err: any) {
+                  setError(err.message || 'Error creating ticket');
+                }
+              }} className="space-y-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Subject / Topic *</label>
+                  <input
+                    type="text"
+                    name="subject"
+                    required
+                    placeholder="Enter short description of the issue..."
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-750 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Select Chat (Optional)</label>
+                  <select
+                    name="session_id"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-mono"
+                  >
+                    <option value="">-- No Specific Chat / General Query --</option>
+                    {userPastSessions.map(s => (
+                      <option key={s.id} value={s.id}>
+                        Chat with {s.consultant_name} ({new Date(s.created_at).toLocaleDateString()}) - Status: {s.status}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500">
+                    Jis chat mein samasya hai, kripya use select karein taaki hum behtar tarike se help kar sakein.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Message / Detail *</label>
+                  <textarea
+                    name="message"
+                    required
+                    rows={4}
+                    placeholder="Describe your issue or query in detail here..."
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-750 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black py-2.5 px-4 rounded-xl transition-all shadow-md w-full uppercase tracking-wider"
+                >
+                  Submit Support Ticket
+                </button>
+              </form>
+            </div>
+
+            {/* Right: My Tickets List */}
+            <div className="space-y-4">
+              <h4 className="font-bold text-xs text-emerald-400 uppercase tracking-widest">My Raised Tickets</h4>
+              
+              {loadingTickets ? (
+                <div className="text-center py-12 text-slate-500 text-xs font-mono">Loading tickets...</div>
+              ) : userTickets.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-xs font-mono bg-slate-950/40 rounded-2xl border border-dashed border-slate-800/80">
+                  No tickets raised yet by your account.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
+                  {userTickets.map((t: any) => (
+                    <div key={t.id} className="bg-slate-950 border border-slate-850 p-4 rounded-xl space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-200">{t.subject}</span>
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ${
+                          t.status === 'closed'
+                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            : t.status === 'resolved' 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        }`}>
+                          {t.status}
+                        </span>
+                      </div>
+
+                      {t.session_id && (
+                        <div className="text-[10px] text-emerald-400 font-mono">
+                          Reference Chat ID: <strong className="text-slate-300 font-bold">#{t.session_id}</strong>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-slate-400 leading-relaxed bg-slate-900/50 p-2.5 rounded-lg border border-slate-850/50">
+                        {t.message}
+                      </p>
+
+                      {/* Conversation Thread history for User */}
+                      {t.replies && t.replies.length > 0 ? (
+                        <div className="space-y-2 mt-2 pt-2 border-t border-slate-850/70">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Conversation History:</span>
+                          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                            {t.replies.map((reply: any) => (
+                              <div 
+                                key={reply.id} 
+                                className={`p-2.5 rounded-xl text-xs space-y-0.5 ${
+                                  reply.sender_type === 'admin'
+                                    ? 'bg-emerald-950/15 border border-emerald-900/10 text-left'
+                                    : 'bg-slate-900 border border-slate-850 text-right ml-6'
+                                }`}
+                              >
+                                <div className={`flex items-center gap-1 text-[9px] text-slate-500 font-mono ${reply.sender_type === 'admin' ? 'justify-start' : 'justify-end'}`}>
+                                  <span className={reply.sender_type === 'admin' ? 'text-emerald-400 font-bold' : 'text-blue-400 font-bold'}>
+                                    {reply.sender_type === 'admin' ? '🛡 Admin Support' : '👤 You'}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{new Date(reply.created_at).toLocaleString()}</span>
+                                </div>
+                                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                  {reply.message}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : t.admin_reply ? (
+                        <div className="bg-emerald-950/20 border border-emerald-800/30 rounded-lg p-3 space-y-1">
+                          <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold">
+                            <span>🛡 Admin Reply:</span>
+                            <span className="font-mono text-slate-500 font-normal">{new Date(t.replied_at).toLocaleString()}</span>
+                          </div>
+                          <p className="text-xs text-emerald-200 leading-relaxed font-medium">
+                            {t.admin_reply}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-500 font-mono">
+                          Pending team response.
+                        </div>
+                      )}
+
+                      {/* User Reply Back Option */}
+                      {t.status !== 'closed' && (
+                        (() => {
+                          const lastReplyIsAdmin = t.replies && t.replies.length > 0 
+                            ? t.replies[t.replies.length - 1].sender_type === 'admin'
+                            : !!t.admin_reply;
+                          
+                          if (lastReplyIsAdmin) {
+                            return (
+                              <form onSubmit={(e) => handleUserReplySubmit(e, t.id)} className="mt-3 pt-3 border-t border-slate-850/60 flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Type a follow-up reply..."
+                                  value={userReplyDrafts[t.id] || ''}
+                                  onChange={(e) => setUserReplyDrafts(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                  className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
+                                />
+                                <button
+                                  type="submit"
+                                  className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs transition-all uppercase tracking-wider flex items-center gap-1 shrink-0"
+                                >
+                                  Reply
+                                </button>
+                              </form>
+                            );
+                          } else {
+                            return (
+                              <div className="mt-3 pt-3 border-t border-slate-850/60 text-slate-500 text-[10px] font-mono italic">
+                                ⏳ Waiting for administrator reply before you can send another follow-up.
+                              </div>
+                            );
+                          }
+                        })()
+                      )}
+                      
+                      {t.status === 'closed' && (
+                        <div className="bg-slate-900/50 border border-slate-850 rounded-xl p-2.5 text-center text-[10px] text-slate-500 font-mono">
+                          🔒 Closed. No further replies allowed.
+                        </div>
+                      )}
+
+                      <div className="text-[9px] text-slate-600 font-mono pt-1">
+                        Date Raised: {new Date(t.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1131,6 +1554,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                               <p className="text-[10px] text-slate-500 font-sans">
                                 Date: {new Date(sess.created_at).toLocaleString()} • Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
                               </p>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span className="text-[10px] bg-rose-500/10 text-rose-400 font-bold px-2 py-0.5 rounded-md font-mono">
+                                  Deducted: ₹{parseFloat(sess.total_paid || 0).toFixed(2)}
+                                </span>
+                                <span className="text-[10px] bg-slate-900 text-slate-400 font-bold px-2 py-0.5 rounded-md font-mono">
+                                  Duration: {sess.duration_minutes} mins
+                                </span>
+                              </div>
                             </div>
                             
                             <button
@@ -1333,13 +1764,66 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
 
       {/* 1. SHOW PUBLIC DIRECTORY OF CONSULTANTS */}
       {!selectedConsultant && (!currentUser || activeDashboardTab === 'advisors') && (
-        <div className="space-y-6">
-          <div className="text-center max-w-2xl mx-auto space-y-2">
-            <h2 className="text-3xl font-extrabold text-slate-100 tracking-tight">Meet Professional Advisors</h2>
-            <p className="text-sm text-slate-400">
-              Browse top-tier specialists and start live chats instantly. Funded per minute speaking time.
-            </p>
-          </div>
+        <div className="space-y-8">
+          
+          {/* Resolve and Render Dynamic 3D Hero Section */}
+          {(() => {
+            const isGlobal = selectedCategory === 'All';
+            const globalConfig = heroSettings?.global;
+            const catConfig = heroSettings?.categories?.[selectedCategory];
+
+            const resolvedHero = {
+              tagline: (isGlobal ? globalConfig?.tagline : catConfig?.tagline) || (isGlobal ? '✨ CHOOSE THE PERFECT EXPERT' : `🔮 TOP-TIER ${selectedCategory.toUpperCase()} EXPERTS`),
+              headline: (isGlobal ? globalConfig?.headline : catConfig?.headline) || (isGlobal ? 'Connect with Global Professional Advisors' : `Meet Leading ${selectedCategory} Instantly`),
+              description: (isGlobal ? globalConfig?.description : catConfig?.description) || (isGlobal ? 'Browse top-tier handpicked specialists and start secure live chats instantly. Pay-per-minute speaking time with secured transaction ledger.' : `Connect with professional ${selectedCategory.toLowerCase()} for live private 1-on-1 audio chat consultation. Secure per-minute pricing.`)
+            };
+
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: -25 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: 'easeOut' }}
+                onMouseMove={(e) => {
+                  const card = e.currentTarget;
+                  const rect = card.getBoundingClientRect();
+                  const x = e.clientX - rect.left - rect.width / 2;
+                  const y = e.clientY - rect.top - rect.height / 2;
+                  const rx = -(y / rect.height) * 12; // tilt X
+                  const ry = (x / rect.width) * 12;   // tilt Y
+                  setTilt({ rx, ry });
+                }}
+                onMouseLeave={() => setTilt({ rx: 0, ry: 0 })}
+                style={{
+                  transform: `perspective(1000px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+                  transformStyle: 'preserve-3d',
+                  transition: 'transform 0.1s ease-out'
+                }}
+                className="relative bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-8 md:p-12 rounded-3xl text-center space-y-4 max-w-4xl mx-auto overflow-hidden shadow-2xl group cursor-default"
+              >
+                {/* Visual Highlights & Accents */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.05),transparent_70%)] pointer-events-none" />
+                <div className="absolute -top-16 -left-16 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-16 -right-16 w-48 h-48 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+
+                <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase">
+                  {resolvedHero.tagline}
+                </span>
+
+                <h2 className="text-3xl md:text-4xl font-black text-slate-100 tracking-tight leading-none bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+                  {resolvedHero.headline}
+                </h2>
+
+                <p className="text-xs md:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                  {resolvedHero.description}
+                </p>
+
+                <div className="flex items-center justify-center space-x-2 pt-2 text-[10px] font-mono text-slate-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span>3D Animated Perspective Active</span>
+                </div>
+              </motion.div>
+            );
+          })()}
 
           {/* Category selection tabs */}
           <div className="flex flex-wrap items-center justify-center gap-2">

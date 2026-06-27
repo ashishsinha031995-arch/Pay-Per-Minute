@@ -69,6 +69,13 @@ export default function AppPage() {
       setSocketConnected(false);
     });
 
+    socket.on('wallet:updated', (data) => {
+      const savedUserId = localStorage.getItem('logged_user_id');
+      if (savedUserId && Number(savedUserId) === Number(data.userId)) {
+        refreshUserProfile(Number(savedUserId));
+      }
+    });
+
     // Parse deep link pathname
     const path = window.location.pathname;
     if (path.startsWith('/u/')) {

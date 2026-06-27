@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   LineChart, Line, BarChart, Bar, Legend, ComposedChart 
@@ -1013,66 +1013,415 @@ export function CmsModulePanel() {
 
 // Component 4: SUPPORT TICKETS MODULE
 export function SupportTicketsPanel() {
-  const [tickets, setTickets] = useState(mockSupportTickets);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'user' | 'consultant'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'closed'>('all');
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [adminReplyText, setAdminReplyText] = useState('');
+  const [replying, setReplying] = useState(false);
+  const [confirmingCloseId, setConfirmingCloseId] = useState<number | null>(null);
+  const [confirmingResolveId, setConfirmingResolveId] = useState<number | null>(null);
 
-  const resolveTicket = (id: string) => {
-    setTickets(tickets.map(t => t.id === id ? { ...t, status: 'Resolved' as const } : t));
+  const fetchTickets = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch('/api/tickets');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setTickets(data.tickets);
+        } else {
+          setError(data.error || 'Failed to load support tickets');
+        }
+      } else {
+        setError('Failed to fetch tickets from server');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error fetching tickets');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchTickets();
+  }, []);
+
+  const handleReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket || !adminReplyText.trim()) return;
+
+    try {
+      setReplying(true);
+      setError(null);
+      setSuccess(null);
+      const res = await fetch(`/api/tickets/${selectedTicket.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_reply: adminReplyText })
+      });
+
+      if (res.ok) {
+        setSuccess('Reply submitted successfully!');
+        setAdminReplyText('');
+        setSelectedTicket(null);
+        fetchTickets();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to submit reply');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error submitting reply');
+    } finally {
+      setReplying(false);
+    }
+  };
+
+  const handleCloseTicket = async (ticketId: number) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      const res = await fetch(`/api/tickets/${ticketId}/close`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setSuccess('Ticket closed successfully!');
+        fetchTickets();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to close ticket');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error closing ticket');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResolveTicket = async (ticketId: number) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      const res = await fetch(`/api/tickets/${ticketId}/resolve`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setSuccess('Ticket marked as resolved successfully!');
+        fetchTickets();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to resolve ticket');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error resolving ticket');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter tickets
+  const filteredTickets = tickets.filter(t => {
+    const matchesSender = activeFilter === 'all' ? true : t.sender_type === activeFilter;
+    const matchesStatus = statusFilter === 'all' 
+      ? true 
+      : statusFilter === 'pending'
+        ? (t.status === 'open' || t.status === 'pending')
+        : t.status === statusFilter;
+    return matchesSender && matchesStatus;
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-left">
       <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 mb-4 gap-4">
           <div>
-            <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Active Customer Support Tickets</h3>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">Track and resolve user and advisor disputes</p>
+            <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Helpdesk Customer Support Tickets</h3>
+            <p className="text-xs text-slate-500 font-mono mt-0.5">Administrate and resolve raised disputes from clients & experts</p>
           </div>
-          <span className="bg-rose-500/10 text-rose-400 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-rose-500/20">
-            {tickets.filter(t => t.status !== 'Resolved').length} Unresolved
-          </span>
+          <div className="flex items-center space-x-2">
+            <span className="bg-rose-500/10 text-rose-400 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-rose-500/20">
+              {tickets.filter(t => t.status === 'open' || t.status === 'pending').length} Open
+            </span>
+            <button 
+              onClick={fetchTickets}
+              className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+              title="Refresh Tickets"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-4">
-          {tickets.map(t => (
-            <div key={t.id} className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5 max-w-xl">
-                <div className="flex items-center space-x-2 flex-wrap gap-1">
-                  <span className="bg-slate-800 text-slate-300 text-[10px] font-mono px-2 py-0.5 rounded font-bold border border-slate-700">{t.id}</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    t.priority === 'Critical' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20' :
-                    t.priority === 'High' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' :
-                    'bg-slate-800 text-slate-400'
-                  }`}>
-                    {t.priority} Priority
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    t.status === 'Resolved' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' :
-                    'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 animate-pulse'
-                  }`}>
-                    {t.status}
-                  </span>
+        {/* Filters/Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-850">
+            <button
+              onClick={() => setActiveFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeFilter === 'all' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              All Tickets ({tickets.length})
+            </button>
+            <button
+              onClick={() => setActiveFilter('user')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeFilter === 'user' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              User Support ({tickets.filter(t => t.sender_type === 'user').length})
+            </button>
+            <button
+              onClick={() => setActiveFilter('consultant')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeFilter === 'consultant' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              Consultant Support ({tickets.filter(t => t.sender_type === 'consultant').length})
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] font-mono text-slate-500 uppercase">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending/Open</option>
+              <option value="resolved">Resolved/Replied</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-rose-500/15 border border-rose-500/25 text-rose-400 text-xs px-4 py-3 rounded-xl font-mono mb-4">
+            ⚠️ {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-xs px-4 py-3 rounded-xl font-mono mb-4">
+            ✅ {success}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-12 text-slate-500 text-xs font-mono animate-pulse">Fetching support tickets database...</div>
+        ) : filteredTickets.length === 0 ? (
+          <div className="text-center py-12 text-slate-500 text-xs font-mono bg-slate-950 rounded-2xl border border-dashed border-slate-850">
+            No support tickets match the selected criteria.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredTickets.map(t => (
+              <div key={t.id} className="bg-slate-950 p-5 rounded-xl border border-slate-850 flex flex-col md:flex-row md:items-start justify-between gap-4 hover:border-slate-800 transition-colors">
+                <div className="space-y-2 max-w-2xl w-full">
+                  <div className="flex items-center space-x-2 flex-wrap gap-1.5">
+                    <span className="bg-slate-900 text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded border border-slate-800">
+                      ID: #{t.id}
+                    </span>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      t.sender_type === 'user' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/15' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
+                    }`}>
+                      {t.sender_type === 'user' ? '👤 User' : '🙋 Consultant'}
+                    </span>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      t.status === 'closed' 
+                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/15'
+                        : t.status === 'resolved' 
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' 
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse'
+                    }`}>
+                      {(t.status || 'open').toUpperCase()}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {new Date(t.created_at).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <h4 className="text-xs font-bold text-slate-100">{t.subject}</h4>
+                  <p className="text-xs text-slate-300 bg-slate-900/55 p-3 rounded-lg border border-slate-850/60 leading-relaxed font-sans">
+                    {t.message}
+                  </p>
+
+                  <div className="text-[10px] text-slate-400 space-y-1 bg-slate-900/20 p-2 rounded border border-slate-850/30">
+                    <div>Sender: <strong className="text-slate-200">{t.sender_name}</strong> (ID: {t.sender_id})</div>
+                    {t.session_id && (
+                      <div className="text-emerald-400 font-mono">
+                        Reference Chat Session ID: <strong className="text-slate-200">#{t.session_id}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Conversation Thread */}
+                  {t.replies && t.replies.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-850/65 space-y-2.5">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block mb-1">Conversation History:</span>
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {t.replies.map((reply: any) => (
+                          <div 
+                            key={reply.id} 
+                            className={`p-3 rounded-xl text-xs space-y-1 ${
+                              reply.sender_type === 'admin' 
+                                ? 'bg-emerald-950/20 border border-emerald-800/20 ml-8 text-right' 
+                                : 'bg-slate-900 border border-slate-850 text-left mr-8'
+                            }`}
+                          >
+                            <div className={`flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold font-mono ${reply.sender_type === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                              <span className={reply.sender_type === 'admin' ? 'text-emerald-400' : reply.sender_type === 'user' ? 'text-blue-400' : 'text-purple-400'}>
+                                {reply.sender_type === 'admin' ? '🛡 Admin Support' : reply.sender_type === 'user' ? `👤 Client (${reply.sender_name})` : `🙋 Expert (${reply.sender_name})`}
+                              </span>
+                              <span className="text-slate-500">•</span>
+                              <span className="text-slate-500 font-normal">{new Date(reply.created_at).toLocaleString()}</span>
+                            </div>
+                            <p className={`text-xs ${reply.sender_type === 'admin' ? 'text-emerald-100' : 'text-slate-200'} leading-relaxed whitespace-pre-wrap`}>
+                              {reply.message}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <h4 className="text-xs font-bold text-slate-100">{t.subject}</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">{t.description}</p>
-                <div className="text-[10px] text-slate-500 flex items-center space-x-2">
-                  <span>Owner: <strong className="text-slate-400">{t.user} ({t.role})</strong></span>
-                  <span>•</span>
-                  <span>Assigned To: <strong className="text-slate-400">{t.assignedTo}</strong></span>
-                </div>
+
+                {t.status !== 'closed' && (
+                  <div className="flex flex-col sm:flex-row md:flex-col items-stretch gap-2 shrink-0 md:self-start w-full md:w-auto">
+                    <button
+                      onClick={() => {
+                        setSelectedTicket(t);
+                        setAdminReplyText('');
+                        setConfirmingCloseId(null);
+                        setConfirmingResolveId(null);
+                      }}
+                      className="bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 font-extrabold px-4 py-2 rounded-xl text-xs transition-all uppercase tracking-wider shadow-md hover:shadow-emerald-500/5 text-center"
+                    >
+                      Reply
+                    </button>
+                    {t.status !== 'resolved' && (
+                      <button
+                        onClick={() => {
+                          if (confirmingResolveId === t.id) {
+                            handleResolveTicket(t.id);
+                            setConfirmingResolveId(null);
+                          } else {
+                            setConfirmingResolveId(t.id);
+                            setConfirmingCloseId(null);
+                          }
+                        }}
+                        className={`font-extrabold px-4 py-2 rounded-xl text-xs transition-all uppercase tracking-wider text-center border cursor-pointer ${
+                          confirmingResolveId === t.id
+                            ? 'bg-amber-500 text-slate-950 border-amber-600 animate-pulse font-black'
+                            : 'bg-teal-500/15 hover:bg-teal-500/30 border-teal-500/20 text-teal-400 hover:text-teal-300'
+                        }`}
+                      >
+                        {confirmingResolveId === t.id ? '⚠️ Click to Confirm' : 'Mark Resolved'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (confirmingCloseId === t.id) {
+                          handleCloseTicket(t.id);
+                          setConfirmingCloseId(null);
+                        } else {
+                          setConfirmingCloseId(t.id);
+                          setConfirmingResolveId(null);
+                        }
+                      }}
+                      className={`font-extrabold px-4 py-2 rounded-xl text-xs transition-all uppercase tracking-wider text-center border cursor-pointer ${
+                        confirmingCloseId === t.id
+                          ? 'bg-rose-600 text-white border-rose-700 animate-pulse font-black'
+                          : 'bg-rose-500/10 hover:bg-rose-500/25 border-rose-500/20 text-rose-400 hover:text-rose-300'
+                      }`}
+                    >
+                      {confirmingCloseId === t.id ? '⚠️ Click to Confirm' : 'Close Ticket'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Reply Modal overlay */}
+      {selectedTicket && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <h3 className="font-bold text-slate-100 text-sm">Respond to Ticket #{selectedTicket.id}</h3>
+                <p className="text-[10px] text-slate-400 font-mono">Raised by {selectedTicket.sender_name} ({selectedTicket.sender_type})</p>
+              </div>
+              <button
+                onClick={() => setSelectedTicket(null)}
+                className="text-slate-400 hover:text-white font-mono text-sm"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <form onSubmit={handleReplySubmit} className="p-5 space-y-4">
+              <div className="bg-slate-950 border border-slate-850 p-4 rounded-xl space-y-1 text-xs max-h-56 overflow-y-auto">
+                <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider">Ticket Subject:</span>
+                <strong className="text-slate-200 text-xs block mb-1">{selectedTicket.subject}</strong>
+                <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider">Original Message:</span>
+                <p className="text-slate-400 leading-relaxed whitespace-pre-wrap italic mt-1 bg-slate-900/60 p-2.5 rounded-lg border border-slate-850/40">
+                  "{selectedTicket.message}"
+                </p>
+
+                {/* Show replies inside modal */}
+                {selectedTicket.replies && selectedTicket.replies.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-slate-850 space-y-2">
+                    <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider">Thread History:</span>
+                    {selectedTicket.replies.map((reply: any) => (
+                      <div key={reply.id} className="p-2.5 rounded-lg bg-slate-900 border border-slate-850/60 text-left space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-semibold font-mono">
+                          <span>{reply.sender_type === 'admin' ? '🛡 Admin Support' : reply.sender_name}</span>
+                          <span className="text-slate-600">•</span>
+                          <span className="text-slate-500">{new Date(reply.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-slate-300 text-xs leading-relaxed">{reply.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {t.status !== 'Resolved' && (
+              <div className="space-y-1">
+                <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Administrative Reply Message *</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={adminReplyText}
+                  onChange={(e) => setAdminReplyText(e.target.value)}
+                  placeholder="Type your official administrative reply or resolution steps here. Submitting will send this reply to the ticket thread."
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-750 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full resize-none"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-2">
                 <button
-                  onClick={() => resolveTicket(t.id)}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs transition-all flex-shrink-0 align-self-start"
+                  type="button"
+                  onClick={() => setSelectedTicket(null)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2.5 px-4 rounded-xl transition-all"
                 >
-                  Mark Resolved
+                  Cancel
                 </button>
-              )}
-            </div>
-          ))}
+                <button
+                  type="submit"
+                  disabled={replying}
+                  className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 text-slate-950 text-xs font-black py-2.5 px-5 rounded-xl transition-all shadow-md flex-1 uppercase tracking-wider"
+                >
+                  {replying ? 'Submitting Reply...' : 'Submit Reply'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -1184,6 +1533,54 @@ export function SettingsPanel() {
   const [maintenance, setMaintenance] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Hero management states
+  const [heroSettings, setHeroSettings] = useState<any>({
+    global: { headline: '', description: '', tagline: '' },
+    categories: {}
+  });
+  const [loadingHero, setLoadingHero] = useState(true);
+  const [savingHero, setSavingHero] = useState(false);
+  const [activeConfigCategory, setActiveConfigCategory] = useState<'global' | 'Astrologers' | 'Influencers' | 'Coaches' | 'Consultants' | 'Lawyers' | 'Mentors'>('global');
+
+  React.useEffect(() => {
+    const fetchHeroSettings = async () => {
+      try {
+        const res = await fetch('/api/settings/hero');
+        if (res.ok) {
+          const data = await res.json();
+          setHeroSettings(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch hero settings:', err);
+      } finally {
+        setLoadingHero(false);
+      }
+    };
+    fetchHeroSettings();
+  }, []);
+
+  const handleSaveHero = async () => {
+    setSavingHero(true);
+    try {
+      const res = await fetch('/api/admin/settings/hero', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hero_settings: heroSettings })
+      });
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save hero settings');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingHero(false);
+    }
+  };
+
   const saveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     setSaved(true);
@@ -1192,67 +1589,209 @@ export function SettingsPanel() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-left">
-      <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-xl">
-        <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider mb-4">Core Platform Configuration Settings</h3>
-        <form onSubmit={saveSettings} className="space-y-4">
-          <div>
-            <label className="block text-[11px] text-slate-400 font-mono mb-1">Platform Identity Name *</label>
-            <input
-              type="text"
-              value={platformName}
-              onChange={e => setPlatformName(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left Side: General Platform configuration */}
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+          <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider mb-4">Core Platform Configuration Settings</h3>
+          <form onSubmit={saveSettings} className="space-y-4">
             <div>
-              <label className="block text-[11px] text-slate-400 font-mono mb-1">Currency Code</label>
-              <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="INR">INR (₹)</option>
-                <option value="USD">USD ($)</option>
-              </select>
+              <label className="block text-[11px] text-slate-400 font-mono mb-1">Platform Identity Name *</label>
+              <input
+                type="text"
+                value={platformName}
+                onChange={e => setPlatformName(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                required
+              />
             </div>
-            <div>
-              <label className="block text-[11px] text-slate-400 font-mono mb-1">Default Timezone</label>
-              <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="IST">Asia/Kolkata (IST)</option>
-                <option value="UTC">Coordinated Universal Time (UTC)</option>
-              </select>
-            </div>
-          </div>
 
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
-            <div>
-              <span className="text-xs font-bold text-slate-200 block">System Maintenance Mode</span>
-              <p className="text-[10px] text-slate-500 mt-0.5">Redirect public visitors to a "Service Restoring" card during DB alterations.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Currency Code</label>
+                <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                  <option value="INR">INR (₹)</option>
+                  <option value="USD">USD ($)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Default Timezone</label>
+                <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                  <option value="IST">Asia/Kolkata (IST)</option>
+                  <option value="UTC">Coordinated Universal Time (UTC)</option>
+                </select>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setMaintenance(!maintenance)}
-              className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                maintenance 
-                  ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/15' 
-                  : 'bg-slate-800 hover:bg-slate-750 text-slate-400 border-slate-700'
-              }`}
-            >
-              {maintenance ? '🔴 Maintenance On' : '🟢 Standard Live'}
-            </button>
-          </div>
 
-          <div className="flex items-center justify-between pt-2">
-            {saved && (
-              <span className="text-emerald-400 text-xs font-mono">✓ Platform settings updated successfully!</span>
-            )}
-            <button
-              type="submit"
-              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold transition-all ml-auto"
-            >
-              Save Parameters
-            </button>
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-200 block">System Maintenance Mode</span>
+                <p className="text-[10px] text-slate-500 mt-0.5">Redirect public visitors to a "Service Restoring" card during DB alterations.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMaintenance(!maintenance)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
+                  maintenance 
+                    ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/15' 
+                    : 'bg-slate-800 hover:bg-slate-750 text-slate-400 border-slate-700'
+                }`}
+              >
+                {maintenance ? '🔴 Maintenance On' : '🟢 Standard Live'}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              {saved && (
+                <span className="text-emerald-400 text-xs font-mono">✓ Platform settings updated successfully!</span>
+              )}
+              <button
+                type="submit"
+                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold transition-all ml-auto"
+              >
+                Save Parameters
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Right Side: Dynamic Hero Content settings */}
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+          <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Homepage Hero Content Settings</h3>
           </div>
-        </form>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Super Admin panel se manage karein ki user homepage ke hero section mein kya dikhega. Category ke basis par header customized copy select karein.
+          </p>
+
+          {loadingHero ? (
+            <div className="text-xs text-slate-500 font-mono py-12 text-center animate-pulse">Loading hero settings...</div>
+          ) : (
+            <div className="space-y-4">
+              {/* Selector */}
+              <div className="flex flex-wrap gap-1.5">
+                {(['global', 'Astrologers', 'Influencers', 'Coaches', 'Consultants', 'Lawyers', 'Mentors'] as const).map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActiveConfigCategory(cat)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono transition-all border ${
+                      activeConfigCategory === cat
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold'
+                        : 'bg-slate-950 hover:bg-slate-850 text-slate-400 border-slate-800/80'
+                    }`}
+                  >
+                    {cat === 'global' ? '🌎 Default Global' : cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Form inputs */}
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label className="block text-[10px] text-slate-400 font-mono mb-1">Tagline / Accent Prefix</label>
+                  <input
+                    type="text"
+                    value={
+                      activeConfigCategory === 'global'
+                        ? (heroSettings.global?.tagline || '')
+                        : (heroSettings.categories?.[activeConfigCategory]?.tagline || '')
+                    }
+                    onChange={e => {
+                      const val = e.target.value;
+                      setHeroSettings((prev: any) => {
+                        const updated = JSON.parse(JSON.stringify(prev));
+                        if (activeConfigCategory === 'global') {
+                          if (!updated.global) updated.global = {};
+                          updated.global.tagline = val;
+                        } else {
+                          if (!updated.categories) updated.categories = {};
+                          if (!updated.categories[activeConfigCategory]) updated.categories[activeConfigCategory] = {};
+                          updated.categories[activeConfigCategory].tagline = val;
+                        }
+                        return updated;
+                      });
+                    }}
+                    placeholder="e.g. ✨ CHOOSE THE PERFECT EXPERT"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 font-mono mb-1">Hero Main Headline</label>
+                  <input
+                    type="text"
+                    value={
+                      activeConfigCategory === 'global'
+                        ? (heroSettings.global?.headline || '')
+                        : (heroSettings.categories?.[activeConfigCategory]?.headline || '')
+                    }
+                    onChange={e => {
+                      const val = e.target.value;
+                      setHeroSettings((prev: any) => {
+                        const updated = JSON.parse(JSON.stringify(prev));
+                        if (activeConfigCategory === 'global') {
+                          if (!updated.global) updated.global = {};
+                          updated.global.headline = val;
+                        } else {
+                          if (!updated.categories) updated.categories = {};
+                          if (!updated.categories[activeConfigCategory]) updated.categories[activeConfigCategory] = {};
+                          updated.categories[activeConfigCategory].headline = val;
+                        }
+                        return updated;
+                      });
+                    }}
+                    placeholder="e.g. Unlock Your Cosmic Destiny"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 font-mono mb-1">Sub-description Paragraph</label>
+                  <textarea
+                    value={
+                      activeConfigCategory === 'global'
+                        ? (heroSettings.global?.description || '')
+                        : (heroSettings.categories?.[activeConfigCategory]?.description || '')
+                    }
+                    onChange={e => {
+                      const val = e.target.value;
+                      setHeroSettings((prev: any) => {
+                        const updated = JSON.parse(JSON.stringify(prev));
+                        if (activeConfigCategory === 'global') {
+                          if (!updated.global) updated.global = {};
+                          updated.global.description = val;
+                        } else {
+                          if (!updated.categories) updated.categories = {};
+                          if (!updated.categories[activeConfigCategory]) updated.categories[activeConfigCategory] = {};
+                          updated.categories[activeConfigCategory].description = val;
+                        }
+                        return updated;
+                      });
+                    }}
+                    rows={3}
+                    placeholder="Describe what these experts offer..."
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500 leading-relaxed font-sans"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  {saved && (
+                    <span className="text-emerald-400 text-xs font-mono">✓ Hero configuration published!</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveHero}
+                    disabled={savingHero}
+                    className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold transition-all ml-auto"
+                  >
+                    {savingHero ? 'Saving config...' : 'Apply & Publish'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -76,6 +76,8 @@ export interface Session {
   started_at: string | null;
   expires_at: string | null;
   transcript: string | null;
+  refunded_minutes?: number;
+  refunded_amount?: number;
 }
 
 export interface Message {
@@ -102,6 +104,7 @@ export interface AdminStats {
   totalSessions: number;
   totalConsultants: number;
   totalCommission: number;
+  totalRefunded?: number;
   commissionRate: number;
   salaryCutoffDay?: number;
   salaryPayoutDay?: number;

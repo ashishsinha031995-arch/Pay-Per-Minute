@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Send, Clock, User, Sparkles, MessageSquare, AlertTriangle, ArrowLeft, Check, CheckCheck, CheckCircle, ShieldAlert, XCircle, Ban } from 'lucide-react';
 import { Message, Session } from '../../types';
+import { useAuthContext } from '../../context/AuthContext';
 
 interface ChatRoomProps {
   sessionId: string;
@@ -11,6 +12,7 @@ interface ChatRoomProps {
 }
 
 export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) {
+  const { currentUser, refreshUserProfile } = useAuthContext();
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -26,6 +28,41 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
   const [isEnding, setIsEnding] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Review states
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionInfo) return;
+    setReviewSubmitting(true);
+    setReviewError(null);
+    try {
+      const res = await fetch(`/api/consultants/${sessionInfo.consultant_id}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_name: userName,
+          rating: reviewRating,
+          text: reviewText,
+          session_id: sessionId
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit review');
+      }
+      setReviewSubmitted(true);
+    } catch (err: any) {
+      setReviewError(err.message);
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -134,16 +171,25 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
       setSessionTranscript(transcript);
       setRemainingSeconds(0);
       setSessionInfo(prev => prev ? { ...prev, status: 'completed', transcript } : null);
+      if (currentUser?.id) {
+        refreshUserProfile(currentUser.id);
+      }
     });
 
     // Request rejected by consultant
     socket.on('session:rejected', ({ message }) => {
       setSessionInfo(prev => prev ? { ...prev, status: 'rejected' } : null);
+      if (currentUser?.id) {
+        refreshUserProfile(currentUser.id);
+      }
     });
 
     // Request missed by consultant
     socket.on('session:missed', ({ message }) => {
       setSessionInfo(prev => prev ? { ...prev, status: 'missed' } : null);
+      if (currentUser?.id) {
+        refreshUserProfile(currentUser.id);
+      }
     });
 
     // Cleanup
@@ -539,6 +585,60 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
                 <pre className="text-[10px] font-mono text-slate-400 whitespace-pre-wrap max-h-[150px] overflow-y-auto leading-relaxed">
                   {sessionTranscript}
                 </pre>
+              </div>
+            )}
+
+            {role === 'user' && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 text-left">
+                <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-1.5 font-bold">RATE YOUR CONSULTATION EXPERIENCE</span>
+                
+                {reviewSubmitted ? (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-center text-xs text-emerald-400 font-sans font-bold">
+                    ✨ Thank you! Aapka feedback successfully submit ho gaya hai.
+                  </div>
+                ) : (
+                  <form onSubmit={handleReviewSubmit} className="space-y-3">
+                    {reviewError && (
+                      <div className="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-center text-[11px] text-rose-400 font-sans">
+                        {reviewError}
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold">Stars Rating</label>
+                      <div className="flex items-center space-x-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            type="button"
+                            key={star}
+                            onClick={() => setReviewRating(star)}
+                            className={`text-xl transition-colors ${
+                              reviewRating >= star ? 'text-amber-400' : 'text-slate-600 hover:text-amber-500'
+                            }`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold">Your Written Review</label>
+                      <textarea
+                        value={reviewText}
+                        onChange={(e) => setReviewText(e.target.value)}
+                        placeholder="Apna anubhav share karein... (e.g. Bohat accha guidance mila, highly recommended)"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[65px] font-sans"
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={reviewSubmitting}
+                      className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold py-2 px-4 rounded-xl w-full transition-all"
+                    >
+                      {reviewSubmitting ? 'Submitting Review...' : 'Submit Review Feedback'}
+                    </button>
+                  </form>
+                )}
               </div>
             )}
 

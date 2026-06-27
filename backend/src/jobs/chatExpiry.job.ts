@@ -15,16 +15,21 @@ export function startChatExpiryJob(io: Server) {
         const diffMs = now.getTime() - createdTime.getTime();
         if (diffMs > 60 * 1000) { // 60 seconds ring timeout
           console.log(`[Timer Engine] Session ${sess.id} timed out waiting for acceptance. Marking as missed.`);
-          db.prepare("UPDATE sessions SET status = 'missed' WHERE id = ?").run(sess.id);
-          db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(sess.consultant_id);
+          
+          const userId = sess.user_id;
+          const totalPaid = sess.total_paid;
+          const consultantId = sess.consultant_id;
+
+          db.prepare("UPDATE sessions SET status = 'missed', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(sess.id);
+          db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
 
           // Refund User Wallet fully!
-          if (sess.user_id && sess.total_paid > 0) {
-            db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(sess.total_paid, sess.user_id);
+          if (userId && totalPaid > 0) {
+            db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
             logWalletTransaction(
-              Number(sess.user_id),
+              Number(userId),
               'refund',
-              sess.total_paid,
+              totalPaid,
               `Refund: Consultation request missed/timed out by advisor`
             );
           }
@@ -47,8 +52,39 @@ export function startChatExpiryJob(io: Server) {
             console.log(`[Timer Engine] Session ${sess.id} expired. Auto-completing.`);
             
             // 1. Fetch transcript (group all chat messages)
-            const msgs = db.prepare('SELECT sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
+            const msgs = db.prepare('SELECT sender_type, sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
             const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text}`).join('\n');
+
+            const consultantMsgs = msgs.filter(m => m.sender_type === 'consultant');
+
+            if (consultantMsgs.length === 0) {
+              // Consultant did not reply or participate at all!
+              // Treat this as missed / cancelled! No money deducted from user wallet (refund).
+              console.log(`[Timer Engine] Session ${sess.id} expired with 0 consultant replies. Refunded user fully.`);
+              
+              const userId = sess.user_id;
+              const totalPaid = sess.total_paid;
+              const consultantId = sess.consultant_id;
+
+              db.prepare("UPDATE sessions SET status = 'missed', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(sess.id);
+              db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
+
+              if (userId && totalPaid > 0) {
+                db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
+                logWalletTransaction(
+                  Number(userId),
+                  'refund',
+                  totalPaid,
+                  `Refund: Consultation session missed/ignored by advisor (No messages received)`
+                );
+              }
+
+              io.to(sess.id).emit('session:missed', {
+                session_id: sess.id,
+                message: 'Session has ended as advisor failed to participate.'
+              });
+              continue;
+            }
 
             // 2. Mark session as completed
             db.prepare('UPDATE sessions SET status = ?, transcript = ? WHERE id = ?').run('completed', transcript, sess.id);
