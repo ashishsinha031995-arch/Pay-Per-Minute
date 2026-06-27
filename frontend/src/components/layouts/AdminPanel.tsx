@@ -3001,7 +3001,7 @@ export function AdminPanel() {
                 </form>
 
                 {/* Ledger & History Log */}
-               {/* 📋 Manual Adjustments History Log */}
+              {/* 📋 Manual Adjustments History Log */}
                 <div className="lg:col-span-7 bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
                   <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-300 border-b border-slate-850 pb-2 flex items-center justify-between">
                     <span>📋 Manual Adjustments History Log</span>
@@ -3060,8 +3060,7 @@ export function AdminPanel() {
   );
 };
 
-export default AdminPanel;
-          {/* ========================================================= */}
+export default AdminPanel;          {/* ========================================================= */}
           {/* 2.8 TAB: COMMISSION MANAGEMENT */}
           {activeTab === 'commissions' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-6 max-w-xl">
