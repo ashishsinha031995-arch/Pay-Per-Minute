@@ -39,6 +39,7 @@ export default function AppPage() {
 
   // Sync user profile state from database
   const refreshUserProfile = async (id: number) => {
+    if (!id || isNaN(id)) return;
     try {
       const res = await fetch(`/api/user/profile/${id}`);
       if (res.ok) {
@@ -53,7 +54,8 @@ export default function AppPage() {
         }
       }
     } catch (err) {
-      console.error('Error refreshing user profile:', err);
+      // Log as warning rather than triggering error flags for transient/offline situations
+      console.warn('Could not refresh user profile temporarily:', err);
     }
   };
 

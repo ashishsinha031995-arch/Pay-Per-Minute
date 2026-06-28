@@ -6,6 +6,10 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   const refreshUserProfile = async (id: number) => {
+    if (!id || isNaN(id)) {
+      setLoading(false);
+      return;
+    }
     try {
       const data = await UserService.getUserProfile(id);
       if (data.success && data.user) {
@@ -17,7 +21,7 @@ export function useAuth() {
         }
       }
     } catch (err) {
-      console.error("Error refreshing profile:", err);
+      console.warn("Could not refresh profile temporarily:", err);
     } finally {
       setLoading(false);
     }
