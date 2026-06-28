@@ -2187,6 +2187,23 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               <p className="text-slate-400 font-mono text-[11px]">
                                 {sess.duration_minutes} Mins @ ₹{sess.price_per_minute}/min
                               </p>
+                              {sess.rating && (
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <div className="flex items-center text-amber-400">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star
+                                        key={i}
+                                        className={`w-2.5 h-2.5 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                      />
+                                    ))}
+                                  </div>
+                                  {sess.review_text && (
+                                    <span className="text-[10px] text-slate-400 italic font-sans truncate max-w-[150px]" title={sess.review_text}>
+                                      "{sess.review_text}"
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="text-right">
                               <span className="text-emerald-400 font-mono font-bold">₹{sess.consultant_earnings.toFixed(2)}</span>
@@ -2535,6 +2552,23 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 {sess.refunded_amount > 0 && (
                                   <div className="text-[11px] text-rose-400 font-mono font-bold mt-1">
                                     ⚠ Refund Deducted: -₹{sess.refunded_amount.toFixed(2)} ({sess.refunded_minutes} Mins)
+                                  </div>
+                                )}
+                                {sess.rating && (
+                                  <div className="flex items-center space-x-2 mt-1.5 bg-slate-900/50 p-1.5 rounded-lg border border-slate-800/40 w-fit">
+                                    <div className="flex items-center text-amber-400">
+                                      {[...Array(5)].map((_, i) => (
+                                        <Star
+                                          key={i}
+                                          className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                        />
+                                      ))}
+                                    </div>
+                                    {sess.review_text && (
+                                      <span className="text-[10px] text-slate-300 italic font-sans" title={sess.review_text}>
+                                        "{sess.review_text}"
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                                 <span className="text-[9px] text-slate-600 font-mono block">

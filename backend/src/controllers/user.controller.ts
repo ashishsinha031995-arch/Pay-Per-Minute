@@ -204,7 +204,13 @@ export const getConsultantStats = (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Consultant not found' });
     }
 
-    const sessions = db.prepare('SELECT * FROM sessions WHERE consultant_id = ? ORDER BY created_at DESC').all(id);
+    const sessions = db.prepare(`
+      SELECT s.*, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
+      FROM sessions s
+      LEFT JOIN reviews r ON s.id = r.session_id
+      WHERE s.consultant_id = ?
+      ORDER BY s.created_at DESC
+    `).all(id);
     const salaryInfo = getSalaryCycleInfo(Number(id));
     const manualAdjustments = db.prepare("SELECT * FROM manual_wallet_adjustments WHERE target_type = 'consultant' AND target_id = ? ORDER BY id DESC").all(id);
 
@@ -248,6 +254,12 @@ export const addConsultantReview = (req: Request, res: Response) => {
 
     if (!user_name || !rating) {
       return res.status(400).json({ error: 'User name and Rating are required' });
+    }
+
+    const reviewTextString = text || '';
+    const wordCount = reviewTextString.trim() === '' ? 0 : reviewTextString.trim().split(/\s+/).length;
+    if (wordCount > 30) {
+      return res.status(400).json({ error: 'Review text cannot exceed 30 words.' });
     }
 
     if (!session_id) {
@@ -430,9 +442,10 @@ export const getUserPastSessions = (req: Request, res: Response) => {
 
     if (user_name) {
       sessionsList = db.prepare(`
-        SELECT s.*, c.display_name as consultant_name 
+        SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
         FROM sessions s
         JOIN consultants c ON s.consultant_id = c.id
+        LEFT JOIN reviews r ON s.id = r.session_id
         WHERE LOWER(s.user_name) = LOWER(?)
         ORDER BY s.id DESC
       `).all(String(user_name).trim());
@@ -441,9 +454,10 @@ export const getUserPastSessions = (req: Request, res: Response) => {
       if (idArr.length > 0) {
         const placeholders = idArr.map(() => '?').join(',');
         sessionsList = db.prepare(`
-          SELECT s.*, c.display_name as consultant_name 
+          SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
           FROM sessions s
           JOIN consultants c ON s.consultant_id = c.id
+          LEFT JOIN reviews r ON s.id = r.session_id
           WHERE s.id IN (${placeholders})
           ORDER BY s.id DESC
         `).all(...idArr);

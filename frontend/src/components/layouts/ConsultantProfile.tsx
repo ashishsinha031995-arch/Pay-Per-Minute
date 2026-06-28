@@ -38,11 +38,6 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   // Active selection states
   const [selectedMinutes, setSelectedMinutes] = useState<number>(10); // Default 10 mins
 
-  // Review Form States
-  const [newReviewName, setNewReviewName] = useState('');
-  const [newReviewRating, setNewReviewRating] = useState<number>(5);
-  const [newReviewText, setNewReviewText] = useState('');
-
   // Payment checkout overlay states
   const [checkoutOrder, setCheckoutOrder] = useState<any>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -402,40 +397,6 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       setError(err.message);
     } finally {
       setRechargeLoading(false);
-    }
-  };
-
-  // Submit client feedback review
-  const handleSubmitReview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedConsultant) return;
-    const authorName = currentUser ? currentUser.display_name : newReviewName.trim();
-    if (!authorName) {
-      setError('Please specify your name for the review.');
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const res = await fetch(`/api/consultants/${selectedConsultant.id}/reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_name: authorName,
-          rating: newReviewRating,
-          text: newReviewText,
-        }),
-      });
-
-      if (!res.ok) throw new Error('Failed to post review');
-
-      setNewReviewText('');
-      setSuccess('Thank you for your valuable consultation review!');
-      fetchFullProfile(selectedConsultant);
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message);
     }
   };
 
@@ -1167,6 +1128,23 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                               Duration: {sess.duration_minutes} mins
                             </span>
                           </div>
+                          {sess.rating && (
+                            <div className="flex items-center space-x-2 mt-1.5 bg-slate-900/50 p-1.5 rounded-lg border border-slate-800/40 w-fit">
+                              <div className="flex items-center text-amber-400">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                  />
+                                ))}
+                              </div>
+                              {sess.review_text && (
+                                <span className="text-[10px] text-slate-300 italic font-sans line-clamp-1 max-w-[150px] sm:max-w-[220px]" title={sess.review_text}>
+                                  "{sess.review_text}"
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         
                         <button
@@ -1571,6 +1549,23 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                                   Duration: {sess.duration_minutes} mins
                                 </span>
                               </div>
+                              {sess.rating && (
+                                <div className="flex items-center space-x-2 mt-1.5 bg-slate-900/50 p-1.5 rounded-lg border border-slate-800/40 w-fit">
+                                  <div className="flex items-center text-amber-400">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star
+                                        key={i}
+                                        className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                      />
+                                    ))}
+                                  </div>
+                                  {sess.review_text && (
+                                    <span className="text-[10px] text-slate-300 italic font-sans line-clamp-1 max-w-[150px] sm:max-w-[220px]" title={sess.review_text}>
+                                      "{sess.review_text}"
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             
                             <button
@@ -2035,57 +2030,6 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                     ))
                   )}
                 </div>
-
-                {/* Review submission form */}
-                <form onSubmit={handleSubmitReview} className="pt-4 border-t border-slate-800 space-y-4">
-                  <span className="block text-xs font-bold text-slate-300">Submit a New Review</span>
-                  <div className="grid grid-cols-2 gap-4">
-                    {!currentUser && (
-                      <div className="col-span-2">
-                        <label className="block text-[11px] text-slate-500 mb-1 font-mono">My Name</label>
-                        <input
-                          type="text"
-                          placeholder="John Doe"
-                          value={newReviewName}
-                          onChange={(e) => setNewReviewName(e.target.value)}
-                          className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full"
-                          required
-                        />
-                      </div>
-                    )}
-                    <div className="col-span-2">
-                      <label className="block text-[11px] text-slate-500 mb-1 font-mono">Rating Score</label>
-                      <select
-                        value={newReviewRating}
-                        onChange={(e) => setNewReviewRating(parseInt(e.target.value))}
-                        className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono"
-                      >
-                        <option value="5">⭐⭐⭐⭐⭐ (5 Star)</option>
-                        <option value="4">⭐⭐⭐⭐ (4 Star)</option>
-                        <option value="3">⭐⭐⭐ (3 Star)</option>
-                        <option value="2">⭐⭐ (2 Star)</option>
-                        <option value="1">⭐ (1 Star)</option>
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-[11px] text-slate-500 mb-1 font-mono">My Review Message</label>
-                      <textarea
-                        placeholder="Share your consultation experience..."
-                        value={newReviewText}
-                        onChange={(e) => setNewReviewText(e.target.value)}
-                        rows={2}
-                        className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full resize-none"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-100 py-1.5 px-4 rounded-xl text-xs font-bold transition-all"
-                  >
-                    Submit Review Log
-                  </button>
-                </form>
 
               </div>
 

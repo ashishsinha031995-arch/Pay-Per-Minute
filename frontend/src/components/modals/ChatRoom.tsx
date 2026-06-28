@@ -61,6 +61,11 @@ export function ChatRoom({
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionInfo) return;
+    const words = reviewText.trim() === '' ? 0 : reviewText.trim().split(/\s+/).length;
+    if (words > 30) {
+      setReviewError('Review text cannot exceed 30 words.');
+      return;
+    }
     setReviewSubmitting(true);
     setReviewError(null);
     try {
@@ -660,10 +665,18 @@ export function ChatRoom({
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[65px] font-sans"
                         required
                       />
+                      <div className="flex justify-between items-center mt-1">
+                        <span className={`text-[10px] font-mono ${reviewText.trim() === '' ? 'text-slate-500' : reviewText.trim().split(/\s+/).length > 30 ? 'text-rose-400 font-bold' : 'text-slate-500'}`}>
+                          Words: {reviewText.trim() === '' ? 0 : reviewText.trim().split(/\s+/).length}/30
+                        </span>
+                        {reviewText.trim() !== '' && reviewText.trim().split(/\s+/).length > 30 && (
+                          <span className="text-[10px] text-rose-400 font-sans">Maximum 30 words allowed!</span>
+                        )}
+                      </div>
                     </div>
                     <button
                       type="submit"
-                      disabled={reviewSubmitting}
+                      disabled={reviewSubmitting || (reviewText.trim() === '' ? 0 : reviewText.trim().split(/\s+/).length) > 30}
                       className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold py-2 px-4 rounded-xl w-full transition-all"
                     >
                       {reviewSubmitting ? 'Submitting Review...' : 'Submit Review Feedback'}
