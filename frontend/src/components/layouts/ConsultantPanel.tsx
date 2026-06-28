@@ -21,6 +21,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [registerDisplayName, setRegisterDisplayName] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
   const [registerPrice, setRegisterPrice] = useState('20');
   const [registerCategory, setRegisterCategory] = useState<'Astrologers' | 'Influencers' | 'Coaches' | 'Consultants' | 'Lawyers' | 'Mentors'>('Consultants');
   const [credentialsGenerated, setCredentialsGenerated] = useState<{username: string, password: string, displayName: string} | null>(null);
@@ -457,8 +458,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   // Login handler
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError(null);
     try {
       const res = await fetch('/api/consultants/login', {
@@ -493,6 +494,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       setError('Please provide your Email Address');
       return;
     }
+    if (!registerPhone) {
+      setError('Please provide your Phone Number');
+      return;
+    }
     try {
       const res = await fetch('/api/consultants/register', {
         method: 'POST',
@@ -501,6 +506,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           plan_id: selectedPlanId,
           display_name: registerDisplayName,
           email: registerEmail,
+          phone: registerPhone,
           initial_price_per_minute: parseFloat(registerPrice),
           category: registerCategory,
         }),
@@ -515,6 +521,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       });
       setRegisterDisplayName('');
       setRegisterEmail('');
+      setRegisterPhone('');
       // Autocomplete login fields for them
       setUsernameInput(data.username);
       setPasswordInput(data.password);
@@ -1388,6 +1395,21 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 <div className="space-y-2">
+                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
+                    Consultant Phone Number (Mandatory)
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. +91 98765 43210"
+                    value={registerPhone}
+                    onChange={(e) => setRegisterPhone(e.target.value)}
+                    className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all"
+                    required
+                  />
+                  <span className="text-[9px] text-slate-500 block">Required for authentication and communication.</span>
+                </div>
+
+                <div className="space-y-2">
                   <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
                     <span>My Custom Audio/Chat Rate (₹ / Minute)</span>
                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-2 py-0.5 rounded-full font-bold">Capped by Plan</span>
@@ -1481,8 +1503,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 <div className="bg-slate-900/40 p-3 rounded-xl border border-emerald-500/10 text-[10px] text-emerald-400 font-mono">
-                  💡 We have loaded your username/password above. Simply click the "Login to Dashboard" modal or button to start managing your consulting channel.
+                  💡 We have loaded your username/password above. Simply click the "Login to Dashboard" button to start managing your consulting channel.
                 </div>
+
+                <button
+                  type="button"
+                  id="instant-dashboard-login-btn"
+                  onClick={() => handleLogin()}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs uppercase tracking-widest py-3 px-6 rounded-xl transition-all flex items-center justify-center space-x-2 w-full shadow-lg border border-emerald-400/20"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Login to Dashboard</span>
+                </button>
               </div>
             )}
           </div>
@@ -1679,17 +1711,35 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 className="w-9 h-9 rounded-xl object-cover border border-emerald-500"
               />
               <div>
-                <h3 className="text-xs font-bold leading-tight truncate max-w-[120px]">{currentConsultant.display_name}</h3>
+                <h3 className="text-xs font-bold leading-tight truncate max-w-[110px]">{currentConsultant.display_name}</h3>
                 <span className="text-[9px] text-slate-400 block font-mono">ID: #{currentConsultant.id}</span>
               </div>
             </div>
             
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all"
-            >
-              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={handleCopyProfileUrl}
+                className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center relative group"
+                title="Copy Profile URL"
+              >
+                {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                <span className="sr-only">Copy link</span>
+              </button>
+              <button
+                onClick={() => onNavigateToUserView(currentConsultant.username)}
+                className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center"
+                title="Open Booking Page"
+              >
+                <Globe className="w-4 h-4" />
+                <span className="sr-only">Go to profile</span>
+              </button>
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center"
+              >
+                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
 
           {/* MOBILE NAVIGATION DROPDOWN DRAWER */}
@@ -1754,6 +1804,33 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 <HelpCircle className="w-4 h-4" />
                 <span>🙋 Help & Customer Support</span>
               </button>
+
+              {/* Shareable Link directly inside drawer */}
+              <div className="border-t border-slate-800/80 pt-3 mt-3 space-y-1.5">
+                <span className="block text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-1">My Shareable Link</span>
+                <div className="flex items-center justify-between bg-slate-950 border border-slate-800/80 rounded-xl p-1.5 pl-3">
+                  <span className="text-xs font-mono text-emerald-400 truncate max-w-[180px]">{`/u/${currentConsultant.username}`}</span>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={handleCopyProfileUrl}
+                      className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center"
+                      title="Copy Profile URL"
+                    >
+                      {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        onNavigateToUserView(currentConsultant.username);
+                      }}
+                      className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center"
+                      title="Open Booking Page"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
               
               <div className="border-t border-slate-800/80 pt-2 mt-2">
                 <button

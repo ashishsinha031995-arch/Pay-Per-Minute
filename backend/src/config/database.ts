@@ -28,6 +28,7 @@ export function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       email TEXT,
+      phone TEXT,
       password TEXT NOT NULL,
       display_name TEXT NOT NULL,
       photo_url TEXT,
@@ -212,6 +213,7 @@ export function initDb() {
   try { db.exec("ALTER TABLE reviews ADD COLUMN session_id TEXT;"); } catch(_) {}
 
   try { db.exec("ALTER TABLE consultants ADD COLUMN email TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN phone TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN category TEXT DEFAULT 'Consultants';"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN experience INTEGER DEFAULT 5;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN languages TEXT DEFAULT 'English, Hindi';"); } catch(_) {}
@@ -499,31 +501,32 @@ export function initDb() {
     insertReview.run(3, 'Sanya', 5, 'Loved the tarot reading, so on point!', now);
   }
 
-  // Migrate existing IDs < 10000 to be at least 5 digits
+  // Migrate existing IDs to be at least 5 digits with completely separate ranges to prevent any ID collisions (users: 10000+, consultants: 20000+)
   try {
     // Turn foreign keys OFF outside transaction
     db.pragma('foreign_keys = OFF');
 
     db.transaction(() => {
-      // Migrate consultants
-      const lowCons = db.prepare('SELECT id FROM consultants WHERE id < 10000 ORDER BY id DESC').all() as { id: number }[];
+      // Migrate consultants to >= 20000
+      const lowCons = db.prepare('SELECT id FROM consultants WHERE id < 20000 ORDER BY id DESC').all() as { id: number }[];
       for (const cons of lowCons) {
         const oldId = cons.id;
-        const newId = oldId + 10000;
+        const newId = oldId < 10000 ? oldId + 20000 : oldId + 10000;
         let targetId = newId;
         const exists = db.prepare('SELECT id FROM consultants WHERE id = ?').get(targetId);
         if (exists) {
           const maxIdRow = db.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
-          targetId = Math.max(10000, maxIdRow?.maxId || 10000) + 1;
+          targetId = Math.max(20000, maxIdRow?.maxId || 20000) + 1;
         }
         
         db.prepare('UPDATE sessions SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
         db.prepare('UPDATE reviews SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
         db.prepare('UPDATE blocked_users SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
+        db.prepare('UPDATE users SET locked_consultant_id = ? WHERE locked_consultant_id = ?').run(targetId, oldId);
         db.prepare('UPDATE consultants SET id = ? WHERE id = ?').run(targetId, oldId);
       }
 
-      // Migrate users
+      // Migrate users to >= 10000
       const lowUsers = db.prepare('SELECT id FROM users WHERE id < 10000 ORDER BY id DESC').all() as { id: number }[];
       for (const usr of lowUsers) {
         const oldId = usr.id;
@@ -545,13 +548,13 @@ export function initDb() {
       const maxUserId = maxUser?.maxId || 10000;
 
       const maxCons = db.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
-      const maxConsId = maxCons?.maxId || 10000;
+      const maxConsId = maxCons?.maxId || 20000;
 
       db.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('users', 10000)").run();
       db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'users'").run(Math.max(10000, maxUserId));
 
-      db.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('consultants', 10000)").run();
-      db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'consultants'").run(Math.max(10000, maxConsId));
+      db.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('consultants', 20000)").run();
+      db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'consultants'").run(Math.max(20000, maxConsId));
     })();
 
     // Turn foreign keys ON outside transaction

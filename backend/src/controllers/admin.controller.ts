@@ -101,6 +101,7 @@ export const updateConsultantBySuperAdmin = (req: Request, res: Response) => {
     const {
       display_name,
       email,
+      phone,
       bio,
       price_per_minute,
       category,
@@ -139,6 +140,9 @@ export const updateConsultantBySuperAdmin = (req: Request, res: Response) => {
     }
     if (email !== undefined) {
       db.prepare('UPDATE consultants SET email = ? WHERE id = ?').run(email, id);
+    }
+    if (phone !== undefined) {
+      db.prepare('UPDATE consultants SET phone = ? WHERE id = ?').run(phone, id);
     }
     if (bio !== undefined) {
       db.prepare('UPDATE consultants SET bio = ? WHERE id = ?').run(bio, id);

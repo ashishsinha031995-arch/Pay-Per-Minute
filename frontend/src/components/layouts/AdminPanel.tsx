@@ -1595,6 +1595,9 @@ export function AdminPanel() {
                               <div>
                                 <strong className="text-slate-100 font-bold block text-sm">{cons.display_name}</strong>
                                 <span className="text-[10px] text-slate-500 font-mono">ID: #{cons.id}</span>
+                                {cons.phone && (
+                                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">Phone: {cons.phone}</div>
+                                )}
                               </div>
                             </td>
                             <td className="px-6 py-4">
@@ -3328,6 +3331,9 @@ export function AdminPanel() {
                                 <div>
                                   <strong className="text-slate-200 block font-semibold">{c.display_name}</strong>
                                   <span className="text-[10px] text-slate-500 font-mono">ID: #{c.id} • @{c.username}</span>
+                                  {c.phone && (
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">Phone: {c.phone}</div>
+                                  )}
                                 </div>
                               </div>
                             </td>

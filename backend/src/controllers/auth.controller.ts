@@ -102,12 +102,15 @@ export const consultantLogin = (req: Request, res: Response) => {
 
 export const consultantRegister = (req: Request, res: Response) => {
   try {
-    const { plan_id, display_name, initial_price_per_minute, category, email } = req.body;
+    const { plan_id, display_name, initial_price_per_minute, category, email, phone } = req.body;
     if (!plan_id || !display_name) {
       return res.status(400).json({ error: 'Plan and Display Name are required' });
     }
     if (!email) {
       return res.status(400).json({ error: 'Email address is required so login credentials can be sent to you.' });
+    }
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required.' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -138,12 +141,13 @@ export const consultantRegister = (req: Request, res: Response) => {
 
     const result = db.prepare(`
       INSERT INTO consultants (
-        username, email, password, display_name, photo_url, bio, price_per_minute, 
+        username, email, phone, password, display_name, photo_url, bio, price_per_minute, 
         is_online, is_busy, is_active, plan_expiry, category, plan_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       username,
       cleanEmail,
+      phone.trim(),
       password,
       display_name,
       defaultPhoto,
@@ -179,6 +183,7 @@ Support Team`;
       password,
       display_name,
       email: cleanEmail,
+      phone: phone.trim(),
       plan_name: plan.name,
       plan_expiry: expiryDate.toLocaleDateString(),
       consultant_id: result.lastInsertRowid,

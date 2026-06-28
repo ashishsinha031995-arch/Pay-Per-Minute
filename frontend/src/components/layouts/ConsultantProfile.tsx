@@ -235,6 +235,18 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
     }
   }, [currentUser?.id]);
 
+  // Listen for navigation requests to the wallet tab (e.g., when clicking wallet balance in Header)
+  useEffect(() => {
+    const handleNavigateWallet = () => {
+      setSelectedConsultant(null);
+      setActiveDashboardTab('wallet');
+    };
+    window.addEventListener('navigate-to-wallet-tab', handleNavigateWallet);
+    return () => {
+      window.removeEventListener('navigate-to-wallet-tab', handleNavigateWallet);
+    };
+  }, []);
+
   // Load past consultations from both username (if logged in) and localStorage
   const loadPastHistoryFromLocalStorage = async () => {
     try {
@@ -580,13 +592,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       )}
 
       {/* Alert feeds */}
-      {error && (
+      {error && activeDashboardTab !== 'profile' && (
         <div className="bg-rose-500/10 border-l-4 border-rose-500 p-4 rounded-r-xl text-rose-200 text-xs flex items-center space-x-2">
           <ShieldAlert className="w-5 h-5 text-rose-400 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
-      {success && (
+      {success && activeDashboardTab !== 'profile' && (
         <div className="bg-emerald-500/10 border-l-4 border-emerald-500 p-4 rounded-r-xl text-emerald-200 text-xs flex items-center space-x-2">
           <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           <span>{success}</span>
@@ -595,21 +607,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
 
       {/* 🟢 DYNAMIC HAMBURGER NAVIGATION DRAWER */}
       {currentUser && !selectedConsultant && (
-        <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={() => setHamburgerOpen(!hamburgerOpen)}
-            className="bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 border border-emerald-300/30 flex items-center justify-center group relative"
-            id="hamburger-menu-btn"
-          >
-            {hamburgerOpen ? (
-              <X className="w-6 h-6 transition-transform group-hover:rotate-90 duration-300" />
-            ) : (
-              <Menu className="w-6 h-6 transition-transform duration-300" />
-            )}
-            <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center animate-bounce shadow">
-              ⚡
-            </span>
-          </button>
+        <>
+          <div className="hidden">
+            <button
+              onClick={() => setHamburgerOpen(!hamburgerOpen)}
+              id="hamburger-menu-btn"
+            />
+          </div>
 
           {/* Hamburger slide-out drawer */}
           <AnimatePresence>
@@ -621,20 +625,26 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onClick={() => setHamburgerOpen(false)}
-                  className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40"
+                  className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50"
                 />
 
                 {/* Animated Drawer Box */}
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: 50, x: 20 }}
+                  initial={{ opacity: 0, scale: 0.95, y: -10, x: 0 }}
                   animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 50, x: 20 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10, x: 0 }}
                   transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-                  className="absolute bottom-16 right-0 w-72 bg-slate-900/95 border border-slate-800 rounded-3xl p-5 shadow-2xl z-50 space-y-4 backdrop-blur-md text-left"
+                  className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-xs bg-slate-950/98 border border-slate-800/80 rounded-3xl p-6 shadow-2xl z-50 space-y-4 backdrop-blur-xl text-left"
                 >
-                  <div className="border-b border-slate-800/80 pb-3">
+                  <div className="border-b border-slate-800/80 pb-3 relative">
+                    <button
+                      onClick={() => setHamburgerOpen(false)}
+                      className="absolute right-0 top-0 p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg transition-colors border border-slate-800/80"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                     <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block font-bold">CallMint Menu</span>
-                    <strong className="text-slate-200 text-sm font-bold block mt-1">{currentUser.display_name}</strong>
+                    <strong className="text-slate-200 text-sm font-bold block mt-2 pr-8">{currentUser.display_name}</strong>
                     <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-slate-400">
                       <span>Wallet Balance:</span>
                       <span className="text-emerald-400 font-bold font-mono">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</span>
@@ -727,7 +737,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
               </>
             )}
           </AnimatePresence>
-        </div>
+        </>
       )}
 
       {/* TAB CONTENTS */}
@@ -848,35 +858,92 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
             </div>
 
             {/* Profile photos presets bar */}
-            <div className="space-y-1.5 text-left">
-              <span className="text-[9px] font-mono text-slate-500 block uppercase">Quick Avatar Presets</span>
-              <div className="flex space-x-2">
-                {[
-                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
-                  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
-                  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
-                  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
-                ].map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setEditPhotoUrl(preset)}
-                    className={`rounded-lg overflow-hidden border-2 transition-all ${editPhotoUrl === preset ? 'border-emerald-500 scale-105' : 'border-transparent hover:scale-105'}`}
-                  >
-                    <img src={preset} alt="" className="w-8 h-8 object-cover" />
-                  </button>
-                ))}
+            <div className="space-y-3.5 text-left bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60 max-w-2xl">
+              <div>
+                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ Gen Z Animated Girl Avatars (GIFs)</span>
+                <div className="flex flex-wrap gap-2.5">
+                  {[
+                    'https://i.giphy.com/OdG9tyVfD9NPM.gif', // Sipping tea & cute happy head nod
+                    'https://i.giphy.com/L20mbc7yqfsly.gif', // Wink & peace sign dance
+                    'https://i.giphy.com/1395UXCac7bUvC.gif'  // Happy cute anime dance shake
+                  ].map((preset, idx) => (
+                    <button
+                      key={`girl-${idx}`}
+                      type="button"
+                      onClick={() => setEditPhotoUrl(preset)}
+                      className={`relative w-12 h-12 rounded-xl overflow-hidden border-2 transition-all duration-300 hover:scale-110 active:scale-95 ${editPhotoUrl === preset ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'}`}
+                    >
+                      <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">G{idx+1}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ Gen Z Animated Boy Avatars (GIFs)</span>
+                <div className="flex flex-wrap gap-2.5">
+                  {[
+                    'https://i.giphy.com/W7Xq86ali939u.gif', // Boy waving warmly with pleasant smile
+                    'https://i.giphy.com/5A8bW9oAoxB2o.gif', // Smug cool shades wink animation
+                    'https://i.giphy.com/11HeubD26tLB8k.gif'  // Thumbs up / shaking cheer boy animation
+                  ].map((preset, idx) => (
+                    <button
+                      key={`boy-${idx}`}
+                      type="button"
+                      onClick={() => setEditPhotoUrl(preset)}
+                      className={`relative w-12 h-12 rounded-xl overflow-hidden border-2 transition-all duration-300 hover:scale-110 active:scale-95 ${editPhotoUrl === preset ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'}`}
+                    >
+                      <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">B{idx+1}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider mb-1.5">Classic Static Avatars</span>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
+                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
+                    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
+                    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
+                  ].map((preset, idx) => (
+                    <button
+                      key={`classic-${idx}`}
+                      type="button"
+                      onClick={() => setEditPhotoUrl(preset)}
+                      className={`w-9 h-9 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 active:scale-95 ${editPhotoUrl === preset ? 'border-emerald-500' : 'border-transparent'}`}
+                    >
+                      <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2 text-left">
               <button
                 type="submit"
                 disabled={profileSaving}
-                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold py-2 px-5 rounded-xl text-xs transition-all flex items-center space-x-1"
+                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center space-x-1 shrink-0 shadow-md"
               >
                 <span>{profileSaving ? 'Saving Profile...' : 'Save Profile Changes'}</span>
               </button>
+
+              {error && (
+                <div className="bg-rose-500/10 border-l-4 border-rose-500 py-2 px-3 rounded-r-xl text-rose-200 text-xs flex items-center space-x-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+              {success && (
+                <div className="bg-emerald-500/10 border-l-4 border-emerald-500 py-2 px-3 rounded-r-xl text-emerald-200 text-xs flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>{success}</span>
+                </div>
+              )}
             </div>
           </form>
         </div>

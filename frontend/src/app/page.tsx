@@ -9,7 +9,15 @@ import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle } from 'lucide-r
 
 export default function AppPage() {
   // Navigation & Role states
-  const [currentRole, setCurrentRole] = useState<'user' | 'consultant' | 'admin'>('user');
+  const [currentRole, setCurrentRole] = useState<'user' | 'consultant' | 'admin'>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path === '/super-secret-owner-portal') {
+        return 'admin';
+      }
+    }
+    return 'user';
+  });
   const [socketConnected, setSocketConnected] = useState(false);
 
   // Deep linking public profiles
@@ -80,7 +88,9 @@ export default function AppPage() {
 
     // Parse deep link pathname
     const path = window.location.pathname;
-    if (path.startsWith('/u/')) {
+    if (path === '/super-secret-owner-portal') {
+      setCurrentRole('admin');
+    } else if (path.startsWith('/u/')) {
       const username = path.slice(3).trim();
       if (username) {
         setTargetUsername(username);
@@ -264,6 +274,9 @@ export default function AppPage() {
           setCurrentRole(role);
           // If switching role, reset target profile links
           if (role !== 'user') setTargetUsername(undefined);
+          if (role !== 'admin' && window.location.pathname === '/super-secret-owner-portal') {
+            window.history.pushState({}, '', '/');
+          }
         }}
         socketConnected={socketConnected}
         currentUser={currentUser}
