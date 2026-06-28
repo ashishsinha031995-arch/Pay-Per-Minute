@@ -41,6 +41,7 @@ export default function AppPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [gender, setGender] = useState<'Male' | 'Female'>('Male');
   const [newPassword, setNewPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
@@ -165,7 +166,8 @@ export default function AppPage() {
           username: username.trim(), 
           email: email.trim(), 
           password, 
-          display_name: displayName.trim() 
+          display_name: displayName.trim(),
+          gender: gender
         })
       });
       const data = await res.json();
@@ -320,6 +322,7 @@ export default function AppPage() {
                   setAuthModalOpen(true);
                 }}
                 activeSessionId={activeSession?.sessionId}
+                onLogout={handleLogout}
               />
             )}
 
@@ -456,6 +459,32 @@ export default function AppPage() {
                       onChange={(e) => setDisplayName(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
                     />
+                  </div>
+                </div>
+              )}
+
+              {authTab === 'signup' && (
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">Gender *</label>
+                  <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={() => setGender('Male')}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                        gender === 'Male' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Male ♂️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGender('Female')}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                        gender === 'Female' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Female ♀️
+                    </button>
                   </div>
                 </div>
               )}

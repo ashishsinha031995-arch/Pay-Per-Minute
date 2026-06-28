@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Send, Clock, User, Sparkles, MessageSquare, AlertTriangle, ArrowLeft, Check, CheckCheck, CheckCircle, ShieldAlert, XCircle, Ban } from 'lucide-react';
+import { Send, Clock, User, Sparkles, MessageSquare, AlertTriangle, ArrowLeft, Check, CheckCheck, CheckCircle, ShieldAlert, XCircle, Ban, Mic, Square, Trash2 } from 'lucide-react';
 import { Message, Session } from '../../types';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -46,6 +46,12 @@ export function ChatRoom({
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+
+  // Audio recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const safeFormatTime = (isoString?: string) => {
     if (!isoString) return '';
@@ -222,6 +228,9 @@ export function ChatRoom({
     // Cleanup
     return () => {
       socket.disconnect();
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
     };
   }, [sessionId, role, userName]);
 
@@ -311,6 +320,126 @@ export function ChatRoom({
         socketRef.current.emit('typing', { session_id: sessionId, sender_name: userName, is_typing: false });
       }
     }, 1500);
+  };
+
+  // 5.5 Audio Recording Handlers for Consultants
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        
+        // Convert Blob to Base64 to save directly in the message text
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          sendVoiceNote(base64data);
+        };
+
+        // Stop all tracks in the stream to release the mic icon in browser tab
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to start audio recording:', err);
+      alert('Microphone permission block hai ya support nahi karta. (Microphone access blocked or not supported.)');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorder && isRecording) {
+      // Temporarily bypass the send action on stop
+      mediaRecorder.onstop = () => {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      };
+      mediaRecorder.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const sendVoiceNote = async (base64Audio: string) => {
+    const isInactive = sessionCompleted || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed';
+    if (isInactive) return;
+
+    const payloadText = `[VOICE_NOTE]:${base64Audio}`;
+
+    try {
+      // Send via HTTP REST API
+      const res = await fetch(`/api/sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender_type: role,
+          sender_name: userName,
+          text: payloadText,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.message) {
+          setMessages(prev => {
+            if (prev.some(m => m.id === data.message.id)) return prev;
+            return [...prev, data.message];
+          });
+        }
+      } else {
+        if (socketRef.current) {
+          socketRef.current.emit('send:message', {
+            session_id: sessionId,
+            sender_type: role,
+            sender_name: userName,
+            text: payloadText,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('REST voice note send failed, trying socket fallback:', err);
+      if (socketRef.current) {
+        socketRef.current.emit('send:message', {
+          session_id: sessionId,
+          sender_type: role,
+          sender_name: userName,
+          text: payloadText,
+        });
+      }
+    }
   };
 
   // Formatter for MM:SS
@@ -561,32 +690,67 @@ export function ChatRoom({
         {/* Chat loop */}
         {messages.map((msg) => {
           const isMe = msg.sender_type === role;
+          const avatarSrc = msg.sender_type === 'consultant'
+            ? (sessionInfo.consultant_photo || 'https://i.giphy.com/W7Xq86ali939u.gif')
+            : (sessionInfo.user_photo || 'https://i.giphy.com/OdG9tyVfD9NPM.gif');
+
           return (
             <div
               key={msg.id}
-              className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+              className={`flex items-start space-x-3 ${isMe ? 'justify-end flex-row-reverse space-x-reverse' : 'justify-start'}`}
             >
-              <div
-                className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
-                  isMe
-                    ? 'bg-emerald-500 text-white rounded-tr-none font-semibold'
-                    : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
-                }`}
-              >
-                <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
+              {/* Profile Pic */}
+              <div className="w-8 h-8 rounded-full border border-slate-800/80 overflow-hidden bg-slate-950 shrink-0 self-start mt-1 shadow">
+                <img
+                  src={avatarSrc}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               </div>
 
-              <div className="flex items-center space-x-1.5 mt-1 px-1 text-[10px] text-slate-600 font-mono">
-                <span>{safeFormatTime(msg.created_at)}</span>
-                {isMe && (
-                  <span>
-                    {msg.is_read === 1 ? (
-                      <CheckCheck className="w-3.5 h-3.5 text-cyan-400" />
-                    ) : (
-                      <Check className="w-3.5 h-3.5" />
-                    )}
-                  </span>
-                )}
+              {/* Message bubble column */}
+              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                {/* Sender name */}
+                <span className="text-[10px] font-mono text-slate-500 mb-1 px-1">
+                  {msg.sender_name}
+                </span>
+
+                <div
+                  className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
+                    isMe
+                      ? 'bg-emerald-500 text-white rounded-tr-none font-semibold'
+                      : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
+                  }`}
+                >
+                  {msg.text.startsWith('[VOICE_NOTE]:') ? (
+                    <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
+                      <div className="flex items-center space-x-1.5 text-[10px] font-mono text-emerald-100 uppercase tracking-wider">
+                        <span>🎙️ Voice Note</span>
+                      </div>
+                      <audio
+                        controls
+                        src={msg.text.substring('[VOICE_NOTE]:'.length)}
+                        className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
+                      />
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-1.5 mt-1 px-1 text-[10px] text-slate-600 font-mono">
+                  <span>{safeFormatTime(msg.created_at)}</span>
+                  {isMe && (
+                    <span>
+                      {msg.is_read === 1 ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-cyan-400" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -701,23 +865,68 @@ export function ChatRoom({
 
       {/* Input panel */}
       <div className="bg-slate-900 border-x border-b border-slate-800 p-4 rounded-b-2xl">
-        <form onSubmit={handleSendMessage} className="flex space-x-3">
-          <input
-            type="text"
-            placeholder={sessionCompleted ? 'Session ended. Inputs disabled.' : 'Type your consultation message here...'}
-            value={textInput}
-            onChange={handleTextInputChange}
-            disabled={sessionCompleted}
-            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-55"
-          />
-          <button
-            type="submit"
-            disabled={sessionCompleted || !textInput.trim()}
-            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 px-5 rounded-xl transition-all flex items-center justify-center"
-          >
-            <Send className="w-4 h-4 font-bold" />
-          </button>
-        </form>
+        {isRecording ? (
+          <div className="flex items-center justify-between bg-slate-950 border border-red-500/30 p-3 rounded-xl">
+            <div className="flex items-center space-x-3">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+              </span>
+              <span className="text-xs font-mono text-red-400 font-bold">
+                Recording Voice Note ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={cancelRecording}
+                className="p-2 text-slate-400 hover:text-rose-400 transition-colors"
+                title="Cancel Recording"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="bg-red-500 hover:bg-red-600 text-white p-2.5 rounded-lg transition-all flex items-center justify-center"
+                title="Stop & Send Voice Note"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSendMessage} className="flex space-x-3">
+            <input
+              type="text"
+              placeholder={sessionCompleted ? 'Session ended. Inputs disabled.' : 'Type your consultation message here...'}
+              value={textInput}
+              onChange={handleTextInputChange}
+              disabled={sessionCompleted}
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-55"
+            />
+            
+            {/* Consultant-only Voice Recording button */}
+            {role === 'consultant' && !sessionCompleted && (
+              <button
+                type="button"
+                onClick={startRecording}
+                className="bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-800 hover:border-slate-700 px-3.5 rounded-xl transition-all flex items-center justify-center"
+                title="Record Voice Note"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            )}
+
+            <button
+              type="submit"
+              disabled={sessionCompleted || !textInput.trim()}
+              className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 px-5 rounded-xl transition-all flex items-center justify-center"
+            >
+              <Send className="w-4 h-4 font-bold" />
+            </button>
+          </form>
+        )}
       </div>
 
     </div>

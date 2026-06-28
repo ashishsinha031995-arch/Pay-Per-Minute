@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -26,9 +26,10 @@ interface ConsultantProfileProps {
   setCurrentUser: (user: any) => void;
   onOpenAuth: () => void;
   activeSessionId?: string;
+  onLogout?: () => void;
 }
 
-export function ConsultantProfile({ onSelectSession, targetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId }: ConsultantProfileProps) {
+export function ConsultantProfile({ onSelectSession, targetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout }: ConsultantProfileProps) {
   // Directory or profile selection
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
@@ -732,6 +733,19 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                       <HelpCircle className="w-4 h-4 shrink-0" />
                       <span>🙋 Help & Customer Support</span>
                     </button>
+
+                    {onLogout && (
+                      <button
+                        onClick={() => {
+                          setHamburgerOpen(false);
+                          onLogout();
+                        }}
+                        className="flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 border border-transparent hover:border-rose-500/20 mt-2"
+                      >
+                        <LogOut className="w-4 h-4 shrink-0" />
+                        <span>🚪 Logout</span>
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               </>
@@ -860,7 +874,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
             {/* Profile photos presets bar */}
             <div className="space-y-3.5 text-left bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60 max-w-2xl">
               <div>
-                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ Gen Z Animated Girl Avatars (GIFs)</span>
+                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ AI Girl Characters</span>
                 <div className="flex flex-wrap gap-2.5">
                   {[
                     'https://i.giphy.com/OdG9tyVfD9NPM.gif', // Sipping tea & cute happy head nod
@@ -874,14 +888,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                       className={`relative w-12 h-12 rounded-xl overflow-hidden border-2 transition-all duration-300 hover:scale-110 active:scale-95 ${editPhotoUrl === preset ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'}`}
                     >
                       <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">G{idx+1}</span>
+                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">AI-G{idx+1}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ Gen Z Animated Boy Avatars (GIFs)</span>
+                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ AI Boy Characters</span>
                 <div className="flex flex-wrap gap-2.5">
                   {[
                     'https://i.giphy.com/W7Xq86ali939u.gif', // Boy waving warmly with pleasant smile
@@ -895,7 +909,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                       className={`relative w-12 h-12 rounded-xl overflow-hidden border-2 transition-all duration-300 hover:scale-110 active:scale-95 ${editPhotoUrl === preset ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'}`}
                     >
                       <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">B{idx+1}</span>
+                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">AI-B{idx+1}</span>
                     </button>
                   ))}
                 </div>

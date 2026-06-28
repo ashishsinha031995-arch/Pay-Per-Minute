@@ -193,9 +193,10 @@ export const getSessionById = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const session = db.prepare(`
-      SELECT s.*, c.display_name as consultant_name, c.photo_url as consultant_photo, c.price_per_minute as consultant_price
+      SELECT s.*, c.display_name as consultant_name, c.photo_url as consultant_photo, c.price_per_minute as consultant_price, u.photo_url as user_photo
       FROM sessions s
       JOIN consultants c ON s.consultant_id = c.id
+      LEFT JOIN users u ON s.user_id = u.id
       WHERE s.id = ?
     `).get(id) as any;
 
@@ -360,7 +361,7 @@ export const endSessionManually = (req: Request, res: Response) => {
     }
 
     const msgs = db.prepare('SELECT sender_type, sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
-    const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text}`).join('\n');
+    const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text.startsWith('[VOICE_NOTE]:') ? '[Voice Note 🎙️]' : m.text}`).join('\n');
 
     const consultantMsgs = msgs.filter(m => m.sender_type === 'consultant');
 

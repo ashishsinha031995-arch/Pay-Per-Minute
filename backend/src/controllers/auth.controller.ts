@@ -4,7 +4,7 @@ import { sendEmail } from '../helpers/email.helper.js';
 
 export const userSignUp = (req: Request, res: Response) => {
   try {
-    const { username, email, password, display_name } = req.body;
+    const { username, email, password, display_name, gender } = req.body;
     if (!username || !password || !display_name) {
       return res.status(400).json({ error: 'Username, password and display name are required' });
     }
@@ -23,11 +23,16 @@ export const userSignUp = (req: Request, res: Response) => {
       }
     }
 
+    const finalGender = (gender || 'Male').trim();
+    const defaultGirlAvatar = 'https://i.giphy.com/OdG9tyVfD9NPM.gif';
+    const defaultBoyAvatar = 'https://i.giphy.com/W7Xq86ali939u.gif';
+    const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? defaultGirlAvatar : defaultBoyAvatar;
+
     const stmt = db.prepare(`
-      INSERT INTO users (username, email, password, display_name, wallet_balance, lifetime_recharge, is_blocked)
-      VALUES (?, ?, ?, ?, 0.0, 0.0, 0)
+      INSERT INTO users (username, email, password, display_name, wallet_balance, lifetime_recharge, is_blocked, gender, photo_url)
+      VALUES (?, ?, ?, ?, 0.0, 0.0, 0, ?, ?)
     `);
-    const result = stmt.run(cleanUsername, cleanEmail, password, display_name.trim());
+    const result = stmt.run(cleanUsername, cleanEmail, password, display_name.trim(), finalGender, defaultPhotoUrl);
     
     const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     res.json({ success: true, user: newUser });
@@ -55,7 +60,15 @@ export const userLogin = (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Aapka account block kar diya gaya hai admin dwara. (Your account has been blocked by the admin.)' });
     }
 
-    res.json({ success: true, user });
+    let updatedUser = user;
+    if (!user.photo_url) {
+      const finalGender = (user.gender || 'Male').trim();
+      const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? 'https://i.giphy.com/OdG9tyVfD9NPM.gif' : 'https://i.giphy.com/W7Xq86ali939u.gif';
+      db.prepare('UPDATE users SET photo_url = ?, gender = ? WHERE id = ?').run(defaultPhotoUrl, finalGender, user.id);
+      updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    }
+
+    res.json({ success: true, user: updatedUser });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

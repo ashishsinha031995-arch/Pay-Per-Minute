@@ -53,7 +53,7 @@ export function startChatExpiryJob(io: Server) {
             
             // 1. Fetch transcript (group all chat messages)
             const msgs = db.prepare('SELECT sender_type, sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
-            const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text}`).join('\n');
+            const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text.startsWith('[VOICE_NOTE]:') ? '[Voice Note 🎙️]' : m.text}`).join('\n');
 
             const consultantMsgs = msgs.filter(m => m.sender_type === 'consultant');
 

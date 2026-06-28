@@ -351,7 +351,16 @@ export const getUserProfileInfo = (req: Request, res: Response) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ success: true, user });
+    
+    let finalUser = user;
+    if (!user.photo_url) {
+      const finalGender = (user.gender || 'Male').trim();
+      const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? 'https://i.giphy.com/OdG9tyVfD9NPM.gif' : 'https://i.giphy.com/W7Xq86ali939u.gif';
+      db.prepare('UPDATE users SET photo_url = ?, gender = ? WHERE id = ?').run(defaultPhotoUrl, finalGender, user.id);
+      finalUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    }
+
+    res.json({ success: true, user: finalUser });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
