@@ -1225,7 +1225,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                           <span className="block text-[9px] text-slate-400 font-mono mb-0.5">{msg.sender_name}</span>
                           <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
                         </div>
-                        <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">
+                          {(() => {
+                            try {
+                              const d = new Date(msg.created_at);
+                              return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            } catch {
+                              return '';
+                            }
+                          })()}
+                        </span>
                       </div>
                     );
                   })
@@ -1620,7 +1629,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                               <span className="block text-[9px] text-slate-400 font-mono mb-0.5">{msg.sender_name}</span>
                               <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
                             </div>
-                            <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">
+                              {(() => {
+                                try {
+                                  const d = new Date(msg.created_at);
+                                  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                } catch {
+                                  return '';
+                                }
+                              })()}
+                            </span>
                           </div>
                         );
                       })

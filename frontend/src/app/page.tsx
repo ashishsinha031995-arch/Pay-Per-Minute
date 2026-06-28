@@ -282,6 +282,8 @@ export default function AppPage() {
             sessionId={activeSession.sessionId}
             userName={activeSession.userName}
             role={activeSession.role}
+            currentUser={currentUser}
+            refreshUserProfile={refreshUserProfile}
             onClose={() => {
               setActiveSession(null);
               if (currentUser?.id) refreshUserProfile(currentUser.id);

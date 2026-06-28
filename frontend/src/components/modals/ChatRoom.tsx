@@ -9,10 +9,21 @@ interface ChatRoomProps {
   userName: string; // The display name of the current client
   role: 'user' | 'consultant'; // Active persona
   onClose: () => void;
+  currentUser?: any;
+  refreshUserProfile?: (id: number) => Promise<void>;
 }
 
-export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) {
-  const { currentUser, refreshUserProfile } = useAuthContext();
+export function ChatRoom({ 
+  sessionId, 
+  userName, 
+  role, 
+  onClose,
+  currentUser: currentUserProp,
+  refreshUserProfile: refreshUserProfileProp
+}: ChatRoomProps) {
+  const authContext = useAuthContext();
+  const currentUser = currentUserProp || authContext?.currentUser;
+  const refreshUserProfile = refreshUserProfileProp || authContext?.refreshUserProfile;
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -35,6 +46,17 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const safeFormatTime = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,7 +193,7 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
       setSessionTranscript(transcript);
       setRemainingSeconds(0);
       setSessionInfo(prev => prev ? { ...prev, status: 'completed', transcript } : null);
-      if (currentUser?.id) {
+      if (currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
       }
     });
@@ -179,7 +201,7 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
     // Request rejected by consultant
     socket.on('session:rejected', ({ message }) => {
       setSessionInfo(prev => prev ? { ...prev, status: 'rejected' } : null);
-      if (currentUser?.id) {
+      if (currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
       }
     });
@@ -187,7 +209,7 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
     // Request missed by consultant
     socket.on('session:missed', ({ message }) => {
       setSessionInfo(prev => prev ? { ...prev, status: 'missed' } : null);
-      if (currentUser?.id) {
+      if (currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
       }
     });
@@ -293,6 +315,15 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
     const remaining = secs % 60;
     return `${mins.toString().padStart(2, '0')}:${remaining.toString().padStart(2, '0')}`;
   };
+
+  if (!sessionInfo) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 flex flex-col items-center justify-center space-y-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
+        <p className="text-sm text-slate-400 font-sans">Connecting to secure consultation room...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 h-[calc(100vh-100px)] flex flex-col justify-between">
@@ -541,7 +572,7 @@ export function ChatRoom({ sessionId, userName, role, onClose }: ChatRoomProps) 
               </div>
 
               <div className="flex items-center space-x-1.5 mt-1 px-1 text-[10px] text-slate-600 font-mono">
-                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>{safeFormatTime(msg.created_at)}</span>
                 {isMe && (
                   <span>
                     {msg.is_read === 1 ? (

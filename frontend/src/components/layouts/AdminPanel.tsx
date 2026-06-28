@@ -3,7 +3,7 @@ import {
   DollarSign, ShieldAlert, Sparkles, Plus, Settings, Users, Percent, ListCollapse, 
   ToggleLeft, ToggleRight, MessageSquare, Search, UserCheck, X, Calendar, BookOpen, 
   Award, CreditCard, Wallet, Landmark, BarChart3, Star, Megaphone, Bell, FileText, 
-  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock
+  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins
 } from 'lucide-react';
 import { Plan, Consultant, Session, AdminStats } from '../../types';
 import { 
@@ -3001,7 +3001,6 @@ export function AdminPanel() {
                 </form>
 
                 {/* Ledger & History Log */}
-              {/* 📋 Manual Adjustments History Log */}
                 <div className="lg:col-span-7 bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
                   <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-300 border-b border-slate-850 pb-2 flex items-center justify-between">
                     <span>📋 Manual Adjustments History Log</span>
@@ -3047,21 +3046,11 @@ export function AdminPanel() {
                   </div>
                 </div>
 
-              </div> {/* End of inner grid */}
-            </div> {/* End of section container */}
-          </div>
-        ) : (
-          <div className="text-center py-12 text-slate-400">
-            Select a section from the admin controls to view metrics.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+              </div>
+            </div>
+          )}
 
-export default AdminPanel;
-        {/* ========================================================= */}
+          {/* ========================================================= */}
           {/* 2.8 TAB: COMMISSION MANAGEMENT */}
           {activeTab === 'commissions' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-6 max-w-xl">

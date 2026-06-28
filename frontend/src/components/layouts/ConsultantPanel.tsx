@@ -1953,96 +1953,95 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   </div>
 
                   {/* Withdrawable Balance Hero - Main Earnings Showcase */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
                     
-                    <div className="lg:col-span-7 bg-gradient-to-br from-slate-900 to-slate-950 border-2 border-emerald-500/20 rounded-3xl p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden group hover:border-emerald-500/35 transition-all">
+                    <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-950 border-2 border-emerald-500/20 rounded-2xl p-5 shadow-2xl flex flex-col justify-between relative overflow-hidden group hover:border-emerald-500/35 transition-all">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/[0.02] rounded-full blur-2xl pointer-events-none" />
                       
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
                           <div className="flex items-center space-x-2">
-                            <Wallet className="w-5 h-5 text-emerald-400" />
-                            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Withdrawable Balance</h3>
+                            <Wallet className="w-4 h-4 text-emerald-400" />
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Withdrawable</h3>
                           </div>
-                          <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-widest">
-                            Instant Sync
+                          <span className="text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-widest shrink-0">
+                            Sync
                           </span>
                         </div>
                         
-                        <div className="py-2">
-                          <span className="text-xs text-slate-500 block">Total withdrawable earnings currently cleared in wallet</span>
-                          <div className="flex items-baseline space-x-2 mt-1">
-                            <span className="text-4xl sm:text-5xl font-black text-emerald-400 font-sans tracking-tight">₹{wallet.wallet_withdrawable.toFixed(2)}</span>
-                            <span className="text-xs text-slate-400 font-mono">INR</span>
+                        <div className="py-1">
+                          <span className="text-[10px] text-slate-500 block">Withdrawable earnings currently cleared</span>
+                          <div className="flex items-baseline space-x-1.5 mt-1">
+                            <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-sans tracking-tight">₹{wallet.wallet_withdrawable.toFixed(2)}</span>
+                            <span className="text-[10px] text-slate-400 font-mono uppercase">INR</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-850/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-400 mt-6 backdrop-blur">
+                      <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-850/80 flex flex-col items-start gap-1.5 text-[10px] text-slate-400 mt-4 backdrop-blur">
                         <span className="flex items-center space-x-1.5">
-                          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>Funds are fully safe and backed by pre-paid clients.</span>
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Pre-paid secure backing</span>
                         </span>
-                        <span className="text-[10px] font-mono font-extrabold text-emerald-400 uppercase tracking-widest shrink-0">● PRE-PAID SECURE</span>
                       </div>
                     </div>
 
                     {/* Simple Statistics Grid */}
-                    <div className="lg:col-span-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+                    <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                       
                       <motion.div 
                         whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-4.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all"
+                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
                       >
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest block">Today's Earnings</span>
-                          <span className="text-2xl font-black text-slate-200 mt-2 block font-sans">₹{wallet.wallet_today.toFixed(2)}</span>
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Today's Earnings</span>
+                          <span className="text-base sm:text-lg xl:text-xl font-black text-slate-200 mt-1 block font-sans whitespace-nowrap">₹{wallet.wallet_today.toFixed(2)}</span>
                         </div>
-                        <span className="text-[9px] text-emerald-400/80 font-mono block mt-4">● Updated today</span>
+                        <span className="text-[9px] text-emerald-400/80 font-mono block mt-2.5 shrink-0">● Active</span>
                       </motion.div>
 
                       <motion.div 
                         whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-4.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all"
+                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
                       >
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest block">Monthly Earnings</span>
-                          <span className="text-2xl font-black text-slate-200 mt-2 block font-sans">₹{wallet.wallet_monthly.toFixed(2)}</span>
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Monthly Earnings</span>
+                          <span className="text-base sm:text-lg xl:text-xl font-black text-slate-200 mt-1 block font-sans whitespace-nowrap">₹{wallet.wallet_monthly.toFixed(2)}</span>
                         </div>
-                        <span className="text-[9px] text-slate-500 font-mono block mt-4">This calendar cycle</span>
+                        <span className="text-[9px] text-slate-500 font-mono block mt-2.5 shrink-0 truncate">Calendar cycle</span>
                       </motion.div>
 
                       <motion.div 
                         whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-4.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all"
+                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
                       >
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest block">Lifetime Total</span>
-                          <span className="text-2xl font-black text-slate-200 mt-2 block font-sans">₹{wallet.wallet_total.toFixed(2)}</span>
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Lifetime Total</span>
+                          <span className="text-base sm:text-lg xl:text-xl font-black text-slate-200 mt-1 block font-sans whitespace-nowrap">₹{wallet.wallet_total.toFixed(2)}</span>
                         </div>
-                        <span className="text-[9px] text-slate-500 font-mono block mt-4">All-time consulted</span>
+                        <span className="text-[9px] text-slate-500 font-mono block mt-2.5 shrink-0 truncate">Cumulative</span>
                       </motion.div>
 
                       <motion.div 
                         whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-4.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all"
+                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
                       >
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest block">Consultations</span>
-                          <span className="text-2xl font-black text-emerald-400 mt-2 block font-sans">{sessions.filter((s: any) => s.status === 'completed').length}</span>
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Consultations</span>
+                          <span className="text-base sm:text-lg xl:text-xl font-black text-emerald-400 mt-1 block font-sans whitespace-nowrap">{sessions.filter((s: any) => s.status === 'completed').length}</span>
                         </div>
-                        <span className="text-[9px] text-slate-500 font-mono block mt-4">Completed chats</span>
+                        <span className="text-[9px] text-slate-500 font-mono block mt-2.5 shrink-0 truncate">Completed</span>
                       </motion.div>
 
                       <motion.div 
                         whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-4.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all"
+                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
                       >
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest block">Total Refunded</span>
-                          <span className="text-2xl font-black text-rose-400 mt-2 block font-sans">₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}</span>
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Total Refunded</span>
+                          <span className="text-base sm:text-lg xl:text-xl font-black text-rose-400 mt-1 block font-sans whitespace-nowrap">₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}</span>
                         </div>
-                        <span className="text-[9px] text-rose-400/80 font-mono block mt-4">Deducted from balance</span>
+                        <span className="text-[9px] text-rose-400/80 font-mono block mt-2.5 shrink-0 truncate">Refunded</span>
                       </motion.div>
 
                     </div>
@@ -3269,7 +3268,16 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         <span className="block text-[9px] text-slate-400 font-mono mb-0.5">{msg.sender_name}</span>
                         <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
                       </div>
-                      <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">
+                        {(() => {
+                          try {
+                            const d = new Date(msg.created_at);
+                            return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          } catch {
+                            return '';
+                          }
+                        })()}
+                      </span>
                     </div>
                   );
                 })
