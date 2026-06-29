@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { db, logWalletTransaction } from '../config/database.js';
+import { processNextInQueue } from '../controllers/payment.controller.js';
 
 export function startChatExpiryJob(io: Server) {
   // Periodically check all active sessions, decrement or check expiry against system clock,
@@ -21,7 +22,7 @@ export function startChatExpiryJob(io: Server) {
           const consultantId = sess.consultant_id;
 
           db.prepare("UPDATE sessions SET status = 'missed', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(sess.id);
-          db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
+          processNextInQueue(consultantId, io);
 
           // Refund User Wallet fully!
           if (userId && totalPaid > 0) {
@@ -67,7 +68,7 @@ export function startChatExpiryJob(io: Server) {
               const consultantId = sess.consultant_id;
 
               db.prepare("UPDATE sessions SET status = 'missed', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(sess.id);
-              db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
+              processNextInQueue(consultantId, io);
 
               if (userId && totalPaid > 0) {
                 db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
@@ -99,10 +100,11 @@ export function startChatExpiryJob(io: Server) {
                   wallet_total = wallet_total + ?, 
                   wallet_withdrawable = wallet_withdrawable + ?,
                   lifetime_revenue = lifetime_revenue + ?,
-                  total_sessions = total_sessions + ?,
-                  is_busy = 0
+                  total_sessions = total_sessions + ?
               WHERE id = ?
             `).run(earnings, earnings, earnings, earnings, earnings, 1, cid);
+
+            processNextInQueue(cid, io);
 
             // 4. Broadcast event via socket.io to instantly stop UI inputs
             io.to(sess.id).emit('session:expired', {

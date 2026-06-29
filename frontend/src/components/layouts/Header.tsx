@@ -63,7 +63,7 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                   )}
                 </div>
                 <div className="text-xs flex items-center">
-                  <span className="text-slate-200 font-bold mr-2">{currentUser.display_name}</span>
+                  <span className="text-slate-200 font-bold mr-2">{currentUser.display_name} (ID: {currentUser.id})</span>
                   <button
                     onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-wallet-tab'))}
                     className="text-emerald-400 font-mono font-bold hover:bg-emerald-500/10 hover:text-emerald-300 px-1.5 py-0.5 rounded transition-all cursor-pointer border border-transparent hover:border-emerald-500/20 flex items-center gap-1 active:scale-95"
@@ -175,10 +175,7 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                     <button
                       id="mobile-header-hamburger-btn"
                       onClick={() => {
-                        const btn = document.getElementById('hamburger-menu-btn');
-                        if (btn) {
-                          btn.click();
-                        }
+                        window.dispatchEvent(new CustomEvent('toggle-hamburger-menu'));
                       }}
                       className="p-1 text-slate-200 hover:text-white bg-slate-800 active:scale-95 hover:bg-slate-750 rounded-xl transition-all flex items-center justify-center w-10 h-10 border border-slate-700 shadow-md shrink-0"
                     >

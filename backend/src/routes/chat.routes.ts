@@ -6,7 +6,8 @@ import {
   postSessionMessageREST,
   acceptSession,
   rejectSession,
-  endSessionManually
+  endSessionManually,
+  getConsultantQueueStatus
 } from '../controllers/payment.controller.js';
 
 const router = Router();
@@ -15,9 +16,10 @@ const router = Router();
 router.post('/payments/create-order', createRazorpayOrMockOrder);
 router.post('/payments/verify', verifyPaymentAndInitSession);
 
-// Session metadata and fallback messaging
+// Session metadata, queue status, and fallback messaging
 router.get('/sessions/:id', getSessionById);
 router.post('/sessions/:id/messages', postSessionMessageREST);
+router.get('/consultants/:id/queue-status', getConsultantQueueStatus);
 
 // Session State Actions
 router.post('/sessions/:id/accept', acceptSession);

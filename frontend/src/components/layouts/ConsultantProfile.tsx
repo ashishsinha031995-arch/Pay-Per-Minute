@@ -133,6 +133,21 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   // Recharge modal visibility state
   const [showRechargeModal, setShowRechargeModal] = useState(false);
 
+  // Consultant Busy & Queue states
+  const [showBusyWarningModal, setShowBusyWarningModal] = useState(false);
+  const [busyConsultantQueueData, setBusyConsultantQueueData] = useState<any>(null);
+  const [busyWarningTickingSeconds, setBusyWarningTickingSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (showBusyWarningModal && busyWarningTickingSeconds > 0) {
+      interval = setInterval(() => {
+        setBusyWarningTickingSeconds(prev => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [showBusyWarningModal, busyWarningTickingSeconds]);
+
   // User past chat history states
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historySearchName, setHistorySearchName] = useState('');
@@ -244,9 +259,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       setSelectedConsultant(null);
       setActiveDashboardTab('wallet');
     };
+    const handleToggleHamburger = () => {
+      setHamburgerOpen(prev => !prev);
+    };
     window.addEventListener('navigate-to-wallet-tab', handleNavigateWallet);
+    window.addEventListener('toggle-hamburger-menu', handleToggleHamburger);
     return () => {
       window.removeEventListener('navigate-to-wallet-tab', handleNavigateWallet);
+      window.removeEventListener('toggle-hamburger-menu', handleToggleHamburger);
     };
   }, []);
 
@@ -427,7 +447,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   };
 
   // Step 1: Create Order and Verify with Wallet instantly
-  const handleInitiateWalletPayment = async () => {
+  const handleInitiateWalletPayment = async (bypassBusyCheck?: boolean) => {
     if (!selectedConsultant) return;
     if (!currentUser) {
       onOpenAuth();
@@ -442,6 +462,24 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
 
     setError(null);
     setIsProcessingPayment(true);
+
+    if (!bypassBusyCheck) {
+      try {
+        const queueRes = await fetch(`/api/consultants/${selectedConsultant.id}/queue-status`);
+        if (queueRes.ok) {
+          const queueData = await queueRes.json();
+          if (queueData.is_busy) {
+            setBusyConsultantQueueData(queueData);
+            setBusyWarningTickingSeconds(queueData.remaining_seconds || 0);
+            setShowBusyWarningModal(true);
+            setIsProcessingPayment(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking consultant busy status on connect click:', err);
+      }
+    }
 
     try {
       // Create initial session order record
@@ -620,7 +658,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       )}
 
       {/* 🟢 DYNAMIC HAMBURGER NAVIGATION DRAWER */}
-      {currentUser && !selectedConsultant && (
+      {currentUser && (
         <>
           <div className="hidden">
             <button
@@ -658,7 +696,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                       <X className="w-4 h-4" />
                     </button>
                     <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block font-bold">CallMint Menu</span>
-                    <strong className="text-slate-200 text-sm font-bold block mt-2 pr-8">{currentUser.display_name}</strong>
+                    <strong className="text-slate-200 text-sm font-bold block mt-2 pr-8">{currentUser.display_name} (ID: {currentUser.id})</strong>
                     <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-slate-400">
                       <span>Wallet Balance:</span>
                       <span className="text-emerald-400 font-bold font-mono">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</span>
@@ -668,6 +706,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                   <div className="flex flex-col space-y-1">
                     <button
                       onClick={() => {
+                        setSelectedConsultant(null);
                         setActiveDashboardTab('advisors');
                         setHamburgerOpen(false);
                       }}
@@ -684,6 +723,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                     <button
                       id="user-profile-tab"
                       onClick={() => {
+                        setSelectedConsultant(null);
                         setActiveDashboardTab('profile');
                         setHamburgerOpen(false);
                       }}
@@ -694,12 +734,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                       }`}
                     >
                       <User className="w-4 h-4 shrink-0" />
-                      <span>👤 My Profile Details</span>
+                      <span>👤 Profile Details</span>
                     </button>
 
                     <button
                       id="wallet-recharge-tab"
                       onClick={() => {
+                        setSelectedConsultant(null);
                         setActiveDashboardTab('wallet');
                         fetchWalletTransactions();
                         setHamburgerOpen(false);
@@ -717,6 +758,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                     <button
                       id="chat-history-tab"
                       onClick={() => {
+                        setSelectedConsultant(null);
                         setActiveDashboardTab('history');
                         loadPastHistoryFromLocalStorage();
                         setHamburgerOpen(false);
@@ -734,6 +776,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                     <button
                       id="support-tickets-tab"
                       onClick={() => {
+                        setSelectedConsultant(null);
                         setActiveDashboardTab('support');
                         setHamburgerOpen(false);
                       }}
@@ -771,9 +814,19 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       {currentUser && !selectedConsultant && activeDashboardTab === 'profile' && (
         <div className="bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80 space-y-6">
           <form onSubmit={handleSaveProfile} className="space-y-6 max-w-3xl">
-            <div className="flex items-center space-x-2 pb-2 border-b border-slate-850">
-              <Edit3 className="w-4 h-4 text-emerald-400" />
-              <h3 className="font-bold text-sm text-slate-200">My Consultation Profile Details</h3>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-850">
+              <div className="flex items-center space-x-2">
+                <Edit3 className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-bold text-sm text-slate-200">Profile Details</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveDashboardTab('advisors')}
+                className="text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center space-x-1.5 shadow-sm active:scale-95"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans text-left">
@@ -976,9 +1029,17 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
               <button
                 type="submit"
                 disabled={profileSaving}
-                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center space-x-1 shrink-0 shadow-md"
+                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center space-x-1 shrink-0 shadow-md active:scale-95"
               >
                 <span>{profileSaving ? 'Saving Profile...' : 'Save Profile Changes'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveDashboardTab('advisors')}
+                className="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 text-slate-300 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center justify-center space-x-1 shrink-0 shadow-md active:scale-95"
+              >
+                <span>Cancel / Go Back</span>
               </button>
 
               {error && (
@@ -999,7 +1060,22 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       )}
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'wallet' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-850">
+            <div className="flex items-center space-x-2">
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <h3 className="font-bold text-sm text-slate-200">Wallet Recharge</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab('advisors')}
+              className="text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center space-x-1.5 shadow-sm active:scale-95"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Cancel / Go Back</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80">
           {/* Left panel: Wallet Recharge */}
           <div className="lg:col-span-5 bg-slate-950/60 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4">
             <div className="space-y-1 text-left">
@@ -1167,6 +1243,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
               </div>
             )}
           </div>
+        </div>
         </div>
       )}
 
@@ -1758,6 +1835,92 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Consultant Busy & Queue Joining Warning Modal */}
+      {showBusyWarningModal && selectedConsultant && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-left">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-100">
+            
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center space-x-2 text-amber-400">
+                <Clock className="w-5 h-5 animate-pulse" />
+                <h3 className="font-extrabold text-slate-100 text-base">Consultant is Busy</h3>
+              </div>
+              <button
+                onClick={() => setShowBusyWarningModal(false)}
+                className="text-slate-400 hover:text-white bg-slate-950/40 p-2 border border-slate-800 rounded-xl transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="pt-5 space-y-4">
+              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl space-y-2 text-center">
+                <span className="text-amber-400 font-bold block text-sm">⚠️ Your consultant is busy right now!</span>
+                <span className="text-slate-300 text-xs block font-semibold leading-relaxed">
+                  (Aapke consultant abhi dusre user ke sath busy hain.)
+                </span>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-3.5 text-center">
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono block">Current Active Chat Timer:</span>
+                  <strong className="text-3xl font-mono text-rose-400 block tracking-widest animate-pulse">
+                    {Math.floor(busyWarningTickingSeconds / 60).toString().padStart(2, '0')}:{(busyWarningTickingSeconds % 60).toString().padStart(2, '0')}
+                  </strong>
+                </div>
+
+                <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+                  You will be able to connect once the timer gets over.
+                  <span className="text-emerald-400 block mt-1 font-bold">
+                    (Jaise hi current chat timer khatam hoga, aap automatic connect ho jayenge.)
+                  </span>
+                </p>
+              </div>
+
+              {busyConsultantQueueData && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-850 text-center">
+                    <span className="text-slate-500 block text-[9px] uppercase tracking-wider font-mono">Users in Queue</span>
+                    <strong className="text-sm font-mono text-amber-400 block mt-0.5">
+                      {busyConsultantQueueData.queue_count} Active
+                    </strong>
+                  </div>
+                  <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-850 text-center">
+                    <span className="text-slate-500 block text-[9px] uppercase tracking-wider font-mono">Est. Wait Time</span>
+                    <strong className="text-sm font-mono text-emerald-400 block mt-0.5">
+                      {Math.ceil(busyConsultantQueueData.total_wait_time_seconds / 60)} Mins
+                    </strong>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[10px] text-slate-500 leading-relaxed text-center font-sans">
+                Aap abhi balance pay karke Queue join kar sakte hain. First chat khatam hone ke 10 seconds baad aapko call request chali jayegi.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={() => setShowBusyWarningModal(false)}
+                  className="bg-slate-950 hover:bg-slate-950/80 border border-slate-800 text-slate-300 py-3 rounded-xl text-xs font-bold transition-all"
+                >
+                  Cancel / Wait
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowBusyWarningModal(false);
+                    await handleInitiateWalletPayment(true);
+                  }}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 shadow-md"
+                >
+                  <span>Pay & Join Queue</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

@@ -60,8 +60,29 @@ export function AdminPanel() {
 
   // Expanded collapsible details row tracker for advisors
   const [expandedKycConsId, setExpandedKycConsId] = useState<number | null>(null);
+  const [expandedConsQueueData, setExpandedConsQueueData] = useState<any>(null);
+  const [loadingQueueData, setLoadingQueueData] = useState(false);
   const [kycRejectReasonInput, setKycRejectReasonInput] = useState('');
   const [bankRejectReasonInput, setBankRejectReasonInput] = useState('');
+
+  useEffect(() => {
+    if (expandedKycConsId) {
+      setLoadingQueueData(true);
+      setExpandedConsQueueData(null);
+      fetch(`/api/consultants/${expandedKycConsId}/queue-status`)
+        .then(res => res.json())
+        .then(data => {
+          setExpandedConsQueueData(data);
+          setLoadingQueueData(false);
+        })
+        .catch(err => {
+          console.error('Error fetching consultant queue details for admin:', err);
+          setLoadingQueueData(false);
+        });
+    } else {
+      setExpandedConsQueueData(null);
+    }
+  }, [expandedKycConsId]);
 
   const getProfileCompletionPercentage = (cons: Consultant) => {
     let score = 0;
@@ -1734,7 +1755,7 @@ export function AdminPanel() {
                           {expandedKycConsId === cons.id && (
                             <tr className="bg-slate-950/40 border-b border-slate-800/60" id={`kyc-details-row-${cons.id}`}>
                               <td colSpan={8} className="px-6 py-4">
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-left">
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 text-left">
                                   {/* Performance Parameters Column */}
                                   {(() => {
                                     const consSessions = sessions.filter(s => s.consultant_id === cons.id);
@@ -1996,6 +2017,76 @@ export function AdminPanel() {
                                           className="bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-slate-100 text-[10px] w-full focus:outline-none placeholder-slate-600 font-mono"
                                         />
                                       </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Live Consultation & Queue Status Column */}
+                                  <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-3 flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                                        <span className="font-bold text-xs text-slate-200 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                                          🔮 Queue & Wait Times
+                                        </span>
+                                        {expandedConsQueueData?.is_busy ? (
+                                          <span className="text-[10px] text-rose-400 font-mono font-bold uppercase animate-pulse">Busy</span>
+                                        ) : (
+                                          <span className="text-[10px] text-emerald-400 font-mono font-bold uppercase">Available</span>
+                                        )}
+                                      </div>
+
+                                      {loadingQueueData ? (
+                                        <div className="flex flex-col items-center justify-center py-6 space-y-2">
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-500"></div>
+                                          <span className="text-[10px] text-slate-500 font-mono">Syncing live queue...</span>
+                                        </div>
+                                      ) : expandedConsQueueData ? (
+                                        <div className="space-y-3 text-xs">
+                                          <div className="grid grid-cols-2 gap-2">
+                                            <div className="bg-slate-950 p-2 rounded-xl border border-slate-850 text-center">
+                                              <span className="text-[9px] text-slate-500 block uppercase font-mono">In Queue</span>
+                                              <strong className="text-sm font-mono block text-amber-400">
+                                                {expandedConsQueueData.queue_count} Users
+                                              </strong>
+                                            </div>
+                                            <div className="bg-slate-950 p-2 rounded-xl border border-slate-850 text-center">
+                                              <span className="text-[9px] text-slate-500 block uppercase font-mono">Wait Time</span>
+                                              <strong className="text-sm font-mono block text-emerald-400">
+                                                {Math.ceil(expandedConsQueueData.total_wait_time_seconds / 60)} Mins
+                                              </strong>
+                                            </div>
+                                          </div>
+
+                                          {expandedConsQueueData.queue_count > 0 ? (
+                                            <div className="space-y-2">
+                                              <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider">Queue Sequence (FIFO):</span>
+                                              <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 font-mono text-[10px]">
+                                                {expandedConsQueueData.queue_users.map((qUser: any) => (
+                                                  <div key={qUser.session_id} className="bg-slate-950/70 p-2 rounded-lg border border-slate-850 flex items-center justify-between">
+                                                    <div className="space-y-0.5">
+                                                      <span className="text-slate-200 font-bold block">#{qUser.position}. {qUser.user_name}</span>
+                                                      <span className="text-slate-500 block text-[9px]">ID: #{qUser.user_id}</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <span className="text-emerald-400 font-bold block">{qUser.duration_minutes} Mins</span>
+                                                      <span className="text-[8px] text-slate-500 block">
+                                                        {new Date(qUser.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl text-center text-[11px] text-slate-500 font-mono">
+                                              No active queue right now. Ready for immediate connection.
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl text-center text-[11px] text-slate-500 font-mono">
+                                          Failed to fetch queue statistics.
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>

@@ -18,7 +18,8 @@ import {
   getBlockedUsersByConsultant,
   uploadPhoto,
   lockUserReferral,
-  getHeroSettings
+  getHeroSettings,
+  getActiveQueuedSessionForUser
 } from '../controllers/user.controller.js';
 
 const router = Router();
@@ -34,6 +35,7 @@ router.post('/user/recharge', rechargeUserWallet);
 router.post('/user/lock-referral', lockUserReferral);
 router.get('/user/wallet-transactions/:userId', getUserWalletTransactions);
 router.get('/user/sessions', getUserPastSessions);
+router.get('/user/active-queued-session/:userId', getActiveQueuedSessionForUser);
 
 // Consultant Actions
 router.get('/consultants', getActiveConsultants);

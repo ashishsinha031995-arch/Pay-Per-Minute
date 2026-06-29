@@ -582,3 +582,88 @@ export const getHeroSettings = (req: Request, res: Response) => {
   }
 };
 
+export const getActiveQueuedSessionForUser = (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if there is a session for this user that is queued, active, or pending
+    const sess = db.prepare(`
+      SELECT s.*, c.display_name as consultant_name 
+      FROM sessions s
+      JOIN consultants c ON s.consultant_id = c.id
+      WHERE s.user_id = ? AND s.status IN ('queued', 'pending', 'active')
+      LIMIT 1
+    `).get(userId) as any;
+
+    if (!sess) {
+      return res.json({ session: null });
+    }
+
+    // If it's queued, let's find the position in the queue
+    let position = 0;
+    let total_wait_time_seconds = 0;
+    if (sess.status === 'queued') {
+      const queuedList = db.prepare(`
+        SELECT id, duration_minutes FROM sessions
+        WHERE consultant_id = ? AND status = 'queued'
+        ORDER BY created_at ASC
+      `).all(sess.consultant_id) as any[];
+
+      const index = queuedList.findIndex(q => q.id === sess.id);
+      position = index !== -1 ? index + 1 : 0;
+
+      // Calculate total wait time:
+      // 1. Check if there's currently an active or pending session
+      const currentActiveOrPending = db.prepare(`
+        SELECT * FROM sessions
+        WHERE consultant_id = ? AND status IN ('active', 'pending')
+        LIMIT 1
+      `).get(sess.consultant_id) as any;
+
+      let currentRemainingSecs = 0;
+      if (currentActiveOrPending) {
+        const now = new Date();
+        if (currentActiveOrPending.status === 'active' && currentActiveOrPending.expires_at) {
+          const expiryTime = new Date(currentActiveOrPending.expires_at);
+          currentRemainingSecs = Math.max(0, Math.floor((expiryTime.getTime() - now.getTime()) / 1000));
+        } else if (currentActiveOrPending.status === 'pending') {
+          const createdTime = new Date(currentActiveOrPending.created_at);
+          currentRemainingSecs = Math.max(0, Math.floor((createdTime.getTime() + 60 * 1000 - now.getTime()) / 1000));
+        }
+      }
+
+      total_wait_time_seconds = currentRemainingSecs;
+      // Add wait time for all users ahead of us in the queue
+      if (index !== -1) {
+        for (let i = 0; i < index; i++) {
+          total_wait_time_seconds += queuedList[i].duration_minutes * 60;
+        }
+      }
+    } else if (sess.status === 'pending' || sess.status === 'active') {
+      const now = new Date();
+      if (sess.status === 'active' && sess.expires_at) {
+        const expiryTime = new Date(sess.expires_at);
+        total_wait_time_seconds = Math.max(0, Math.floor((expiryTime.getTime() - now.getTime()) / 1000));
+      } else if (sess.status === 'pending') {
+        const createdTime = new Date(sess.created_at);
+        total_wait_time_seconds = Math.max(0, Math.floor((createdTime.getTime() + 60 * 1000 - now.getTime()) / 1000));
+      }
+    }
+
+    res.json({
+      session: {
+        id: sess.id,
+        consultant_id: sess.consultant_id,
+        consultant_name: sess.consultant_name,
+        status: sess.status,
+        position,
+        total_wait_time_seconds
+      }
+    });
+  } catch (err: any) {
+    console.error('Error fetching active/queued session for user:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+

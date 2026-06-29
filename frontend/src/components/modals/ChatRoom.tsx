@@ -34,6 +34,63 @@ export function ChatRoom({
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const [sessionTranscript, setSessionTranscript] = useState<string | null>(null);
+  const [queueCount, setQueueCount] = useState<number>(0);
+
+  // User real-time queue states
+  const [userQueuePos, setUserQueuePos] = useState<number | null>(null);
+  const [userQueueWaitSeconds, setUserQueueWaitSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    if (role === 'user' && sessionInfo?.status === 'queued' && sessionInfo?.consultant_id) {
+      const fetchUserQueueStatus = async () => {
+        try {
+          const res = await fetch(`/api/consultants/${sessionInfo.consultant_id}/queue-status`);
+          if (res.ok) {
+            const data = await res.json();
+            // Find user's position in queue_users
+            const meInQueue = data.queue_users?.find((u: any) => u.session_id === sessionId);
+            if (meInQueue) {
+              setUserQueuePos(meInQueue.position);
+              // Calculate wait time for this user: remaining seconds of current active chat + wait time of preceding users in queue
+              let waitTime = data.remaining_seconds || 0;
+              for (const u of data.queue_users) {
+                if (u.position < meInQueue.position) {
+                  waitTime += u.duration_minutes * 60;
+                }
+              }
+              setUserQueueWaitSeconds(waitTime);
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching user queue status:', err);
+        }
+      };
+
+      fetchUserQueueStatus();
+      const interval = setInterval(fetchUserQueueStatus, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [role, sessionInfo?.status, sessionInfo?.consultant_id, sessionId]);
+
+  useEffect(() => {
+    if (role === 'consultant' && sessionInfo?.consultant_id) {
+      const fetchQueueStatus = async () => {
+        try {
+          const res = await fetch(`/api/consultants/${sessionInfo.consultant_id}/queue-status`);
+          if (res.ok) {
+            const data = await res.json();
+            setQueueCount(data.queue_count || 0);
+          }
+        } catch (err) {
+          console.error('Error fetching consultant queue count:', err);
+        }
+      };
+      
+      fetchQueueStatus();
+      const interval = setInterval(fetchQueueStatus, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [role, sessionInfo?.consultant_id]);
 
   // New action states
   const [isEnding, setIsEnding] = useState(false);
@@ -151,6 +208,12 @@ export function ChatRoom({
         }
         return { ...prev, status: 'active', started_at, expires_at };
       });
+      loadSessionDataset();
+    });
+
+    // Queue activated by server
+    socket.on('queue:activated', ({ session_id }) => {
+      console.log('Queue activated for session:', session_id);
       loadSessionDataset();
     });
 
@@ -462,6 +525,20 @@ export function ChatRoom({
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 h-[calc(100vh-100px)] flex flex-col justify-between">
       
+      {/* Consultant Queue Banner */}
+      {role === 'consultant' && queueCount > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-extrabold px-4 py-2.5 rounded-xl flex items-center justify-between mb-3 animate-pulse">
+          <span className="flex items-center space-x-2">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span>👥 {queueCount} user{queueCount > 1 ? 's' : ''} joined your queue (Aapki queue mein {queueCount} user{queueCount > 1 ? 's' : ''} hain)</span>
+          </span>
+          <span className="text-[10px] font-mono tracking-wider uppercase bg-amber-500/15 px-2 py-0.5 rounded text-amber-300 font-bold">In Queue</span>
+        </div>
+      )}
+
       {/* Session Title Bar */}
       <div className="bg-slate-900 text-white p-4 rounded-t-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
         <div className="flex items-center space-x-3">
@@ -588,7 +665,9 @@ export function ChatRoom({
           <div className="flex items-center space-x-2 bg-slate-950 border border-slate-850 px-3.5 py-2 rounded-xl text-rose-400">
             <Clock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
             <div className="text-xs font-black font-mono tracking-wider">
-              {sessionInfo?.status === 'pending' ? (
+              {sessionInfo?.status === 'queued' ? (
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wide">In Queue</span>
+              ) : sessionInfo?.status === 'pending' ? (
                 <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wide">Pending Accept</span>
               ) : sessionCompleted ? (
                 '00:00'
@@ -617,7 +696,45 @@ export function ChatRoom({
         {/* Connection Status Inline Banner (Replaces giant fullscreen cards) */}
         {!sessionCompleted && sessionInfo?.status !== 'rejected' && sessionInfo?.status !== 'missed' && (
           <div className="max-w-lg mx-auto mb-2">
-            {sessionInfo?.status === 'active' ? (
+            {sessionInfo?.status === 'queued' ? (
+              <div className="bg-amber-500/10 border border-amber-500/25 p-6 rounded-2xl flex flex-col items-center text-center space-y-4">
+                <Clock className="w-12 h-12 text-amber-400 animate-bounce" />
+                <div className="space-y-1">
+                  <strong className="text-sm text-amber-400 block font-sans">Aap Queue mein hain! (You are in the Queue!)</strong>
+                  <p className="text-xs text-slate-300 font-sans leading-relaxed">
+                    Your payment was successful. You are queued for consultation.
+                    <span className="text-emerald-400 block font-bold mt-1">
+                      You will be able to connect once the timer gets over.
+                    </span>
+                    <span className="text-slate-400 block text-[10px] mt-0.5">
+                      (Jaise hi current active timer khatam hoga, aap automatically connect ho jayenge.)
+                    </span>
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 w-full max-w-sm pt-2 text-xs">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-900">
+                    <span className="text-slate-500 block text-[9px] uppercase tracking-wider font-mono">Queue Position</span>
+                    <strong className="text-base font-mono text-amber-400 mt-0.5 block">
+                      #{userQueuePos !== null ? userQueuePos : '...'}
+                    </strong>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-900">
+                    <span className="text-slate-500 block text-[9px] uppercase tracking-wider font-mono">Est. Wait Time</span>
+                    <strong className="text-base font-mono text-emerald-400 mt-0.5 block">
+                      {Math.ceil(userQueueWaitSeconds / 60)} Mins
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-3.5 w-full max-w-sm text-center">
+                  <span className="text-[10px] text-slate-500 block mb-1">STAY ON THIS PAGE • RE-CONNECT DELAY: 10S</span>
+                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full animate-pulse w-2/3"></div>
+                  </div>
+                </div>
+              </div>
+            ) : sessionInfo?.status === 'active' ? (
               <div className="bg-emerald-500/10 border border-emerald-500/25 p-3.5 rounded-xl flex items-start space-x-2.5 text-left">
                 <Sparkles className="w-4.5 h-4.5 text-emerald-400 mt-0.5 flex-shrink-0 animate-pulse" />
                 <div>

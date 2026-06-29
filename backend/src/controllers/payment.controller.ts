@@ -151,6 +151,19 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
     const commission_amount = total_paid * (commission_rate / 100);
     const consultant_earnings = total_paid - commission_amount;
 
+    // Check if the consultant is busy
+    const activeOrPendingSession = db.prepare(`
+      SELECT id FROM sessions 
+      WHERE consultant_id = ? AND (status = 'active' OR status = 'pending')
+      LIMIT 1
+    `).get(consultant_id);
+
+    // Also check if the consultant has marked themselves as busy manually
+    const consultantObjBusy = db.prepare('SELECT is_busy FROM consultants WHERE id = ?').get(consultant_id) as { is_busy: number } | undefined;
+
+    const isBusyNow = activeOrPendingSession || (consultantObjBusy && consultantObjBusy.is_busy === 1);
+    const sessionStatus = isBusyNow ? 'queued' : 'pending';
+
     const session_id = `sess_${Math.random().toString(36).slice(2, 15)}`;
     const created_at = new Date().toISOString();
 
@@ -173,11 +186,14 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
       commission_rate,
       consultant_earnings,
       commission_amount,
-      'pending',
+      sessionStatus,
       final_payment_id,
       final_order_id,
       created_at
     );
+
+    // Keep consultant as busy if they are already busy or just received a pending session
+    db.prepare('UPDATE consultants SET is_busy = 1 WHERE id = ?').run(consultant_id);
 
     const io = req.app.get('io');
     if (io) {
@@ -188,6 +204,7 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
     res.json({
       success: true,
       session_id,
+      status: sessionStatus,
       total_paid,
     });
   } catch (err: any) {
@@ -325,7 +342,6 @@ export const rejectSession = (req: Request, res: Response) => {
     const consultantId = sess.consultant_id;
 
     db.prepare("UPDATE sessions SET status = 'rejected', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(session_id);
-    db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
 
     if (userId && totalPaid > 0) {
       db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
@@ -340,6 +356,8 @@ export const rejectSession = (req: Request, res: Response) => {
     console.log(`[Timer Engine] Session ${session_id} rejected.`);
 
     const io = req.app.get('io');
+    processNextInQueue(consultantId, io);
+
     if (io) {
       io.to(session_id).emit('session:rejected', {
         session_id,
@@ -434,8 +452,7 @@ export const endSessionManually = (req: Request, res: Response) => {
           wallet_total = wallet_total + ?, 
           wallet_withdrawable = wallet_withdrawable + ?,
           lifetime_revenue = lifetime_revenue + ?,
-          total_sessions = total_sessions + ?,
-          is_busy = 0
+          total_sessions = total_sessions + ?
       WHERE id = ?
     `).run(
       actual_consultant_earnings,
@@ -450,6 +467,8 @@ export const endSessionManually = (req: Request, res: Response) => {
     console.log(`[REST Manual End] Session ${sess.id} marked as ${finalStatus} by manual request. Talked: ${actualMinutes} mins, Cost: ${actualCost}, Refund: ${refundAmount}`);
 
     const io = req.app.get('io');
+    processNextInQueue(cid, io);
+
     if (io) {
       if (consultantMsgs.length === 0) {
         io.to(sess.id).emit('session:missed', {
@@ -468,6 +487,136 @@ export const endSessionManually = (req: Request, res: Response) => {
     res.json({ success: true, status: 'completed', transcript, actualMinutes, actualCost, refundAmount });
   } catch (err: any) {
     console.error('Error ending session manually:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export function processNextInQueue(consultantId: number, io: any) {
+  try {
+    console.log(`[Queue System] Setting is_busy=1 for transition breather. Scheduling queue processing for consultant ${consultantId} in 10 seconds...`);
+    
+    // Set is_busy to 1 during the transitional 10 seconds, so they aren't marked as free
+    db.prepare('UPDATE consultants SET is_busy = 1 WHERE id = ?').run(consultantId);
+    
+    // Trigger io broadcast to let clients know the status is busy / transitioning
+    if (io) {
+      io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 1 });
+    }
+
+    setTimeout(() => {
+      try {
+        console.log(`[Queue System] Processing queue for consultant ${consultantId} now (after 10s breather).`);
+        
+        // Find the next queued session for this consultant ordered by created_at ascending (FIFO)
+        const nextQueuedSess = db.prepare(`
+          SELECT * FROM sessions 
+          WHERE consultant_id = ? AND status = 'queued' 
+          ORDER BY created_at ASC 
+          LIMIT 1
+        `).get(consultantId) as any;
+        
+        if (nextQueuedSess) {
+          const nowStr = new Date().toISOString();
+          console.log(`[Queue System] Found next queued session ${nextQueuedSess.id} for user ${nextQueuedSess.user_name}. Transitioning to pending.`);
+          
+          // Update session status to pending, and set created_at to now (triggers 60s countdown)
+          db.prepare("UPDATE sessions SET status = 'pending', created_at = ? WHERE id = ?").run(nowStr, nextQueuedSess.id);
+          
+          // Keep consultant is_busy as 1
+          db.prepare('UPDATE consultants SET is_busy = 1 WHERE id = ?').run(consultantId);
+  
+          // Notify clients
+          if (io) {
+            console.log(`[Queue System] Emitting session:created for newly activated queued session ${nextQueuedSess.id}`);
+            io.emit('session:created', { consultant_id: Number(consultantId), session_id: nextQueuedSess.id });
+            io.to(nextQueuedSess.id).emit('queue:activated', { session_id: nextQueuedSess.id });
+          }
+        } else {
+          console.log(`[Queue System] No queued sessions found for consultant ${consultantId}. Marking as not busy.`);
+          // Update is_busy = 0
+          db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
+          if (io) {
+            io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 0 });
+          }
+        }
+      } catch (err) {
+        console.error(`[Queue System] Error in delayed processNextInQueue inside setTimeout:`, err);
+      }
+    }, 10000);
+  } catch (err) {
+    console.error(`[Queue System] Error processing queue for consultant ${consultantId}:`, err);
+  }
+}
+
+export const getConsultantQueueStatus = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // 1. Get current active/pending session
+    const activeSession = db.prepare(`
+      SELECT * FROM sessions 
+      WHERE consultant_id = ? AND status = 'active'
+      LIMIT 1
+    `).get(id) as any;
+
+    const pendingSession = db.prepare(`
+      SELECT * FROM sessions 
+      WHERE consultant_id = ? AND status = 'pending'
+      LIMIT 1
+    `).get(id) as any;
+
+    let remaining_seconds = 0;
+    let current_active_id = null;
+    let is_busy = false;
+
+    const now = new Date();
+
+    if (activeSession) {
+      is_busy = true;
+      current_active_id = activeSession.id;
+      if (activeSession.expires_at) {
+        const expiryTime = new Date(activeSession.expires_at);
+        remaining_seconds = Math.max(0, Math.floor((expiryTime.getTime() - now.getTime()) / 1000));
+      }
+    } else if (pendingSession) {
+      is_busy = true;
+      current_active_id = pendingSession.id;
+      // Pending sessions have a 60-second limit from created_at
+      const createdTime = new Date(pendingSession.created_at);
+      remaining_seconds = Math.max(0, Math.floor((createdTime.getTime() + 60 * 1000 - now.getTime()) / 1000));
+    }
+
+    // 2. Get all queued sessions
+    const queuedSessions = db.prepare(`
+      SELECT id, user_id, user_name, duration_minutes, created_at 
+      FROM sessions 
+      WHERE consultant_id = ? AND status = 'queued'
+      ORDER BY created_at ASC
+    `).all(id) as any[];
+
+    // Calculate total wait time
+    let total_wait_time_seconds = remaining_seconds;
+    for (const q of queuedSessions) {
+      total_wait_time_seconds += q.duration_minutes * 60;
+    }
+
+    res.json({
+      is_busy,
+      current_active_id,
+      remaining_seconds,
+      queue_count: queuedSessions.length,
+      queue_users: queuedSessions.map((q, idx) => ({
+        session_id: q.id,
+        user_id: q.user_id,
+        user_name: q.user_name,
+        duration_minutes: q.duration_minutes,
+        position: idx + 1,
+        created_at: q.created_at
+      })),
+      total_wait_time_seconds
+    });
+  } catch (err: any) {
+    console.error('Error fetching queue status:', err);
     res.status(500).json({ error: err.message });
   }
 };
