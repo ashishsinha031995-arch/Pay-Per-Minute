@@ -697,59 +697,61 @@ export function ChatRoom({
           return (
             <div
               key={msg.id}
-              className={`flex items-start space-x-3 ${isMe ? 'justify-end flex-row-reverse space-x-reverse' : 'justify-start'}`}
+              className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}
             >
-              {/* Profile Pic */}
-              <div className="w-8 h-8 rounded-full border border-slate-800/80 overflow-hidden bg-slate-950 shrink-0 self-start mt-1 shadow">
-                <img
-                  src={avatarSrc}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-
-              {/* Message bubble column */}
-              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                {/* Sender name */}
-                <span className="text-[10px] font-mono text-slate-500 mb-1 px-1">
-                  {msg.sender_name}
-                </span>
-
-                <div
-                  className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
-                    isMe
-                      ? 'bg-emerald-500 text-white rounded-tr-none font-semibold'
-                      : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
-                  }`}
-                >
-                  {msg.text.startsWith('[VOICE_NOTE]:') ? (
-                    <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
-                      <div className="flex items-center space-x-1.5 text-[10px] font-mono text-emerald-100 uppercase tracking-wider">
-                        <span>🎙️ Voice Note</span>
-                      </div>
-                      <audio
-                        controls
-                        src={msg.text.substring('[VOICE_NOTE]:'.length)}
-                        className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
-                      />
-                    </div>
-                  ) : (
-                    <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
-                  )}
+              <div className={`flex items-start max-w-[85%] ${isMe ? 'flex-row-reverse space-x-3 space-x-reverse' : 'space-x-3'}`}>
+                {/* Profile Pic */}
+                <div className="w-8 h-8 rounded-full border border-slate-800/80 overflow-hidden bg-slate-950 shrink-0 self-start mt-1 shadow">
+                  <img
+                    src={avatarSrc}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
 
-                <div className="flex items-center space-x-1.5 mt-1 px-1 text-[10px] text-slate-600 font-mono">
-                  <span>{safeFormatTime(msg.created_at)}</span>
-                  {isMe && (
-                    <span>
-                      {msg.is_read === 1 ? (
-                        <CheckCheck className="w-3.5 h-3.5 text-cyan-400" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
-                    </span>
-                  )}
+                {/* Message bubble column */}
+                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  {/* Sender name */}
+                  <span className="text-[10px] font-mono text-slate-500 mb-1 px-1">
+                    {msg.sender_name}
+                  </span>
+
+                  <div
+                    className={`rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
+                      isMe
+                        ? 'bg-emerald-500 text-slate-950 rounded-tr-none font-semibold'
+                        : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
+                    }`}
+                  >
+                    {msg.text.startsWith('[VOICE_NOTE]:') ? (
+                      <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
+                        <div className="flex items-center space-x-1.5 text-[10px] font-mono text-emerald-100 uppercase tracking-wider">
+                          <span>🎙️ Voice Note</span>
+                        </div>
+                        <audio
+                          controls
+                          src={msg.text.substring('[VOICE_NOTE]:'.length)}
+                          className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
+                        />
+                      </div>
+                    ) : (
+                      <p className={`whitespace-pre-wrap leading-relaxed ${isMe ? 'text-slate-950 font-bold' : 'text-white'}`}>{msg.text}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 mt-1 px-1 text-[10px] text-slate-600 font-mono">
+                    <span>{safeFormatTime(msg.created_at)}</span>
+                    {isMe && (
+                      <span>
+                        {msg.is_read === 1 ? (
+                          <CheckCheck className="w-3.5 h-3.5 text-cyan-400" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

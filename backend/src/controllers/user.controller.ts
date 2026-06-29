@@ -93,10 +93,13 @@ export const getConsultantProfileById = (req: Request, res: Response) => {
 export const updateConsultantProfile = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { photo_url, bio, price_per_minute, display_name, email, password } = req.body;
+    const { photo_url, bio, price_per_minute, display_name, email, password, phone } = req.body;
 
     if (photo_url !== undefined) {
       db.prepare('UPDATE consultants SET photo_url = ? WHERE id = ?').run(photo_url, id);
+    }
+    if (phone !== undefined) {
+      db.prepare('UPDATE consultants SET phone = ? WHERE id = ?').run(phone, id);
     }
     if (bio !== undefined) {
       db.prepare('UPDATE consultants SET bio = ? WHERE id = ?').run(bio, id);
@@ -369,7 +372,7 @@ export const getUserProfileInfo = (req: Request, res: Response) => {
 // User Update Profile
 export const updateUserProfile = (req: Request, res: Response) => {
   try {
-    const { id, display_name, photo_url, dob, gender, location, languages } = req.body;
+    const { id, display_name, photo_url, dob, gender, location, languages, phone } = req.body;
     if (!id) {
       return res.status(400).json({ error: 'User ID is required' });
     }
@@ -381,9 +384,9 @@ export const updateUserProfile = (req: Request, res: Response) => {
 
     db.prepare(`
       UPDATE users 
-      SET display_name = ?, photo_url = ?, dob = ?, gender = ?, location = ?, languages = ?
+      SET display_name = ?, photo_url = ?, dob = ?, gender = ?, location = ?, languages = ?, phone = ?
       WHERE id = ?
-    `).run(cleanDisplayName, photo_url || null, dob || null, gender || null, location || null, languages || null, id);
+    `).run(cleanDisplayName, photo_url || null, dob || null, gender || null, location || null, languages || null, phone || null, id);
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     res.json({ success: true, user: updatedUser });

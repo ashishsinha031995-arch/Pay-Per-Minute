@@ -98,9 +98,11 @@ export function startChatExpiryJob(io: Server) {
                   wallet_monthly = wallet_monthly + ?, 
                   wallet_total = wallet_total + ?, 
                   wallet_withdrawable = wallet_withdrawable + ?,
+                  lifetime_revenue = lifetime_revenue + ?,
+                  total_sessions = total_sessions + ?,
                   is_busy = 0
               WHERE id = ?
-            `).run(earnings, earnings, earnings, earnings, cid);
+            `).run(earnings, earnings, earnings, earnings, earnings, 1, cid);
 
             // 4. Broadcast event via socket.io to instantly stop UI inputs
             io.to(sess.id).emit('session:expired', {

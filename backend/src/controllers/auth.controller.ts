@@ -4,12 +4,13 @@ import { sendEmail } from '../helpers/email.helper.js';
 
 export const userSignUp = (req: Request, res: Response) => {
   try {
-    const { username, email, password, display_name, gender } = req.body;
+    const { username, email, password, display_name, gender, phone } = req.body;
     if (!username || !password || !display_name) {
       return res.status(400).json({ error: 'Username, password and display name are required' });
     }
     const cleanUsername = username.trim().toLowerCase();
     const cleanEmail = email ? email.trim().toLowerCase() : null;
+    const cleanPhone = phone ? phone.trim() : null;
     
     const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(username) = ?').get(cleanUsername);
     if (existingUser) {
@@ -29,10 +30,10 @@ export const userSignUp = (req: Request, res: Response) => {
     const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? defaultGirlAvatar : defaultBoyAvatar;
 
     const stmt = db.prepare(`
-      INSERT INTO users (username, email, password, display_name, wallet_balance, lifetime_recharge, is_blocked, gender, photo_url)
-      VALUES (?, ?, ?, ?, 0.0, 0.0, 0, ?, ?)
+      INSERT INTO users (username, email, password, display_name, wallet_balance, lifetime_recharge, is_blocked, gender, photo_url, phone)
+      VALUES (?, ?, ?, ?, 0.0, 0.0, 0, ?, ?, ?)
     `);
-    const result = stmt.run(cleanUsername, cleanEmail, password, display_name.trim(), finalGender, defaultPhotoUrl);
+    const result = stmt.run(cleanUsername, cleanEmail, password, display_name.trim(), finalGender, defaultPhotoUrl, cleanPhone);
     
     const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     res.json({ success: true, user: newUser });

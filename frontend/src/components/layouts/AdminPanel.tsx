@@ -36,6 +36,7 @@ export function AdminPanel() {
   const [editingConsultant, setEditingConsultant] = useState<Consultant | null>(null);
   const [consName, setConsName] = useState('');
   const [consEmail, setConsEmail] = useState('');
+  const [consPhone, setConsPhone] = useState('');
   const [consUsername, setConsUsername] = useState('');
   const [consPassword, setConsPassword] = useState('');
   const [consBio, setConsBio] = useState('');
@@ -135,6 +136,7 @@ export function AdminPanel() {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [usrDisplayName, setUsrDisplayName] = useState('');
   const [usrEmail, setUsrEmail] = useState('');
+  const [usrPhone, setUsrPhone] = useState('');
   const [usrPhotoUrl, setUsrPhotoUrl] = useState('');
   const [usrDob, setUsrDob] = useState('');
   const [usrGender, setUsrGender] = useState('Male');
@@ -489,15 +491,24 @@ export function AdminPanel() {
   // Save Consultant (Create or Edit)
   const handleSaveConsultant = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!consName || !consUsername || (!editingConsultant && (!consPassword || !consEmail))) {
-      setError('Please complete all required consultant registration parameters, including display name, username, password, and email.');
+    if (!consName || !consUsername || (!editingConsultant && (!consPassword || !consEmail || !consPhone))) {
+      setError('Please complete all required consultant registration parameters, including display name, username, password, email, and phone.');
       return;
     }
+
+    const numericPhone = consPhone.replace(/\D/g, '');
+    if (numericPhone.length !== 10) {
+      setError('Phone number must be exactly 10 digits.');
+      return;
+    }
+    const finalPhone = '+91' + numericPhone;
+
     try {
       const payload = {
         display_name: consName,
         username: consUsername,
         email: consEmail,
+        phone: finalPhone,
         password: consPassword || undefined,
         bio: consBio,
         price_per_minute: parseFloat(consRate),
@@ -545,6 +556,7 @@ export function AdminPanel() {
       setEditingConsultant(null);
       setConsName('');
       setConsEmail('');
+      setConsPhone('');
       setConsUsername('');
       setConsPassword('');
       setConsBio('');
@@ -674,6 +686,7 @@ export function AdminPanel() {
     setEditingUser(user);
     setUsrDisplayName(user.display_name || '');
     setUsrEmail(user.email || '');
+    setUsrPhone(user.phone || '');
     setUsrPhotoUrl(user.photo_url || '');
     
     let formattedDob = '';
@@ -760,6 +773,14 @@ export function AdminPanel() {
       return;
     }
 
+    const numericPart = usrPhone.replace(/\D/g, '');
+    const last10 = numericPart.slice(-10);
+    if (usrPhone && last10.length !== 10) {
+      setError('Mobile number must be exactly 10 digits.');
+      return;
+    }
+    const finalPhone = last10.length === 10 ? '+91' + last10 : null;
+
     try {
       setError(null);
       const res = await fetch(`/api/admin/users/${editingUser.id}`, {
@@ -776,7 +797,8 @@ export function AdminPanel() {
           locked_consultant_id: usrLockedConsultantId || null,
           admin_allow_others: usrAdminAllowOthers,
           location: usrLocation,
-          languages: usrLanguages
+          languages: usrLanguages,
+          phone: finalPhone
         })
       });
 
@@ -1473,6 +1495,7 @@ export function AdminPanel() {
                     setEditingConsultant(null);
                     setConsName('');
                     setConsEmail('');
+                    setConsPhone('');
                     setConsUsername('');
                     setConsPassword('');
                     setConsBio('');
@@ -1666,6 +1689,7 @@ export function AdminPanel() {
                                     setEditingConsultant(cons);
                                     setConsName(cons.display_name);
                                     setConsEmail(cons.email || '');
+                                    setConsPhone((cons.phone || '').replace(/^\+91/, ''));
                                     setConsUsername(cons.username);
                                     setConsPassword(cons.password);
                                     setConsBio(cons.bio || '');
@@ -2509,7 +2533,15 @@ export function AdminPanel() {
                           )}
                           <div>
                             <strong className="text-slate-100 font-bold block text-sm">{user.display_name}</strong>
-                            <span className="text-[10px] text-slate-500 font-mono">ID: #{user.id}</span>
+                            <div className="flex items-center space-x-2 font-mono text-[10px] text-slate-500 mt-0.5">
+                              <span>ID: #{user.id}</span>
+                              {user.phone && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-emerald-400 font-semibold">{user.phone}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5 font-mono text-slate-300">{user.username}</td>
@@ -3878,6 +3910,28 @@ export function AdminPanel() {
                 />
               </div>
 
+              <div>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Mobile Number (10 digits) *</label>
+                <div className="relative flex rounded-xl border border-slate-800 bg-slate-950 items-center focus-within:border-emerald-500 transition-colors overflow-hidden">
+                  <div className="flex items-center pl-3.5 pr-2 py-2 bg-slate-900 border-r border-slate-800 shrink-0">
+                    <span className="text-xs font-bold text-slate-300 font-mono">+91</span>
+                  </div>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="9876543210"
+                    value={consPhone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      if (val.length <= 10) {
+                        setConsPhone(val);
+                      }
+                    }}
+                    className="w-full bg-transparent border-0 pl-3 pr-4 py-2 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
               {!editingConsultant && (
                 <div>
                   <label className="block text-[11px] text-slate-400 font-mono mb-1">Plaintext Security Password *</label>
@@ -4125,6 +4179,27 @@ export function AdminPanel() {
                   placeholder="rahul@example.com"
                   className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-sky-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Mobile Number</label>
+                <div className="relative flex rounded-xl border border-slate-800 bg-slate-950 items-center focus-within:border-sky-500 transition-colors overflow-hidden">
+                  <div className="flex items-center pl-3.5 pr-2 py-2 bg-slate-900 border-r border-slate-850 shrink-0 font-mono text-xs font-bold text-slate-400">
+                    +91
+                  </div>
+                  <input
+                    type="tel"
+                    placeholder="9876543210"
+                    value={usrPhone.startsWith('+91') ? usrPhone.substring(3) : usrPhone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      if (val.length <= 10) {
+                        setUsrPhone('+91' + val);
+                      }
+                    }}
+                    className="w-full bg-transparent border-0 pl-3.5 pr-3.5 py-2 text-slate-100 text-xs focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

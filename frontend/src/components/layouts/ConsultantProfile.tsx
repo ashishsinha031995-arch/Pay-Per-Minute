@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -55,6 +55,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   const [editGender, setEditGender] = useState('Male');
   const [editLocation, setEditLocation] = useState('');
   const [editLanguages, setEditLanguages] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
@@ -232,6 +233,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       setEditGender(currentUser.gender || 'Male');
       setEditLocation(currentUser.location || '');
       setEditLanguages(currentUser.languages || '');
+      setEditPhone(currentUser.phone || '');
       fetchWalletTransactions();
     }
   }, [currentUser?.id]);
@@ -354,6 +356,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
     setProfileSaving(true);
     setError(null);
     setSuccess(null);
+
+    const numericPart = editPhone.replace(/\D/g, '');
+    const last10 = numericPart.slice(-10);
+    if (editPhone && last10.length !== 10) {
+      setError('Mobile number must be exactly 10 digits.');
+      setProfileSaving(false);
+      return;
+    }
+    const finalPhone = last10.length === 10 ? '+91' + last10 : null;
+
     try {
       const res = await fetch('/api/user/update-profile', {
         method: 'POST',
@@ -365,7 +377,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
           dob: editDob,
           gender: editGender,
           location: editLocation,
-          languages: editLanguages
+          languages: editLanguages,
+          phone: finalPhone
         })
       });
       const data = await res.json();
@@ -826,6 +839,28 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                   placeholder="e.g. Hindi, English, Marathi"
                   className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono text-slate-400 mb-1">Mobile Number</label>
+                <div className="relative flex rounded-xl border border-slate-800 bg-slate-950 items-center focus-within:border-emerald-500 transition-colors overflow-hidden">
+                  <div className="flex items-center pl-3 pr-2 py-2.5 bg-slate-900 border-r border-slate-800 shrink-0 font-mono text-xs font-bold text-slate-400">
+                    <Phone className="w-3.5 h-3.5 mr-1" />
+                    <span>+91</span>
+                  </div>
+                  <input
+                    type="tel"
+                    placeholder="9876543210"
+                    value={editPhone.startsWith('+91') ? editPhone.substring(3) : editPhone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      if (val.length <= 10) {
+                        setEditPhone('+91' + val);
+                      }
+                    }}
+                    className="w-full bg-transparent border-0 pl-3 pr-4 py-2 text-xs text-slate-100 focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="md:col-span-2 space-y-2">

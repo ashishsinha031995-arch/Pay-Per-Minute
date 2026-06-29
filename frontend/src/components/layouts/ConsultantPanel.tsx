@@ -3,6 +3,7 @@ import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw
 import { motion } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
+import { io } from 'socket.io-client';
 
 interface ConsultantPanelProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
@@ -329,6 +330,21 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return () => clearInterval(interval);
   }, [currentConsultant]);
 
+  // Real-time instant notification via WebSockets
+  useEffect(() => {
+    if (!currentConsultant) return;
+    const socket = io();
+    socket.on('session:created', (data) => {
+      if (Number(data.consultant_id) === Number(currentConsultant.id)) {
+        console.log('[WebSocket] Instant incoming chat request detected! Refreshing sessions immediately...');
+        loadConsultantStatsAndStatus(currentConsultant.id);
+      }
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [currentConsultant]);
+
   // Trigger immediate refresh when a session finishes (activeSessionId transitions to falsy)
   useEffect(() => {
     if (currentConsultant && !activeSessionId) {
@@ -494,8 +510,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       setError('Please provide your Email Address');
       return;
     }
-    if (!registerPhone) {
-      setError('Please provide your Phone Number');
+    const numericPhone = registerPhone.replace(/\D/g, '');
+    if (numericPhone.length !== 10) {
+      setError('Mobile number must be exactly 10 digits.');
       return;
     }
     try {
@@ -506,7 +523,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           plan_id: selectedPlanId,
           display_name: registerDisplayName,
           email: registerEmail,
-          phone: registerPhone,
+          phone: '+91' + numericPhone,
           initial_price_per_minute: parseFloat(registerPrice),
           category: registerCategory,
         }),
@@ -1398,14 +1415,24 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
                     Consultant Phone Number (Mandatory)
                   </label>
-                  <input
-                    type="tel"
-                    placeholder="e.g. +91 98765 43210"
-                    value={registerPhone}
-                    onChange={(e) => setRegisterPhone(e.target.value)}
-                    className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all"
-                    required
-                  />
+                  <div className="relative flex rounded-xl border border-slate-850 bg-slate-950 items-center focus-within:border-emerald-500 transition-colors overflow-hidden">
+                    <div className="flex items-center pl-3.5 pr-2 py-2.5 bg-slate-900 border-r border-slate-850 shrink-0">
+                      <span className="text-xs font-bold text-slate-300 font-mono">+91</span>
+                    </div>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="9876543210"
+                      value={registerPhone}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        if (val.length <= 10) {
+                          setRegisterPhone(val);
+                        }
+                      }}
+                      className="w-full bg-transparent border-0 pl-3 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                    />
+                  </div>
                   <span className="text-[9px] text-slate-500 block">Required for authentication and communication.</span>
                 </div>
 

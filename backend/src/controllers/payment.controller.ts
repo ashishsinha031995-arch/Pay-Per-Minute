@@ -179,6 +179,12 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
       created_at
     );
 
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`[REST Server] Emitting session:created for consultant ${consultant_id} and session ${session_id}`);
+      io.emit('session:created', { consultant_id: Number(consultant_id), session_id });
+    }
+
     res.json({
       success: true,
       session_id,
@@ -420,15 +426,26 @@ export const endSessionManually = (req: Request, res: Response) => {
     }
 
     const cid = sess.consultant_id;
+    const isCompletedVal = finalStatus === 'completed' ? 1 : 0;
     db.prepare(`
       UPDATE consultants 
       SET wallet_today = wallet_today + ?, 
           wallet_monthly = wallet_monthly + ?, 
           wallet_total = wallet_total + ?, 
           wallet_withdrawable = wallet_withdrawable + ?,
+          lifetime_revenue = lifetime_revenue + ?,
+          total_sessions = total_sessions + ?,
           is_busy = 0
       WHERE id = ?
-    `).run(actual_consultant_earnings, actual_consultant_earnings, actual_consultant_earnings, actual_consultant_earnings, cid);
+    `).run(
+      actual_consultant_earnings,
+      actual_consultant_earnings,
+      actual_consultant_earnings,
+      actual_consultant_earnings,
+      actual_consultant_earnings,
+      isCompletedVal,
+      cid
+    );
 
     console.log(`[REST Manual End] Session ${sess.id} marked as ${finalStatus} by manual request. Talked: ${actualMinutes} mins, Cost: ${actualCost}, Refund: ${refundAmount}`);
 

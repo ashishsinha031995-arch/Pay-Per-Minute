@@ -334,7 +334,8 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
       admin_allow_others,
       category,
       location,
-      languages
+      languages,
+      phone
     } = req.body;
     
     if (!id) {
@@ -349,7 +350,7 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
     db.prepare(`
       UPDATE users 
       SET display_name = ?, email = ?, photo_url = ?, dob = ?, gender = ?, wallet_balance = ?,
-          locked_consultant_id = ?, admin_allow_others = ?, category = ?, location = ?, languages = ?
+          locked_consultant_id = ?, admin_allow_others = ?, category = ?, location = ?, languages = ?, phone = ?
       WHERE id = ?
     `).run(
       cleanDisplayName,
@@ -363,6 +364,7 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
       category || 'General',
       location || null,
       languages || null,
+      phone || null,
       id
     );
 

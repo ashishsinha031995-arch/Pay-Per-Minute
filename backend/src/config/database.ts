@@ -73,6 +73,7 @@ export function initDb() {
       photo_url TEXT,
       dob TEXT,
       gender TEXT,
+      phone TEXT,
       wallet_balance REAL DEFAULT 0.0,
       lifetime_recharge REAL DEFAULT 0.0,
       is_active INTEGER DEFAULT 1,
@@ -226,6 +227,7 @@ export function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN locked_consultant_id INTEGER DEFAULT NULL;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN admin_allow_others INTEGER DEFAULT 0;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN category TEXT DEFAULT 'General';"); } catch(_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN phone TEXT;"); } catch(_) {}
 
   try { db.exec("ALTER TABLE wallet_transactions ADD COLUMN gst_rate REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE wallet_transactions ADD COLUMN gst_amount REAL DEFAULT 0.0;"); } catch(_) {}
