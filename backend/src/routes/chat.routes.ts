@@ -7,7 +7,8 @@ import {
   acceptSession,
   rejectSession,
   endSessionManually,
-  getConsultantQueueStatus
+  getConsultantQueueStatus,
+  cancelQueuedSession
 } from '../controllers/payment.controller.js';
 
 const router = Router();
@@ -25,5 +26,6 @@ router.get('/consultants/:id/queue-status', getConsultantQueueStatus);
 router.post('/sessions/:id/accept', acceptSession);
 router.post('/sessions/:id/reject', rejectSession);
 router.post('/sessions/:id/end', endSessionManually);
+router.post('/sessions/:id/cancel', cancelQueuedSession);
 
 export default router;

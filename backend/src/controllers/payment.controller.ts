@@ -612,3 +612,56 @@ export const getConsultantQueueStatus = (req: Request, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const cancelQueuedSession = (req: Request, res: Response) => {
+  try {
+    const { id: session_id } = req.params;
+    const sess = db.prepare('SELECT * FROM sessions WHERE id = ?').get(session_id) as any;
+    if (!sess) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (sess.status !== 'queued' && sess.status !== 'pending') {
+      return res.status(400).json({ error: `Session is already ${sess.status}` });
+    }
+
+    const userId = sess.user_id;
+    const totalPaid = sess.total_paid;
+    const consultantId = sess.consultant_id;
+
+    // Update status to cancelled and zero out earnings
+    db.prepare("UPDATE sessions SET status = 'cancelled', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(session_id);
+
+    if (userId && totalPaid > 0) {
+      db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
+      logWalletTransaction(
+        Number(userId),
+        'refund',
+        totalPaid,
+        `Refund: Queued consultation request cancelled by user`
+      );
+    }
+
+    console.log(`[Queue System] Session ${session_id} cancelled by user.`);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(session_id).emit('session:cancelled', {
+        session_id,
+        message: 'You have exited the queue.'
+      });
+      // Also notify consultant if it was pending
+      if (sess.status === 'pending') {
+        io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 0 });
+      }
+    }
+
+    // Process next in queue
+    processNextInQueue(consultantId, io);
+
+    res.json({ success: true, status: 'cancelled' });
+  } catch (err: any) {
+    console.error('Error in cancelQueuedSession:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+

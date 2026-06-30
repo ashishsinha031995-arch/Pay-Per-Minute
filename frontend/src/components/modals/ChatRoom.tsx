@@ -134,6 +134,29 @@ export function ChatRoom({
   const [userQueueWaitSeconds, setUserQueueWaitSeconds] = useState<number>(0);
   const [showBusyPopup, setShowBusyPopup] = useState(true);
   const [activeChatRemainingSeconds, setActiveChatRemainingSeconds] = useState<number>(0);
+  const [isExitingQueue, setIsExitingQueue] = useState(false);
+
+  const handleExitQueue = async () => {
+    if (!sessionId) return;
+    if (window.confirm("Aap sach mein queue se bahar nikalna chahte hain? Aapka paid amount refund ho jayega. (Are you sure you want to exit the queue? Your payment will be refunded to your wallet.)")) {
+      try {
+        setIsExitingQueue(true);
+        const res = await fetch(`/api/sessions/${sessionId}/cancel`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          setSessionInfo(prev => prev ? { ...prev, status: 'cancelled' } : null);
+          setShowBusyPopup(false);
+        } else {
+          alert(data.error || "Failed to exit queue.");
+        }
+      } catch (err: any) {
+        console.error("Error exiting queue:", err);
+        alert("An error occurred. Please try again.");
+      } finally {
+        setIsExitingQueue(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (activeChatRemainingSeconds > 0) {
@@ -448,6 +471,14 @@ export function ChatRoom({
       }
     });
 
+    // Request cancelled by user
+    socket.on('session:cancelled', ({ message }) => {
+      setSessionInfo(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      if (currentUser?.id && refreshUserProfile) {
+        refreshUserProfile(currentUser.id);
+      }
+    });
+
     // Request missed by consultant
     socket.on('session:missed', ({ message }) => {
       setSessionInfo(prev => prev ? { ...prev, status: 'missed' } : null);
@@ -505,7 +536,7 @@ export function ChatRoom({
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const textToSend = textInput.trim();
-    const isInactive = sessionCompleted || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed';
+    const isInactive = sessionCompleted || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed' || sessionInfo?.status === 'cancelled';
     if (!textToSend || isInactive) return;
 
     // Clear input immediately to make UI responsive
@@ -684,7 +715,7 @@ export function ChatRoom({
   };
 
   const sendVoiceNote = async (base64Audio: string) => {
-    const isInactive = sessionCompleted || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed';
+    const isInactive = sessionCompleted || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed' || sessionInfo?.status === 'cancelled';
     if (isInactive) return;
 
     const payloadText = `[VOICE_NOTE]:${base64Audio}`;
@@ -980,9 +1011,16 @@ export function ChatRoom({
 
                 <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-3.5 w-full max-w-sm text-center">
                   <span className="text-[10px] text-slate-500 block mb-1">STAY ON THIS PAGE • RE-CONNECT DELAY: 10S</span>
-                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mb-2.5">
                     <div className="bg-emerald-500 h-full animate-pulse w-2/3"></div>
                   </div>
+                  <button
+                    onClick={handleExitQueue}
+                    disabled={isExitingQueue}
+                    className="text-xs font-bold text-rose-400 hover:text-rose-300 disabled:opacity-50 transition-all underline underline-offset-4 flex items-center justify-center mx-auto space-x-1"
+                  >
+                    <span>{isExitingQueue ? 'Exiting Queue...' : 'Exit Queue & Refund'}</span>
+                  </button>
                 </div>
               </div>
             ) : sessionInfo?.status === 'active' ? (
@@ -1043,6 +1081,29 @@ export function ChatRoom({
               </p>
               <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
                 (Consultant missed your chat request. Paid amount will be refunded.)
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl w-full transition-all flex items-center justify-center space-x-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Listings</span>
+            </button>
+          </div>
+        )}
+
+        {/* Cancelled Status Screen */}
+        {sessionInfo?.status === 'cancelled' && (
+          <div className="space-y-4 pt-6 max-w-md mx-auto">
+            <div className="bg-slate-500/10 border border-slate-500/20 p-6 rounded-2xl text-center space-y-3">
+              <Clock className="w-10 h-10 text-slate-400 mx-auto animate-pulse" />
+              <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wide">Request Cancelled</h4>
+              <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                Aapne queue se exit kar liya hai. Aapka paid amount wallet mein safe hai aur refund process ho gaya hai.
+              </p>
+              <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
+                (You have exited the queue. Your paid amount has been refunded to your wallet.)
               </p>
             </div>
             <button
@@ -1338,12 +1399,19 @@ export function ChatRoom({
               </div>
             </div>
 
-            <div className="flex gap-3 justify-center">
+            <div className="flex flex-col gap-2.5 justify-center w-full">
               <button
                 onClick={() => setShowBusyPopup(false)}
                 className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs transition-all"
               >
                 Got it, wait in queue
+              </button>
+              <button
+                onClick={handleExitQueue}
+                disabled={isExitingQueue}
+                className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 disabled:opacity-50 font-bold py-2.5 px-4 rounded-xl text-xs border border-rose-500/15 transition-all"
+              >
+                {isExitingQueue ? 'Exiting Queue...' : 'Exit Queue & Refund'}
               </button>
             </div>
           </div>
