@@ -19,7 +19,11 @@ import {
   uploadPhoto,
   lockUserReferral,
   getHeroSettings,
-  getActiveQueuedSessionForUser
+  getActiveQueuedSessionForUser,
+  getConsultantSchedules,
+  createConsultantSchedule,
+  updateConsultantSchedule,
+  deleteConsultantSchedule
 } from '../controllers/user.controller.js';
 
 const router = Router();
@@ -53,5 +57,11 @@ router.post('/consultants/:id/reviews', addConsultantReview);
 router.post('/consultants/block', blockUserByConsultant);
 router.post('/consultants/unblock', unblockUserByConsultant);
 router.get('/consultants/:id/blocked', getBlockedUsersByConsultant);
+
+// Consultant Schedule Actions
+router.get('/consultants/:id/schedules', getConsultantSchedules);
+router.post('/consultants/:id/schedules', createConsultantSchedule);
+router.put('/consultants/:id/schedules/:scheduleId', updateConsultantSchedule);
+router.delete('/consultants/:id/schedules/:scheduleId', deleteConsultantSchedule);
 
 export default router;

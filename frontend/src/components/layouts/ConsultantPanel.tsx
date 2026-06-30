@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
@@ -114,7 +114,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   // Tab Navigation & Mobile Drawer States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules'>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Status Toggles
@@ -222,6 +222,110 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
   // Blocked users state
   const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
+
+  // Schedules state
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [newDate, setNewDate] = useState('');
+  const [newDay, setNewDay] = useState('');
+  const [newFromTime, setNewFromTime] = useState('');
+  const [newToTime, setNewToTime] = useState('');
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
+
+  const fetchSchedules = async (consultantId: number) => {
+    try {
+      setScheduleLoading(true);
+      const res = await fetch(`/api/consultants/${consultantId}/schedules`);
+      if (res.ok) {
+        const data = await res.json();
+        setSchedules(data);
+      }
+    } catch (err) {
+      console.error('Failed to load schedules:', err);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const handleDateChange = (val: string) => {
+    setNewDate(val);
+    if (val) {
+      const parts = val.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const dateObj = new Date(year, month, day);
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        setNewDay(days[dateObj.getDay()]);
+      }
+    } else {
+      setNewDay('');
+    }
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentConsultant) return;
+    if (!newFromTime || !newToTime) {
+      setError('Please fill in both From Time and To Time.');
+      return;
+    }
+    try {
+      const url = editingScheduleId 
+        ? `/api/consultants/${currentConsultant.id}/schedules/${editingScheduleId}`
+        : `/api/consultants/${currentConsultant.id}/schedules`;
+      const method = editingScheduleId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: newDate || null,
+          day: newDay || null,
+          from_time: newFromTime,
+          to_time: newToTime
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to save schedule');
+      }
+
+      setSuccess(editingScheduleId ? 'Schedule has been updated successfully!' : 'New schedule slot has been added successfully!');
+      setNewDate('');
+      setNewDay('');
+      setNewFromTime('');
+      setNewToTime('');
+      setEditingScheduleId(null);
+      fetchSchedules(currentConsultant.id);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const handleDeleteSchedule = async (scheduleId: number) => {
+    if (!currentConsultant) return;
+    if (!window.confirm('Are you sure you want to delete this schedule slot?')) return;
+    try {
+      const res = await fetch(`/api/consultants/${currentConsultant.id}/schedules/${scheduleId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete schedule');
+      }
+      setSuccess('Schedule slot deleted successfully.');
+      fetchSchedules(currentConsultant.id);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(null), 3000);
+    }
+  };
 
   // Support ticket states
   const [consultantTickets, setConsultantTickets] = useState<any[]>([]);
@@ -433,6 +537,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         const blockedData = await blockedRes.json();
         setBlockedUsers(blockedData);
       }
+
+      // Fetch availability schedules
+      fetchSchedules(id);
 
       // Fetch complete profile info (including KYC and Bank statuses)
       const profileRes = await fetch(`/api/consultants/${id}/profile`);
@@ -1801,6 +1908,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               </button>
 
               <button
+                onClick={() => { setActiveTab('schedules'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>📅 Availability Schedule</span>
+              </button>
+
+              <button
                 onClick={() => { setActiveTab('kyc'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black' : 'text-slate-300 hover:bg-slate-800'}`}
               >
@@ -2009,6 +2124,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 >
                   <Settings2 className="w-4 h-4 shrink-0" />
                   <span>⚙️ Profile Settings</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('schedules')}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                >
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  <span>📅 Availability Schedule</span>
                 </button>
 
                 <button
@@ -3155,6 +3278,164 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
                     )}
                   </form>
+                </motion.div>
+              )}
+
+              {/* TAB: Availability Schedule */}
+              {activeTab === 'schedules' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-5 h-5 text-emerald-400" />
+                      <h3 className="font-bold text-slate-100 font-sans">Availability Schedule</h3>
+                    </div>
+                  </div>
+
+                  {/* Add / Edit Schedule Form */}
+                  <form onSubmit={handleSaveSchedule} className="bg-slate-950/80 p-5 rounded-xl border border-slate-800/60 space-y-4">
+                    <h4 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest">
+                      {editingScheduleId ? '✏️ Edit Schedule' : '➕ Add Availability Slot'}
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-mono text-slate-400 mb-1">Date <span className="text-slate-500">(Optional)</span></label>
+                        <input
+                          type="date"
+                          value={newDate}
+                          onChange={(e) => handleDateChange(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-mono text-slate-400 mb-1">Day <span className="text-slate-500">(Optional)</span></label>
+                        <select
+                          value={newDay}
+                          onChange={(e) => {
+                            setNewDay(e.target.value);
+                            if (e.target.value) setNewDate(''); // Clear date if day is picked
+                          }}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        >
+                          <option value="">-- Choose Day --</option>
+                          <option value="Monday">Monday</option>
+                          <option value="Tuesday">Tuesday</option>
+                          <option value="Wednesday">Wednesday</option>
+                          <option value="Thursday">Thursday</option>
+                          <option value="Friday">Friday</option>
+                          <option value="Saturday">Saturday</option>
+                          <option value="Sunday">Sunday</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-mono text-slate-400 mb-1">From Time *</label>
+                        <input
+                          type="time"
+                          required
+                          value={newFromTime}
+                          onChange={(e) => setNewFromTime(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-mono text-slate-400 mb-1">To Time *</label>
+                        <input
+                          type="time"
+                          required
+                          value={newToTime}
+                          onChange={(e) => setNewToTime(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 pt-2">
+                      <button
+                        type="submit"
+                        className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md"
+                      >
+                        {editingScheduleId ? 'Update Slot' : 'Save Slot'}
+                      </button>
+                      {editingScheduleId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingScheduleId(null);
+                            setNewDate('');
+                            setNewDay('');
+                            setNewFromTime('');
+                            setNewToTime('');
+                          }}
+                          className="bg-slate-850 hover:bg-slate-800 text-slate-300 font-bold text-xs px-4 py-2 rounded-xl transition-all border border-slate-800"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </form>
+
+                  {/* Active Slots List */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-widest">
+                      Your Availability Slots
+                    </h4>
+
+                    {scheduleLoading ? (
+                      <div className="text-center py-6 text-slate-500 text-xs font-mono">
+                        Loading slots...
+                      </div>
+                    ) : schedules.length === 0 ? (
+                      <div className="bg-slate-950/40 border border-dashed border-slate-800 rounded-xl py-8 text-center text-slate-500 text-xs">
+                        No availability schedules set. Please add a slot above.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {schedules.map((sch) => (
+                          <div key={sch.id} className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
+                            <div className="space-y-1">
+                              <span className="inline-block text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+                                {sch.date ? sch.date : sch.day}
+                              </span>
+                              <div className="text-xs font-bold text-slate-200">
+                                {sch.from_time} to {sch.to_time}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingScheduleId(sch.id);
+                                  setNewDate(sch.date || '');
+                                  setNewDay(sch.day || '');
+                                  setNewFromTime(sch.from_time);
+                                  setNewToTime(sch.to_time);
+                                }}
+                                className="p-1.5 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors text-xs"
+                                title="Edit Slot"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSchedule(sch.id)}
+                                className="p-1.5 bg-rose-950/30 border border-rose-900/40 text-rose-400 hover:text-rose-300 rounded-lg transition-colors text-xs"
+                                title="Delete Slot"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               )}
 

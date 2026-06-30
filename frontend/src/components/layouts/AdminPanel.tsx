@@ -35,6 +35,107 @@ export function AdminPanel() {
   // Create / Edit Consultant form states
   const [showConsultantModal, setShowConsultantModal] = useState(false);
   const [editingConsultant, setEditingConsultant] = useState<Consultant | null>(null);
+
+  // Admin Schedule Manager States
+  const [scheduleManageConsId, setScheduleManageConsId] = useState<number | null>(null);
+  const [scheduleManageConsName, setScheduleManageConsName] = useState<string>('');
+  const [showScheduleManagerModal, setShowScheduleManagerModal] = useState<boolean>(false);
+  const [adminSchedules, setAdminSchedules] = useState<any[]>([]);
+  const [adminSchedulesLoading, setAdminSchedulesLoading] = useState<boolean>(false);
+  const [adminNewDate, setAdminNewDate] = useState<string>('');
+  const [adminNewDay, setAdminNewDay] = useState<string>('');
+  const [adminNewFromTime, setAdminNewFromTime] = useState<string>('');
+  const [adminNewToTime, setAdminNewToTime] = useState<string>('');
+  const [adminEditingScheduleId, setAdminEditingScheduleId] = useState<number | null>(null);
+
+  const fetchAdminConsSchedules = async (consId: number) => {
+    try {
+      setAdminSchedulesLoading(true);
+      const res = await fetch(`/api/consultants/${consId}/schedules`);
+      if (res.ok) {
+        const data = await res.json();
+        setAdminSchedules(data);
+      }
+    } catch (err) {
+      console.error('Failed to load consultant schedules:', err);
+    } finally {
+      setAdminSchedulesLoading(false);
+    }
+  };
+
+  const handleAdminDateChange = (val: string) => {
+    setAdminNewDate(val);
+    if (val) {
+      const parts = val.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const dateObj = new Date(year, month, day);
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        setAdminNewDay(days[dateObj.getDay()]);
+      }
+    } else {
+      setAdminNewDay('');
+    }
+  };
+
+  const handleAdminSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleManageConsId) return;
+    if (!adminNewFromTime || !adminNewToTime) {
+      alert('Please fill in both From Time and To Time.');
+      return;
+    }
+    try {
+      const url = adminEditingScheduleId 
+        ? `/api/consultants/${scheduleManageConsId}/schedules/${adminEditingScheduleId}`
+        : `/api/consultants/${scheduleManageConsId}/schedules`;
+      const method = adminEditingScheduleId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: adminNewDate || null,
+          day: adminNewDay || null,
+          from_time: adminNewFromTime,
+          to_time: adminNewToTime
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to save schedule');
+      }
+
+      setAdminNewDate('');
+      setAdminNewDay('');
+      setAdminNewFromTime('');
+      setAdminNewToTime('');
+      setAdminEditingScheduleId(null);
+      fetchAdminConsSchedules(scheduleManageConsId);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAdminDeleteSchedule = async (scheduleId: number) => {
+    if (!scheduleManageConsId) return;
+    if (!window.confirm('Are you sure you want to delete this schedule slot?')) return;
+    try {
+      const res = await fetch(`/api/consultants/${scheduleManageConsId}/schedules/${scheduleId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete schedule');
+      }
+      fetchAdminConsSchedules(scheduleManageConsId);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
   const [consName, setConsName] = useState('');
   const [consEmail, setConsEmail] = useState('');
   const [consPhone, setConsPhone] = useState('');
@@ -1745,6 +1846,18 @@ export function AdminPanel() {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <div className="flex items-center justify-end space-x-1.5">
+                                <button
+                                  onClick={() => {
+                                    setScheduleManageConsId(cons.id);
+                                    setScheduleManageConsName(cons.display_name);
+                                    fetchAdminConsSchedules(cons.id);
+                                    setShowScheduleManagerModal(true);
+                                  }}
+                                  className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-850"
+                                  title="Manage Availability Schedule"
+                                >
+                                  <Calendar className="w-3.5 h-3.5" />
+                                </button>
                                 <button
                                   onClick={() => handleResetPassword(cons)}
                                   className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-850"
@@ -4113,6 +4226,170 @@ export function AdminPanel() {
       {/* ========================================================= */}
       {/* 3. MODALS AND FLOATING OVERLAYS */}
       
+      {/* Super Admin Consultant Schedule Manager Modal */}
+      {showScheduleManagerModal && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 space-y-6 my-8 shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div>
+                <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-emerald-400" />
+                  <span>Schedule Manager for {scheduleManageConsName}</span>
+                </h3>
+                <p className="text-[10px] text-slate-400 font-mono">ID: #{scheduleManageConsId}</p>
+              </div>
+              <button 
+                onClick={() => setShowScheduleManagerModal(false)}
+                className="text-slate-400 hover:text-white p-1 bg-slate-800 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form to Add Slot */}
+            <form onSubmit={handleAdminSaveSchedule} className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-4">
+              <h4 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest">
+                {adminEditingScheduleId ? '✏️ Edit Schedule Slot' : '➕ Add Availability Slot'}
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 mb-1">Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={adminNewDate}
+                    onChange={(e) => handleAdminDateChange(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 mb-1">Day (Optional)</label>
+                  <select
+                    value={adminNewDay}
+                    onChange={(e) => {
+                      setAdminNewDay(e.target.value);
+                      if (e.target.value) setAdminNewDate(''); // Clear date if day is picked
+                    }}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="">-- Choose Day --</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                    <option value="Sunday">Sunday</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 mb-1">From Time *</label>
+                  <input
+                    type="time"
+                    required
+                    value={adminNewFromTime}
+                    onChange={(e) => setAdminNewFromTime(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 mb-1">To Time *</label>
+                  <input
+                    type="time"
+                    required
+                    value={adminNewToTime}
+                    onChange={(e) => setAdminNewToTime(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="submit"
+                  className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md"
+                >
+                  {adminEditingScheduleId ? 'Update Slot' : 'Save Slot'}
+                </button>
+                {adminEditingScheduleId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminEditingScheduleId(null);
+                      setAdminNewDate('');
+                      setAdminNewDay('');
+                      setAdminNewFromTime('');
+                      setAdminNewToTime('');
+                    }}
+                    className="bg-slate-850 hover:bg-slate-800 text-slate-300 font-bold text-xs px-4 py-2 rounded-xl transition-all border border-slate-800"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {/* List Slots */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-widest">
+                Availability Slots (Active)
+              </h4>
+
+              {adminSchedulesLoading ? (
+                <div className="text-center py-6 text-slate-500 text-xs font-mono">
+                  Loading slots...
+                </div>
+              ) : adminSchedules.length === 0 ? (
+                <div className="bg-slate-950/40 border border-dashed border-slate-800 rounded-xl py-8 text-center text-slate-500 text-xs">
+                  No active availability schedules set for this consultant.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
+                  {adminSchedules.map((sch) => (
+                    <div key={sch.id} className="bg-slate-950 p-3.5 rounded-xl border border-slate-850 flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="inline-block text-[9px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+                          {sch.date ? sch.date : sch.day}
+                        </span>
+                        <div className="text-xs font-bold text-slate-200">
+                          {sch.from_time} to {sch.to_time}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => {
+                            setAdminEditingScheduleId(sch.id);
+                            setAdminNewDate(sch.date || '');
+                            setAdminNewDay(sch.day || '');
+                            setAdminNewFromTime(sch.from_time);
+                            setAdminNewToTime(sch.to_time);
+                          }}
+                          className="px-2 py-1 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded text-[10px] transition-colors"
+                          title="Edit Slot"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleAdminDeleteSchedule(sch.id)}
+                          className="px-2 py-1 bg-rose-950/30 border border-rose-900/40 text-rose-400 hover:text-rose-300 rounded text-[10px] transition-colors"
+                          title="Delete Slot"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create / Edit Consultant Modal */}
       {showConsultantModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">

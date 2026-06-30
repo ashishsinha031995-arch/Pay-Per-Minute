@@ -845,7 +845,11 @@ export function ChatRoom({
                     if (!window.confirm('Kya aap sach mein is consultation ko end karna chahte hain? (Are you sure you want to end this consultation?)')) return;
                     try {
                       setIsEnding(true);
-                      const res = await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
+                      const res = await fetch(`/api/sessions/${sessionId}/end`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ended_by: role })
+                      });
                       if (res.ok) {
                         setToastMessage({ type: 'success', text: 'Consultation ended successfully.' });
                       } else {
@@ -887,7 +891,11 @@ export function ChatRoom({
                         });
                         if (blockRes.ok) {
                           // 2. End current session
-                          await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
+                          await fetch(`/api/sessions/${sessionId}/end`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ended_by: role })
+                          });
                           setToastMessage({ type: 'success', text: `Blocked ${uName} and ended chat.` });
                         } else {
                           const blockErr = await blockRes.json();
@@ -912,7 +920,11 @@ export function ChatRoom({
                       if (!window.confirm('Kya aap is session ko end karna chahte hain?')) return;
                       try {
                         setIsEnding(true);
-                        const res = await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
+                        const res = await fetch(`/api/sessions/${sessionId}/end`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ ended_by: role })
+                        });
                         if (res.ok) {
                           setToastMessage({ type: 'success', text: 'Session manually completed.' });
                         }
@@ -1303,7 +1315,15 @@ export function ChatRoom({
 
       {/* Input panel */}
       <div className="bg-slate-900 border-x border-b border-slate-800 p-4 rounded-b-2xl">
-        {isRecording ? (
+        {sessionInfo?.status === 'queued' || sessionInfo?.status === 'pending' ? (
+          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3.5 text-center text-xs font-mono text-slate-400">
+            ⏳ Waiting in queue... You can start messaging as soon as the consultant accepts your chat.
+          </div>
+        ) : sessionInfo?.status === 'cancelled' || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed' ? (
+          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3.5 text-center text-xs font-mono text-slate-400">
+            🚫 Chat is inactive. Message inputs are disabled.
+          </div>
+        ) : isRecording ? (
           <div className="flex items-center justify-between bg-slate-950 border border-red-500/30 p-3 rounded-xl">
             <div className="flex items-center space-x-3">
               <span className="flex h-2.5 w-2.5 relative">

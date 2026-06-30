@@ -679,4 +679,78 @@ export const getActiveQueuedSessionForUser = (req: Request, res: Response) => {
   }
 };
 
+// Get schedules for a specific consultant
+export const getConsultantSchedules = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const schedules = db.prepare('SELECT * FROM consultant_schedules WHERE consultant_id = ? ORDER BY date ASC, from_time ASC').all(id);
+    res.json(schedules);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Create a schedule for a consultant
+export const createConsultantSchedule = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { date, day, from_time, to_time } = req.body;
+
+    if (!from_time || !to_time) {
+      return res.status(400).json({ error: 'From Time and To Time are required.' });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO consultant_schedules (consultant_id, date, day, from_time, to_time, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, date || null, day || null, from_time, to_time, new Date().toISOString());
+
+    const newSchedule = db.prepare('SELECT * FROM consultant_schedules WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(newSchedule);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update a schedule for a consultant
+export const updateConsultantSchedule = (req: Request, res: Response) => {
+  try {
+    const { id, scheduleId } = req.params;
+    const { date, day, from_time, to_time } = req.body;
+
+    const schedule = db.prepare('SELECT * FROM consultant_schedules WHERE id = ? AND consultant_id = ?').get(scheduleId, id);
+    if (!schedule) {
+      return res.status(404).json({ error: 'Schedule not found' });
+    }
+
+    db.prepare(`
+      UPDATE consultant_schedules
+      SET date = ?, day = ?, from_time = ?, to_time = ?
+      WHERE id = ? AND consultant_id = ?
+    `).run(date || null, day || null, from_time, to_time, scheduleId, id);
+
+    const updatedSchedule = db.prepare('SELECT * FROM consultant_schedules WHERE id = ?').get(scheduleId);
+    res.json(updatedSchedule);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete a schedule
+export const deleteConsultantSchedule = (req: Request, res: Response) => {
+  try {
+    const { id, scheduleId } = req.params;
+    const schedule = db.prepare('SELECT * FROM consultant_schedules WHERE id = ? AND consultant_id = ?').get(scheduleId, id);
+    if (!schedule) {
+      return res.status(404).json({ error: 'Schedule not found' });
+    }
+
+    db.prepare('DELETE FROM consultant_schedules WHERE id = ? AND consultant_id = ?').run(scheduleId, id);
+    res.json({ success: true, message: 'Schedule deleted successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
 

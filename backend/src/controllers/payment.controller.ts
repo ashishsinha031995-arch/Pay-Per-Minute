@@ -392,6 +392,11 @@ export const endSessionManually = (req: Request, res: Response) => {
       return res.json({ success: true, status: sess.status, message: 'Session is already inactive.' });
     }
 
+    const { ended_by } = req.body || {};
+    // Treat as user ending unless explicitly specified as 'consultant'. This ensures robust detection 
+    // even if client payload is modified or missing keys.
+    const isUserEnding = ended_by === 'user' || ended_by !== 'consultant';
+
     const msgs = db.prepare('SELECT sender_type, sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
     const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text.startsWith('[VOICE_NOTE]:') ? '[Voice Note 🎙️]' : m.text}`).join('\n');
 
@@ -404,7 +409,7 @@ export const endSessionManually = (req: Request, res: Response) => {
     let actual_consultant_earnings = 0;
     let finalStatus = 'completed';
 
-    if (consultantMsgs.length === 0) {
+    if (consultantMsgs.length === 0 && !isUserEnding) {
       // Consultant did not reply or participate at all! Refund user 100%!
       actualMinutes = 0;
       actualCost = 0.0;
@@ -420,12 +425,13 @@ export const endSessionManually = (req: Request, res: Response) => {
         const actualSeconds = Math.max(0, Math.floor(diffMs / 1000));
         actualMinutes = Math.min(sess.duration_minutes, Math.max(1, Math.ceil(actualSeconds / 60)));
       } else {
-        actualMinutes = 0;
+        actualMinutes = 1;
       }
       actualCost = sess.price_per_minute * actualMinutes;
       refundAmount = Math.max(0, sess.total_paid - actualCost);
       actual_commission = actualCost * (sess.commission_rate / 100);
       actual_consultant_earnings = actualCost - actual_commission;
+      finalStatus = 'completed';
     }
 
     db.prepare(`
@@ -445,7 +451,7 @@ export const endSessionManually = (req: Request, res: Response) => {
         Number(sess.user_id),
         'refund',
         refundAmount,
-        consultantMsgs.length === 0
+        finalStatus === 'missed'
           ? `Refund: Consultation session missed/ignored by advisor (No messages received)`
           : `Refund: Remaining balance after completing ${actualMinutes} mins consultation`
       );

@@ -34,6 +34,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [selectedConsSchedules, setSelectedConsSchedules] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   
   // Active selection states
@@ -388,8 +389,15 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
         const revsData = await revsRes.json();
         setReviews(revsData);
       }
+      const schedulesRes = await fetch(`/api/consultants/${cons.id}/schedules`);
+      if (schedulesRes.ok) {
+        const schedulesData = await schedulesRes.json();
+        setSelectedConsSchedules(schedulesData);
+      } else {
+        setSelectedConsSchedules([]);
+      }
     } catch (err) {
-      console.error('Error loading consultant reviews:', err);
+      console.error('Error loading consultant reviews and schedules:', err);
     }
   };
 
@@ -2329,6 +2337,28 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                     )
                   ) : (
                     <span className="text-slate-500 font-bold">🔴 Offline</span>
+                  )}
+                </div>
+
+                {/* 📅 Availability Schedule Section */}
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-850/60 space-y-3">
+                  <div className="flex items-center space-x-2 text-emerald-400">
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Availability Schedule</span>
+                  </div>
+                  {selectedConsSchedules.length === 0 ? (
+                    <div className="text-slate-500 text-xs font-mono pl-6">No specific schedule listed. Consultant connects live based on real-time online status.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6">
+                      {selectedConsSchedules.map((sch) => (
+                        <div key={sch.id} className="text-xs flex items-center space-x-2 bg-slate-900 p-2 rounded-lg border border-slate-850">
+                          <span className="font-semibold text-emerald-300 font-mono text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/10">
+                            {sch.date ? sch.date : sch.day}
+                          </span>
+                          <span className="text-slate-300 font-bold">{sch.from_time} - {sch.to_time}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

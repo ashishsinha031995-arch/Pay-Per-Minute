@@ -183,6 +183,17 @@ export function initDb() {
       reason TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS consultant_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      consultant_id INTEGER NOT NULL,
+      date TEXT,
+      day TEXT,
+      from_time TEXT,
+      to_time TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (consultant_id) REFERENCES consultants (id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate existing tables if they are missing newer columns
@@ -196,6 +207,20 @@ export function initDb() {
         amount REAL NOT NULL,
         reason TEXT NOT NULL,
         created_at TEXT NOT NULL
+      );
+    `);
+  } catch (_) {}
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS consultant_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        consultant_id INTEGER NOT NULL,
+        date TEXT,
+        day TEXT,
+        from_time TEXT,
+        to_time TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (consultant_id) REFERENCES consultants (id) ON DELETE CASCADE
       );
     `);
   } catch (_) {}
