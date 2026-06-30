@@ -25,7 +25,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
   const [registerPrice, setRegisterPrice] = useState('20');
-  const [registerCategory, setRegisterCategory] = useState<'Astrologers' | 'Influencers' | 'Coaches' | 'Consultants' | 'Lawyers' | 'Mentors'>('Consultants');
+  const [registerCategory, setRegisterCategory] = useState<'Astrologers' | 'Influencers' | 'Coaches' | 'Consultants' | 'Lawyers' | 'Mentors' | 'Doctors' | 'Singers' | 'Advisors' | 'Friends'>('Consultants');
   const [credentialsGenerated, setCredentialsGenerated] = useState<{username: string, password: string, displayName: string} | null>(null);
 
   // Stats & Sessions list
@@ -1584,10 +1584,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   >
                     <option value="Astrologers">Astrologers</option>
                     <option value="Influencers">Influencers</option>
+                    <option value="Mentors">Mentors</option>
+                    <option value="Doctors">Doctors</option>
+                    <option value="Lawyers">Lawyers</option>
+                    <option value="Singers">Singers</option>
+                    <option value="Advisors">Advisors</option>
+                    <option value="Friends">Friends</option>
                     <option value="Coaches">Coaches</option>
                     <option value="Consultants">Consultants</option>
-                    <option value="Lawyers">Lawyers</option>
-                    <option value="Mentors">Mentors</option>
                   </select>
                   <span className="text-[9px] text-slate-500 block">Correct categorisation helps clients search you faster.</span>
                 </div>

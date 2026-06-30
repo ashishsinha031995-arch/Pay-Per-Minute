@@ -820,7 +820,7 @@ export const getAdminLiveQueues = (req: Request, res: Response) => {
     const liveQueues = consultants.map(cons => {
       // 1. Get current active session
       const activeSession = db.prepare(`
-        SELECT id, expires_at, status 
+        SELECT id, user_id, user_name, duration_minutes, expires_at, status 
         FROM sessions 
         WHERE consultant_id = ? AND status = 'active'
         LIMIT 1
@@ -828,7 +828,7 @@ export const getAdminLiveQueues = (req: Request, res: Response) => {
 
       // 2. Get current pending session (60s ring timeout)
       const pendingSession = db.prepare(`
-        SELECT id, created_at, status 
+        SELECT id, user_id, user_name, duration_minutes, created_at, status 
         FROM sessions 
         WHERE consultant_id = ? AND status = 'pending'
         LIMIT 1
@@ -838,13 +838,25 @@ export const getAdminLiveQueues = (req: Request, res: Response) => {
       let activeSessionInfo = null;
 
       if (activeSession) {
-        activeSessionInfo = { id: activeSession.id, status: 'active' };
+        activeSessionInfo = { 
+          id: activeSession.id, 
+          status: 'active',
+          user_id: activeSession.user_id,
+          user_name: activeSession.user_name,
+          duration_minutes: activeSession.duration_minutes
+        };
         if (activeSession.expires_at) {
           const expiryTime = new Date(activeSession.expires_at);
           remainingSeconds = Math.max(0, Math.floor((expiryTime.getTime() - now.getTime()) / 1000));
         }
       } else if (pendingSession) {
-        activeSessionInfo = { id: pendingSession.id, status: 'pending' };
+        activeSessionInfo = { 
+          id: pendingSession.id, 
+          status: 'pending',
+          user_id: pendingSession.user_id,
+          user_name: pendingSession.user_name,
+          duration_minutes: pendingSession.duration_minutes
+        };
         const createdTime = new Date(pendingSession.created_at);
         remainingSeconds = Math.max(0, Math.floor((createdTime.getTime() + 60 * 1000 - now.getTime()) / 1000));
       }

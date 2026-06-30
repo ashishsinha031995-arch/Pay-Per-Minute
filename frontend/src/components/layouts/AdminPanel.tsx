@@ -3,7 +3,8 @@ import {
   DollarSign, ShieldAlert, Sparkles, Plus, Settings, Users, Percent, ListCollapse, 
   ToggleLeft, ToggleRight, MessageSquare, Search, UserCheck, X, Calendar, BookOpen, 
   Award, CreditCard, Wallet, Landmark, BarChart3, Star, Megaphone, Bell, FileText, 
-  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins, Download, Clock
+  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins, Download, Clock,
+  Activity, UserMinus
 } from 'lucide-react';
 import { Plan, Consultant, Session, AdminStats } from '../../types';
 import { 
@@ -11,6 +12,24 @@ import {
   SupportTicketsPanel, AuditLogsPanel, RoleManagementPanel, SettingsPanel 
 } from './AdminSubSections';
 import { downloadInvoice } from '../../utils/invoiceHelper';
+
+const normalizeCategory = (cat: string) => {
+  if (!cat) return 'Consultants';
+  const c = cat.trim();
+  const mapping: Record<string, string> = {
+    'Astrologer': 'Astrologers', 'Astrologers': 'Astrologers',
+    'Influencer': 'Influencers', 'Influencers': 'Influencers',
+    'Mentor': 'Mentors', 'Mentors': 'Mentors',
+    'Doctor': 'Doctors', 'Doctors': 'Doctors',
+    'Lawyer': 'Lawyers', 'Lawyers': 'Lawyers',
+    'Singer': 'Singers', 'Singers': 'Singers',
+    'Advisor': 'Advisors', 'Advisors': 'Advisors',
+    'Friend': 'Friends', 'Friends': 'Friends',
+    'Coach': 'Coaches', 'Coaches': 'Coaches',
+    'Consultant': 'Consultants', 'Consultants': 'Consultants'
+  };
+  return mapping[c] || c;
+};
 
 export function AdminPanel() {
   const [stats, setStats] = useState<AdminStats>({
@@ -349,6 +368,11 @@ export function AdminPanel() {
   const [filterPayAmt, setFilterPayAmt] = useState('all');
   const [filterPayGateway, setFilterPayGateway] = useState('all');
 
+  // Search & Filter state for Live Queues
+  const [searchQueueCons, setSearchQueueCons] = useState('');
+  const [filterQueueStatus, setFilterQueueStatus] = useState('all');
+  const [sortQueueBy, setSortQueueBy] = useState('queue-desc');
+
   // State to track manual refresh spinner animation
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -444,6 +468,77 @@ export function AdminPanel() {
     setIsRefreshing(true);
     await loadAdminData(true);
     setTimeout(() => setIsRefreshing(false), 800);
+  };
+
+  const handleForceEndSession = async (sessionId: string | number) => {
+    if (!window.confirm("🚨 WARNING: Are you sure you want to FORCE END this active session?\n\nThis will calculate partial earnings based on actual elapsed chat time, process any unused minute refunds, write the transcript log, and end the live conversation instantly.")) return;
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccessMsg(null);
+      const res = await fetch(`/api/sessions/${sessionId}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ended_by: 'user' })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessMsg(`Session #${sessionId} successfully terminated. Partial refunds processed and pipelines updated.`);
+        await loadAdminData(true);
+      } else {
+        setError(data.error || "Failed to force end the session.");
+      }
+    } catch (err: any) {
+      setError("Error force ending session: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelQueuedSession = async (sessionId: string | number) => {
+    if (!window.confirm("⚠️ DEQUEUE USER: Are you sure you want to remove this user from the queue?\n\nThis will cancel their reservation and instantly refund 100% of their booking value (total paid amount) back into their user wallet.")) return;
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccessMsg(null);
+      const res = await fetch(`/api/sessions/${sessionId}/cancel`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setSuccessMsg(`User in session #${sessionId} successfully removed from queue and fully refunded.`);
+        await loadAdminData(true);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to cancel queue spot.");
+      }
+    } catch (err: any) {
+      setError("Error cancelling queue spot: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectPendingSession = async (sessionId: string | number) => {
+    if (!window.confirm("⚠️ CANCEL PENDING CALL: Are you sure you want to cancel this pending connection request?\n\nThis will reject the ring notification and immediately refund 100% of the customer's payment back to their wallet.")) return;
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccessMsg(null);
+      const res = await fetch(`/api/sessions/${sessionId}/reject`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessMsg(`Pending call #${sessionId} was successfully canceled. 100% user refund processed.`);
+        await loadAdminData(true);
+      } else {
+        setError(data.error || "Failed to cancel the pending call.");
+      }
+    } catch (err: any) {
+      setError("Error canceling pending call: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleApplyManualAdjustment = async (e: React.FormEvent) => {
@@ -986,7 +1081,7 @@ export function AdminPanel() {
     const idMatch = String(c.id).toLowerCase().includes(sTerm);
     if (sTerm && !nameMatch && !userMatch && !emailMatch && !idMatch) return false;
 
-    if (filterConsCat !== 'all' && (c as any).category !== filterConsCat) return false;
+    if (filterConsCat !== 'all' && normalizeCategory((c as any).category) !== filterConsCat) return false;
 
     if (filterConsStatus !== 'all') {
       const activeVal = filterConsStatus === 'active' ? 1 : 0;
@@ -1352,7 +1447,7 @@ export function AdminPanel() {
               </div>
 
               {/* Dynamic Analytics graphs from sub-component */}
-              <DashboardGraphs />
+              <DashboardGraphs consultants={consultants} sessions={sessions} users={adminUsers} />
 
               {/* ⚡ Subscription Packages Dynamic Dashboard */}
               {stats.plansStats && stats.plansStats.length > 0 && (
@@ -1685,11 +1780,15 @@ export function AdminPanel() {
                   >
                     <option value="all">All Categories</option>
                     <option value="Astrologers">Astrologers</option>
+                    <option value="Influencers">Influencers</option>
+                    <option value="Mentors">Mentors</option>
+                    <option value="Doctors">Doctors</option>
+                    <option value="Lawyers">Lawyers</option>
+                    <option value="Singers">Singers</option>
+                    <option value="Advisors">Advisors</option>
+                    <option value="Friends">Friends</option>
                     <option value="Coaches">Coaches</option>
                     <option value="Consultants">Consultants</option>
-                    <option value="Influencers">Influencers</option>
-                    <option value="Lawyers">Lawyers</option>
-                    <option value="Mentors">Mentors</option>
                   </select>
 
                   {/* Filter 2: Status */}
@@ -2266,121 +2365,385 @@ export function AdminPanel() {
 
           {/* ========================================================= */}
           {/* TAB: LIVE QUEUE MANAGER */}
-          {activeTab === 'queues' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-100">Live Queue Dashboard</h3>
-                  <p className="text-xs text-slate-400 font-mono">Real-time status, active sessions, and FIFO queue sequence tracking across all consultants</p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">Live Sync Active</span>
-                </div>
-              </div>
+          {activeTab === 'queues' && (() => {
+            // Compute real-time filtered and sorted queues
+            const processedQueues = liveQueues.filter(q => {
+              // Search query filter
+              if (searchQueueCons.trim()) {
+                const query = searchQueueCons.toLowerCase();
+                const nameMatch = q.display_name?.toLowerCase().includes(query);
+                const userMatch = q.username?.toLowerCase().includes(query);
+                if (!nameMatch && !userMatch) return false;
+              }
 
-              {/* Quick KPI stats */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">Total Consultants</span>
-                  <strong className="text-xl text-slate-100 block mt-1 font-mono">{liveQueues.length}</strong>
+              // Status filter
+              if (filterQueueStatus !== 'all') {
+                const status = q.active_session?.status;
+                if (filterQueueStatus === 'active' && status !== 'active') return false;
+                if (filterQueueStatus === 'pending' && status !== 'pending') return false;
+                if (filterQueueStatus === 'has-queue' && q.queue_count === 0) return false;
+                if (filterQueueStatus === 'available' && (status || q.queue_count > 0)) return false;
+              }
+
+              return true;
+            });
+
+            // Sort logic
+            processedQueues.sort((a, b) => {
+              if (sortQueueBy === 'queue-desc') {
+                return b.queue_count - a.queue_count;
+              } else if (sortQueueBy === 'queue-asc') {
+                return a.queue_count - b.queue_count;
+              } else if (sortQueueBy === 'name-asc') {
+                return (a.display_name || '').localeCompare(b.display_name || '');
+              } else if (sortQueueBy === 'status-first') {
+                const score = (q: any) => {
+                  if (q.active_session?.status === 'active') return 3;
+                  if (q.active_session?.status === 'pending') return 2;
+                  return 1;
+                };
+                return score(b) - score(a);
+              }
+              return 0;
+            });
+
+            // Calculate operational stats
+            const totalConsultants = liveQueues.length;
+            const activeSessionsCount = liveQueues.filter(q => q.active_session?.status === 'active').length;
+            const pendingRequestsCount = liveQueues.filter(q => q.active_session?.status === 'pending').length;
+            const totalUsersQueued = liveQueues.reduce((acc, q) => acc + q.queue_count, 0);
+
+            // Queue density descriptive status
+            let densityStatus = "Idle / Optimal";
+            let densityColor = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+            if (totalUsersQueued > 12) {
+              densityStatus = "Critical Overload";
+              densityColor = "text-rose-400 bg-rose-500/10 border-rose-500/20";
+            } else if (totalUsersQueued > 5) {
+              densityStatus = "Heavy Traffic";
+              densityColor = "text-amber-400 bg-amber-500/10 border-amber-500/20";
+            } else if (totalUsersQueued > 0) {
+              densityStatus = "Active Flow";
+              densityColor = "text-indigo-400 bg-indigo-500/10 border-indigo-500/20";
+            }
+
+            return (
+              <div className="space-y-6 text-left animate-in fade-in duration-300">
+                {/* Header Title with live pulse */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-3xl">
+                  <div>
+                    <div className="flex items-center space-x-2.5">
+                      <h3 className="text-lg font-extrabold text-slate-100 tracking-tight">Live Queue Command Center</h3>
+                      <span className="flex h-2.5 w-2.5 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 font-mono">
+                      Monitor advisor sessions in real-time, override stuck pipelines, and dequeue/refund customers instantly.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-3 self-end md:self-center">
+                    <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider hidden sm:inline">
+                      Auto-updates every 4s
+                    </span>
+                    <button
+                      onClick={handleManualRefresh}
+                      disabled={isRefreshing}
+                      className="flex items-center space-x-2 py-2 px-4 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700/80 rounded-2xl text-xs font-mono tracking-wide transition-all active:scale-[0.97]"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
+                      <span>{isRefreshing ? 'Syncing...' : 'Force Sync'}</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">Busy / On Call</span>
-                  <strong className="text-xl text-amber-400 block mt-1 font-mono">
-                    {liveQueues.filter(q => q.active_session || q.queue_count > 0).length}
-                  </strong>
-                </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">Total Users Queued</span>
-                  <strong className="text-xl text-emerald-400 block mt-1 font-mono">
-                    {liveQueues.reduce((acc, q) => acc + q.queue_count, 0)}
-                  </strong>
-                </div>
-              </div>
 
-              {/* Grid of live queues */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {liveQueues.map(q => (
-                  <div key={q.consultant_id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 hover:border-slate-700 transition-all flex flex-col justify-between">
-                    <div>
-                      <div className="flex justify-between items-start gap-3">
-                        <div>
-                          <h4 className="font-bold text-sm text-slate-100">{q.display_name}</h4>
-                          <span className="text-[10px] text-slate-500 font-mono">@{q.username}</span>
-                        </div>
-                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                          q.active_session?.status === 'active' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10' :
-                          q.active_session?.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/10 animate-pulse' :
-                          'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
-                        }`}>
-                          {q.active_session?.status === 'active' ? 'Busy (In Session)' :
-                           q.active_session?.status === 'pending' ? 'Pending Accept' :
-                           'Available (Free)'}
-                        </span>
-                      </div>
+                {/* Quick KPIs stats banner */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between hover:border-slate-700 transition-all">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Total Advisors</span>
+                      <Users className="h-4 w-4 text-slate-500" />
+                    </div>
+                    <strong className="text-2xl text-slate-100 mt-2 font-mono">{totalConsultants}</strong>
+                    <span className="text-[10px] text-slate-400 mt-1">Configured on platform</span>
+                  </div>
 
-                      {q.active_session && (
-                        <div className="mt-3.5 bg-slate-950/60 border border-slate-850 p-3.5 rounded-2xl space-y-1.5">
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-slate-400 uppercase font-mono tracking-wider">Active Chat ID</span>
-                            <span className="text-slate-200 font-mono font-bold">{q.active_session.id}</span>
-                          </div>
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-slate-400 uppercase font-mono tracking-wider">Remaining Time</span>
-                            <span className="text-rose-400 font-mono font-bold">
-                              {Math.floor(q.active_session_remaining_seconds / 60)}m {q.active_session_remaining_seconds % 60}s
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between hover:border-slate-700 transition-all">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Active Chats</span>
+                      <Activity className="h-4 w-4 text-rose-400" />
+                    </div>
+                    <strong className="text-2xl text-rose-400 mt-2 font-mono">{activeSessionsCount}</strong>
+                    <span className="text-[10px] text-slate-400 mt-1">Live call voice/chat rooms</span>
+                  </div>
 
-                      {/* Queue Section */}
-                      <div className="mt-4 space-y-2">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-400 font-bold">Queue Pipeline</span>
-                          <span className="text-emerald-400 font-mono text-[10px] font-bold">
-                            {q.queue_count} user(s) waiting
-                          </span>
-                        </div>
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between hover:border-slate-700 transition-all">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Pending Ringing</span>
+                      <Bell className="h-4 w-4 text-amber-400 animate-bounce" />
+                    </div>
+                    <strong className="text-2xl text-amber-400 mt-2 font-mono animate-pulse">{pendingRequestsCount}</strong>
+                    <span className="text-[10px] text-slate-400 mt-1">Ringing & awaiting accept</span>
+                  </div>
 
-                        {q.queue.length === 0 ? (
-                          <div className="bg-slate-950/40 border border-slate-850 border-dashed rounded-2xl p-4 text-center text-[10px] text-slate-500 font-mono">
-                            No users currently queued
-                          </div>
-                        ) : (
-                          <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                            {q.queue.map((user: any) => (
-                              <div key={user.session_id} className="bg-slate-950 border border-slate-850/60 p-3 rounded-2xl flex items-center justify-between hover:border-slate-700 transition-all">
-                                <div className="space-y-0.5">
-                                  <div className="flex items-center space-x-1.5">
-                                    <span className="text-xs font-extrabold text-slate-200">#{user.position} {user.user_name}</span>
-                                    <span className="text-[10px] font-mono text-slate-500">(UID: {user.user_id})</span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-400 font-mono">
-                                    Duration: {user.duration_minutes} mins
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-[9px] text-slate-500 uppercase font-mono block">Wait Time</span>
-                                  <span className="text-[11px] font-mono text-emerald-400 font-black">
-                                    {Math.ceil(user.wait_time_seconds / 60)} mins
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between hover:border-slate-700 transition-all">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Queue Pipeline</span>
+                      <Clock className="h-4 w-4 text-indigo-400" />
+                    </div>
+                    <strong className="text-2xl text-slate-100 mt-2 font-mono flex items-baseline space-x-1.5">
+                      <span>{totalUsersQueued}</span>
+                      <span className="text-xs font-bold text-slate-400">waiting</span>
+                    </strong>
+                    <div className={`mt-1 text-[9px] font-mono px-2 py-0.5 rounded-full border inline-block max-w-max ${densityColor}`}>
+                      {densityStatus}
                     </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Advanced Search & Filters Panel */}
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                  {/* Search query */}
+                  <div className="relative md:col-span-6">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search advisor by name or username..."
+                      value={searchQueueCons}
+                      onChange={(e) => setSearchQueueCons(e.target.value)}
+                      className="w-full bg-slate-950 text-slate-200 pl-10 pr-9 py-2.5 rounded-2xl border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none text-xs font-medium placeholder:text-slate-600 transition-all"
+                    />
+                    {searchQueueCons && (
+                      <button
+                        onClick={() => setSearchQueueCons('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Status filter dropdown */}
+                  <div className="md:col-span-3">
+                    <select
+                      value={filterQueueStatus}
+                      onChange={(e) => setFilterQueueStatus(e.target.value)}
+                      className="w-full bg-slate-950 text-slate-300 px-4 py-2.5 rounded-2xl border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs font-semibold cursor-pointer transition-all"
+                    >
+                      <option value="all">🔍 Status: All Advisors</option>
+                      <option value="active">🔴 Status: Busy (In Call)</option>
+                      <option value="pending">🟡 Status: Ringing (Pending)</option>
+                      <option value="has-queue">🟢 Status: Has Queued Users</option>
+                      <option value="available">⚪ Status: Idle & Available</option>
+                    </select>
+                  </div>
+
+                  {/* Sort order dropdown */}
+                  <div className="md:col-span-3">
+                    <select
+                      value={sortQueueBy}
+                      onChange={(e) => setSortQueueBy(e.target.value)}
+                      className="w-full bg-slate-950 text-slate-300 px-4 py-2.5 rounded-2xl border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs font-semibold cursor-pointer transition-all"
+                    >
+                      <option value="queue-desc">📈 Queue: Highest First</option>
+                      <option value="queue-asc">📉 Queue: Lowest First</option>
+                      <option value="status-first">⚡ Priority: Busy/Ringing First</option>
+                      <option value="name-asc">🔤 Name: Alphabetical (A-Z)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Empty State or Grid layout */}
+                {processedQueues.length === 0 ? (
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-xl mx-auto space-y-4">
+                    <div className="inline-flex p-4 rounded-full bg-slate-950 border border-slate-850 text-slate-600">
+                      <Search className="h-8 w-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-200 text-sm">No Live Queues Found</h4>
+                      <p className="text-xs text-slate-500">No active advisors or pipelines match your current search/filter combination.</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSearchQueueCons('');
+                        setFilterQueueStatus('all');
+                        setSortQueueBy('queue-desc');
+                      }}
+                      className="py-1.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-slate-100 rounded-xl text-xs font-semibold transition-all active:scale-95"
+                    >
+                      Clear Search Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    {processedQueues.map(q => {
+                      const isActive = q.active_session?.status === 'active';
+                      const isPending = q.active_session?.status === 'pending';
+                      
+                      // Calculate active/pending session details safely
+                      const activeSessUser = q.active_session?.user_name || "Unknown Customer";
+                      const activeSessId = q.active_session?.id;
+                      const activeSessDuration = q.active_session?.duration_minutes || 0;
+                      const activeSessUserId = q.active_session?.user_id;
+
+                      // Calculate live session duration percent
+                      const totalSecs = activeSessDuration * 60;
+                      const remainingSecs = q.active_session_remaining_seconds || 0;
+                      const elapsedSecs = Math.max(0, totalSecs - remainingSecs);
+                      const progressPct = totalSecs > 0 ? Math.min(100, Math.round((elapsedSecs / totalSecs) * 100)) : 0;
+
+                      return (
+                        <div
+                          key={q.consultant_id}
+                          className="bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-col justify-between hover:border-slate-700 transition-all hover:shadow-lg text-left"
+                        >
+                          <div className="space-y-4">
+                            {/* Advisor header */}
+                            <div className="flex justify-between items-start gap-4">
+                              <div className="flex items-center space-x-3">
+                                <div className="h-10 w-10 rounded-full bg-indigo-950 border border-indigo-800 flex items-center justify-center font-bold text-indigo-300 text-sm uppercase">
+                                  {q.display_name?.slice(0, 2) || "EX"}
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center space-x-1.5">
+                                    <h4 className="font-extrabold text-slate-100 text-sm">{q.display_name}</h4>
+                                    <span className="text-[10px] text-indigo-400 font-mono font-semibold">#{q.consultant_id}</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 font-mono">@{q.username}</p>
+                                </div>
+                              </div>
+
+                              <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${
+                                isActive ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                isPending ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' :
+                                'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              }`}>
+                                {isActive ? '🔴 Live Chat' : isPending ? '🟡 Ringing Client' : '⚪ Available'}
+                              </span>
+                            </div>
+
+                            {/* Active/Pending Live Conversation box */}
+                            {q.active_session ? (
+                              <div className="bg-slate-950/75 border border-slate-800 p-4 rounded-2xl space-y-3">
+                                <div className="flex justify-between items-start">
+                                  <div className="space-y-0.5 text-left">
+                                    <span className="text-[9px] text-slate-500 uppercase font-mono tracking-wider">
+                                      {isActive ? 'Current Active Client' : 'Incoming Ring Request'}
+                                    </span>
+                                    <div className="flex items-center space-x-1.5">
+                                      <span className="text-xs font-bold text-slate-200">{activeSessUser}</span>
+                                      <span className="text-[10px] text-slate-500 font-mono">(UID: {activeSessUserId})</span>
+                                    </div>
+                                    <span className="text-[9px] text-slate-400 font-mono block">
+                                      Booked: {activeSessDuration} mins • Session ID: #{activeSessId}
+                                    </span>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <span className="text-[9px] text-slate-500 uppercase font-mono block">Time Left</span>
+                                    <span className={`text-xs font-mono font-black ${isActive ? 'text-rose-400' : 'text-amber-400'}`}>
+                                      {Math.floor(remainingSecs / 60)}m {remainingSecs % 60}s
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Progress timer bar */}
+                                {isActive && (
+                                  <div className="space-y-1">
+                                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                      <div
+                                        className="bg-rose-500 h-full rounded-full transition-all duration-1000"
+                                        style={{ width: `${progressPct}%` }}
+                                      ></div>
+                                    </div>
+                                    <div className="flex justify-between text-[8px] font-mono text-slate-500">
+                                      <span>{Math.round(elapsedSecs / 60)}m elapsed</span>
+                                      <span>{progressPct}% complete</span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Admin Action overrides for current call */}
+                                {isActive ? (
+                                  <button
+                                    onClick={() => handleForceEndSession(activeSessId)}
+                                    className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-rose-500/10 hover:bg-rose-600/20 text-rose-400 hover:text-rose-300 border border-rose-500/10 hover:border-rose-500/20 rounded-xl text-xs font-semibold tracking-wide transition-all active:scale-[0.98]"
+                                  >
+                                    <UserMinus className="h-3.5 w-3.5" />
+                                    <span>Force End Session (Refund Remaining)</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleRejectPendingSession(activeSessId)}
+                                    className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-amber-500/10 hover:bg-amber-600/20 text-amber-400 hover:text-amber-300 border border-amber-500/10 hover:border-amber-500/20 rounded-xl text-xs font-semibold tracking-wide transition-all active:scale-[0.98]"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                    <span>Cancel Ringing Call (Full Refund)</span>
+                                  </button>
+                                )}
+                              </div>
+                            ) : null}
+
+                            {/* Queue Pipeline Container */}
+                            <div className="space-y-2.5">
+                              <div className="flex justify-between items-center">
+                                <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">FIFO Queue Pipeline</h5>
+                                <span className="text-[10px] font-mono font-bold text-indigo-400 px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/10 rounded-lg">
+                                  {q.queue_count} clients queued
+                                </span>
+                              </div>
+
+                              {q.queue.length === 0 ? (
+                                <div className="bg-slate-950/40 border border-slate-850/80 border-dashed rounded-2xl p-4 text-center text-[10px] text-slate-500 font-mono">
+                                  Pipeline clear. No clients waiting.
+                                </div>
+                              ) : (
+                                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                                  {q.queue.map((user: any) => (
+                                    <div
+                                      key={user.session_id}
+                                      className="bg-slate-950 border border-slate-850/60 p-3 rounded-2xl flex items-center justify-between hover:border-slate-800 transition-all"
+                                    >
+                                      <div className="flex items-center space-x-3">
+                                        <div className="h-7 w-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-xs font-mono font-black text-slate-400">
+                                          #{user.position}
+                                        </div>
+                                        <div className="space-y-0.5 text-left">
+                                          <div className="flex items-center space-x-1.5">
+                                            <span className="text-xs font-extrabold text-slate-200">{user.user_name}</span>
+                                            <span className="text-[9px] font-mono text-slate-500">ID: {user.user_id}</span>
+                                          </div>
+                                          <p className="text-[10px] text-slate-400 font-mono flex items-center space-x-2">
+                                            <span>Duration: {user.duration_minutes}m</span>
+                                            <span className="text-slate-600">•</span>
+                                            <span>Est. Wait: {Math.ceil(user.wait_time_seconds / 60)}m</span>
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        onClick={() => handleCancelQueuedSession(user.session_id)}
+                                        title="Dequeue & 100% Refund user"
+                                        className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg border border-transparent hover:border-rose-500/10 transition-all active:scale-[0.95]"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ========================================================= */}
           {/* 2.3 TAB: SUBSCRIPTION MANAGEMENT */}
@@ -3836,7 +4199,7 @@ export function AdminPanel() {
                 </div>
               </div>
               
-              <DashboardGraphs />
+              <DashboardGraphs consultants={consultants} sessions={sessions} users={adminUsers} />
             </div>
           )}
 
@@ -4503,10 +4866,14 @@ export function AdminPanel() {
                   >
                     <option value="Astrologers">Astrologers</option>
                     <option value="Influencers">Influencers</option>
+                    <option value="Mentors">Mentors</option>
+                    <option value="Doctors">Doctors</option>
+                    <option value="Lawyers">Lawyers</option>
+                    <option value="Singers">Singers</option>
+                    <option value="Advisors">Advisors</option>
+                    <option value="Friends">Friends</option>
                     <option value="Coaches">Coaches</option>
                     <option value="Consultants">Consultants</option>
-                    <option value="Lawyers">Lawyers</option>
-                    <option value="Mentors">Mentors</option>
                   </select>
                 </div>
               </div>

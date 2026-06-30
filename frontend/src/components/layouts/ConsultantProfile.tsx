@@ -19,6 +19,24 @@ const formatToLocalDateString = (dateStr: any) => {
   }
 };
 
+const normalizeCategory = (cat: string) => {
+  if (!cat) return 'Consultants';
+  const c = cat.trim();
+  const mapping: Record<string, string> = {
+    'Astrologer': 'Astrologers', 'Astrologers': 'Astrologers',
+    'Influencer': 'Influencers', 'Influencers': 'Influencers',
+    'Mentor': 'Mentors', 'Mentors': 'Mentors',
+    'Doctor': 'Doctors', 'Doctors': 'Doctors',
+    'Lawyer': 'Lawyers', 'Lawyers': 'Lawyers',
+    'Singer': 'Singers', 'Singers': 'Singers',
+    'Advisor': 'Advisors', 'Advisors': 'Advisors',
+    'Friend': 'Friends', 'Friends': 'Friends',
+    'Coach': 'Coaches', 'Coaches': 'Coaches',
+    'Consultant': 'Consultants', 'Consultants': 'Consultants'
+  };
+  return mapping[c] || c;
+};
+
 interface ConsultantProfileProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
   targetUsername?: string; // If navigated from Consultant Panel profile URL
@@ -2181,7 +2199,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
 
           {/* Category selection tabs */}
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {['All', 'Astrologers', 'Influencers', 'Coaches', 'Consultants', 'Lawyers', 'Mentors'].map((category) => (
+            {['All', 'Astrologers', 'Influencers', 'Mentors', 'Doctors', 'Lawyers', 'Singers', 'Advisors', 'Friends', 'Coaches', 'Consultants'].map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
@@ -2197,12 +2215,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {getFilteredConsultants().filter(c => selectedCategory === 'All' || (c as any).category === selectedCategory).length === 0 ? (
+            {getFilteredConsultants().filter(c => selectedCategory === 'All' || normalizeCategory((c as any).category) === selectedCategory).length === 0 ? (
               <div className="col-span-3 text-center py-16 text-slate-500 bg-slate-900 border border-slate-800 rounded-2xl">
                 No active advisors found in "{selectedCategory}" category at the moment.
               </div>
             ) : (
-              getFilteredConsultants().filter(c => selectedCategory === 'All' || (c as any).category === selectedCategory).map((cons) => (
+              getFilteredConsultants().filter(c => selectedCategory === 'All' || normalizeCategory((c as any).category) === selectedCategory).map((cons) => (
                 <div
                   key={cons.id}
                   className="bg-slate-900 text-white rounded-2xl border border-slate-800 shadow-sm overflow-hidden hover:border-slate-700 transition-all flex flex-col justify-between"
@@ -2225,7 +2243,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                         <h3 className="font-bold text-lg text-slate-100">{cons.display_name}</h3>
                         <div className="flex flex-wrap gap-1 items-center">
                           <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold px-2 py-0.5 rounded-full">
-                            {(cons as any).category || 'Consultants'}
+                            {normalizeCategory((cons as any).category || 'Consultants')}
                           </span>
                           {cons.is_online === 1 ? (
                             cons.is_busy === 1 ? (
