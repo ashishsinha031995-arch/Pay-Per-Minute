@@ -3,7 +3,7 @@ import {
   DollarSign, ShieldAlert, Sparkles, Plus, Settings, Users, Percent, ListCollapse, 
   ToggleLeft, ToggleRight, MessageSquare, Search, UserCheck, X, Calendar, BookOpen, 
   Award, CreditCard, Wallet, Landmark, BarChart3, Star, Megaphone, Bell, FileText, 
-  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins
+  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins, Download
 } from 'lucide-react';
 import { Plan, Consultant, Session, AdminStats } from '../../types';
 import { 
@@ -203,6 +203,25 @@ export function AdminPanel() {
   // Transcript monitoring overlay states
   const [viewingPastSessionMessages, setViewingPastSessionMessages] = useState<any[] | null>(null);
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
+
+  const downloadBulkVoiceNotes = () => {
+    if (!viewingPastSessionMessages) return;
+    const voiceNotes = viewingPastSessionMessages.filter((m: any) => m.text?.startsWith('[VOICE_NOTE]:'));
+    if (voiceNotes.length === 0) {
+      alert('No voice notes found in this session to download in bulk.');
+      return;
+    }
+    voiceNotes.forEach((msg: any, index: number) => {
+      setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = msg.text.substring('[VOICE_NOTE]:'.length);
+        link.download = `voice_note_session_${viewingPastSessionInfo?.id || 'session'}_${msg.id || index}.webm`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }, index * 500);
+    });
+  };
 
   // Search & Filter state for Consultants ledger
   const [searchCons, setSearchCons] = useState('');
@@ -4595,20 +4614,32 @@ export function AdminPanel() {
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150">
             
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h3 className="font-bold text-sm text-slate-100">Super Admin Transcript Audit Monitor</h3>
                 <p className="text-[10px] text-slate-400 font-mono">UUID: {viewingPastSessionInfo?.id}</p>
               </div>
-              <button
-                onClick={() => {
-                  setViewingPastSessionMessages(null);
-                  setViewingPastSessionInfo(null);
-                }}
-                className="text-slate-400 hover:text-white bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 text-xs font-mono transition-colors"
-              >
-                Close
-              </button>
+              <div className="flex items-center space-x-2">
+                {viewingPastSessionMessages && viewingPastSessionMessages.some((m: any) => m.text?.startsWith('[VOICE_NOTE]:')) && (
+                  <button
+                    onClick={downloadBulkVoiceNotes}
+                    className="flex items-center space-x-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                    title="Download all voice notes in bulk"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Bulk Download Voice Notes</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setViewingPastSessionMessages(null);
+                    setViewingPastSessionInfo(null);
+                  }}
+                  className="text-slate-400 hover:text-white bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 text-xs font-mono transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="p-4 overflow-y-auto flex-1 space-y-3 bg-slate-950">
@@ -4617,13 +4648,36 @@ export function AdminPanel() {
               ) : (
                 viewingPastSessionMessages.map((msg: any) => {
                   const isConsultant = msg.sender_type === 'consultant';
+                  const isVoiceNote = msg.text && msg.text.startsWith('[VOICE_NOTE]:');
                   return (
                     <div key={msg.id} className={`flex flex-col ${isConsultant ? 'items-end' : 'items-start'}`}>
                       <div className={`max-w-xs rounded-xl p-2.5 text-xs ${
                         isConsultant ? 'bg-cyan-950 text-cyan-400 border border-cyan-900/30 rounded-tr-none' : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
                       }`}>
                         <span className="block text-[9px] text-slate-500 font-mono mb-0.5">{msg.sender_name}</span>
-                        <p className="whitespace-pre-wrap text-white leading-relaxed">{msg.text}</p>
+                        {isVoiceNote ? (
+                          <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
+                            <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                              <span>🎙️ Voice Note</span>
+                              <a
+                                href={msg.text.substring('[VOICE_NOTE]:'.length)}
+                                download={`voice_note_${viewingPastSessionInfo?.id || 'session'}_${msg.id}.webm`}
+                                className="flex items-center space-x-1 text-emerald-400 hover:text-emerald-300 font-sans normal-case font-bold"
+                                title="Download this voice note"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Download</span>
+                              </a>
+                            </div>
+                            <audio
+                              controls
+                              src={msg.text.substring('[VOICE_NOTE]:'.length)}
+                              className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
+                            />
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap text-white leading-relaxed">{msg.text}</p>
+                        )}
                       </div>
                       <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString()}</span>
                     </div>

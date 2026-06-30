@@ -21,14 +21,47 @@ export default function AppPage() {
   const [socketConnected, setSocketConnected] = useState(false);
 
   // Deep linking public profiles
-  const [targetUsername, setTargetUsername] = useState<string | undefined>(undefined);
+  const [targetUsername, setTargetUsername] = useState<string | undefined>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/u/')) {
+        const username = path.slice(3).trim();
+        if (username) {
+          localStorage.setItem('clicked_consultant_username', username);
+          return username;
+        }
+      }
+      return localStorage.getItem('clicked_consultant_username') || undefined;
+    }
+    return undefined;
+  });
 
   // Active Chat Session state
   const [activeSession, setActiveSession] = useState<{
     sessionId: string;
     userName: string;
     role: 'user' | 'consultant';
-  } | null>(null);
+  } | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const persisted = localStorage.getItem('advisor_active_session');
+        if (persisted) {
+          return JSON.parse(persisted);
+        }
+      } catch (e) {
+        console.error('Error reading activeSession from localStorage:', e);
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (activeSession) {
+      localStorage.setItem('advisor_active_session', JSON.stringify(activeSession));
+    } else {
+      localStorage.removeItem('advisor_active_session');
+    }
+  }, [activeSession]);
 
   // User Auth States
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -97,6 +130,7 @@ export default function AppPage() {
       const username = path.slice(3).trim();
       if (username) {
         setTargetUsername(username);
+        localStorage.setItem('clicked_consultant_username', username);
         setCurrentRole('user');
       }
     }
@@ -272,7 +306,11 @@ export default function AppPage() {
   // Logout handler
   const handleLogout = () => {
     localStorage.removeItem('logged_user_id');
+    localStorage.removeItem('advisor_active_session');
+    localStorage.removeItem('clicked_consultant_username');
+    setTargetUsername(undefined);
     setCurrentUser(null);
+    setActiveSession(null);
   };
 
   return (

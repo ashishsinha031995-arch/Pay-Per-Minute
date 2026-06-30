@@ -25,7 +25,100 @@ export function ChatRoom({
   const currentUser = currentUserProp || authContext?.currentUser;
   const refreshUserProfile = refreshUserProfileProp || authContext?.refreshUserProfile;
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const cached = localStorage.getItem(`advisor_chat_messages_${sessionId}`);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.error('Error reading cached messages:', e);
+    }
+    return [];
+  });
+
+  // Network Resilience and Offline Queue states/refs
+  const [lowInternet, _setLowInternet] = useState(false);
+  const lowInternetRef = useRef(false);
+  const setLowInternet = (val: boolean) => {
+    lowInternetRef.current = val;
+    _setLowInternet(val);
+  };
+  const [pingLatency, setPingLatency] = useState<number | null>(null);
+  const offlineQueueRef = useRef<{ id: string; text: string; sender_type: string; sender_name: string; attempts: number }[]>([]);
+  const isProcessingQueue = useRef(false);
+
+  const processOfflineQueue = async () => {
+    if (isProcessingQueue.current) return;
+    if (offlineQueueRef.current.length === 0) return;
+    if (lowInternetRef.current || !socketRef.current?.connected) return;
+
+    isProcessingQueue.current = true;
+    console.log('[Offline Queue] Processing started. Current queue length:', offlineQueueRef.current.length);
+
+    while (offlineQueueRef.current.length > 0) {
+      if (lowInternetRef.current || !socketRef.current?.connected) {
+        console.log('[Offline Queue] Connection lost or unstable. Pausing processing.');
+        break;
+      }
+
+      const msg = offlineQueueRef.current[0];
+      const backoffDelay = Math.min(1000 * Math.pow(2, msg.attempts), 10000); // Backoff limit of 10s
+
+      if (msg.attempts > 0) {
+        console.log(`[Offline Queue] Retrying message id: ${msg.id} after backoff of ${backoffDelay}ms`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+      }
+
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender_type: msg.sender_type,
+            sender_name: msg.sender_name,
+            text: msg.text,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.message) {
+            console.log('[Offline Queue] Successfully sent queued message:', msg.id);
+            // Replace the temporary offline message with the actual message from the database
+            setMessages(prev => {
+              const filtered = prev.filter(m => m.id !== msg.id);
+              if (filtered.some(m => m.id === data.message.id)) return filtered;
+              return [...filtered, data.message];
+            });
+            // Remove from the queue
+            offlineQueueRef.current.shift();
+          } else {
+            msg.attempts += 1;
+          }
+        } else {
+          msg.attempts += 1;
+        }
+      } catch (err) {
+        console.error('[Offline Queue] Send failed with error:', err);
+        msg.attempts += 1;
+      }
+    }
+
+    isProcessingQueue.current = false;
+  };
+
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      try {
+        localStorage.setItem(`advisor_chat_messages_${sessionId}`, JSON.stringify(messages));
+      } catch (e) {
+        console.error('Error saving messages to localStorage:', e);
+      }
+    }
+  }, [messages, sessionId]);
+
   const [textInput, setTextInput] = useState('');
   
   // Real-time socket states
@@ -167,10 +260,19 @@ export function ChatRoom({
         setSessionInfo(data.session);
         setMessages(data.messages);
         
-        if (data.session.status === 'completed') {
+        if (data.session.status === 'completed' || data.session.status === 'cancelled' || data.session.status === 'rejected' || data.session.status === 'missed') {
           setSessionCompleted(true);
           setSessionTranscript(data.session.transcript);
+          localStorage.removeItem('advisor_active_session');
+        } else if (data.session.status === 'active' && data.session.expires_at) {
+          const expiryTime = new Date(data.session.expires_at);
+          const now = new Date();
+          const remainingMs = expiryTime.getTime() - now.getTime();
+          const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+          setRemainingSeconds(remainingSeconds);
         }
+      } else {
+        localStorage.removeItem('advisor_active_session');
       }
     } catch (err) {
       console.error('Failed to load session details:', err);
@@ -187,12 +289,61 @@ export function ChatRoom({
     const socket = io();
     socketRef.current = socket;
 
+    let heartbeatInterval: NodeJS.Timeout | null = null;
+    let heartbeatTimeout: NodeJS.Timeout | null = null;
+
+    const startHeartbeat = () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+
+      heartbeatInterval = setInterval(() => {
+        if (socket.connected && !lowInternetRef.current) {
+          const startTime = Date.now();
+          socket.emit('ping:heartbeat', { startTime });
+
+          heartbeatTimeout = setTimeout(() => {
+            console.warn('[Heartbeat] No pong response within 3000ms. Low internet detected.');
+            setLowInternet(true);
+          }, 3000);
+        } else if (!socket.connected) {
+          setLowInternet(true);
+        }
+      }, 3000);
+    };
+
     // Join room
     socket.emit('join:room', { session_id: sessionId, role, username: userName });
 
     // Connection success indicator
     socket.on('connect', () => {
       console.log('Chat socket connected successfully!');
+      setLowInternet(false);
+      startHeartbeat();
+      socket.emit('join:room', { session_id: sessionId, role, username: userName });
+      loadSessionDataset();
+      processOfflineQueue();
+    });
+
+    socket.on('disconnect', () => {
+      console.warn('Chat socket disconnected!');
+      setLowInternet(true);
+    });
+
+    socket.on('connect_error', () => {
+      setLowInternet(true);
+    });
+
+    socket.on('pong:heartbeat', (data: { startTime: number }) => {
+      if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+      const latency = Date.now() - data.startTime;
+      setPingLatency(latency);
+      if (latency > 3000) {
+        console.warn(`[Heartbeat] High ping latency detected: ${latency}ms`);
+        setLowInternet(true);
+      } else {
+        setLowInternet(false);
+        processOfflineQueue();
+      }
     });
 
     // Session started ticker (transitions status pending -> active)
@@ -228,6 +379,7 @@ export function ChatRoom({
       // Automatically trigger read receipt if chat room is focused
       if (msg.sender_type !== role) {
         socket.emit('read:messages', { session_id: sessionId, sender_type: role });
+        setPartnerOnline(true);
       }
     });
 
@@ -246,6 +398,9 @@ export function ChatRoom({
     // Partner Typing
     socket.on('partner:typing', ({ sender_name, is_typing }) => {
       setPartnerTyping(is_typing);
+      if (is_typing) {
+        setPartnerOnline(true);
+      }
     });
 
     // Messages Read receipt
@@ -253,6 +408,7 @@ export function ChatRoom({
       if (reader_type !== role) {
         // Partner read our messages! Update local read states
         setMessages(prev => prev.map(m => m.sender_type === role ? { ...m, is_read: 1 } : m));
+        setPartnerOnline(true);
       }
     });
 
@@ -291,11 +447,42 @@ export function ChatRoom({
     // Cleanup
     return () => {
       socket.disconnect();
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
     };
   }, [sessionId, role, userName]);
+
+  // 2.5 Tab visibility recovery & background state recovery
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[App Lifecycle] Tab in foreground. Syncing chat state & verifying connection...');
+        loadSessionDataset();
+        if (socketRef.current) {
+          if (!socketRef.current.connected) {
+            socketRef.current.connect();
+          } else {
+            socketRef.current.emit('join:room', { session_id: sessionId, role, username: userName });
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [sessionId, role, userName]);
+
+  // 2.6 Reactive offline queue process trigger
+  useEffect(() => {
+    if (!lowInternet && socketRef.current?.connected) {
+      processOfflineQueue();
+    }
+  }, [lowInternet]);
 
   // 3. Scroll to bottom on message updates
   useEffect(() => {
@@ -311,6 +498,34 @@ export function ChatRoom({
 
     // Clear input immediately to make UI responsive
     setTextInput('');
+
+    // Generate local offline message object
+    const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+    const tempMessage: Message = {
+      id: tempId,
+      session_id: sessionId,
+      sender_type: role,
+      sender_name: userName,
+      text: textToSend,
+      created_at: new Date().toISOString(),
+      is_read: 0,
+      is_offline: true, // Custom flag for UI indicators
+    };
+
+    // If offline or low internet, queue immediately and display locally
+    if (lowInternetRef.current || !socketRef.current?.connected) {
+      console.log('[Offline Send] Low internet/socket disconnected. Queueing message locally.');
+      setMessages(prev => [...prev, tempMessage]);
+      offlineQueueRef.current.push({
+        id: tempId,
+        text: textToSend,
+        sender_type: role,
+        sender_name: userName,
+        attempts: 0
+      });
+      processOfflineQueue();
+      return;
+    }
 
     try {
       // Send message via our ultra-reliable REST API
@@ -337,26 +552,28 @@ export function ChatRoom({
         }
       } else {
         console.error('Failed to send message via REST API status:', res.status);
-        // Fallback to socket emit in case HTTP fails
-        if (socketRef.current) {
-          socketRef.current.emit('send:message', {
-            session_id: sessionId,
-            sender_type: role,
-            sender_name: userName,
-            text: textToSend,
-          });
-        }
-      }
-    } catch (err) {
-      console.error('REST message send failed, trying socket fallback:', err);
-      if (socketRef.current) {
-        socketRef.current.emit('send:message', {
-          session_id: sessionId,
+        // Queue local fallback
+        setMessages(prev => [...prev, tempMessage]);
+        offlineQueueRef.current.push({
+          id: tempId,
+          text: textToSend,
           sender_type: role,
           sender_name: userName,
-          text: textToSend,
+          attempts: 0
         });
+        processOfflineQueue();
       }
+    } catch (err) {
+      console.error('REST message send failed, queueing message locally:', err);
+      setMessages(prev => [...prev, tempMessage]);
+      offlineQueueRef.current.push({
+        id: tempId,
+        text: textToSend,
+        sender_type: role,
+        sender_name: userName,
+        attempts: 0
+      });
+      processOfflineQueue();
     }
 
     // Clear typing states
@@ -549,13 +766,24 @@ export function ChatRoom({
             <h3 className="font-bold text-sm text-slate-100">
               {role === 'user' ? sessionInfo?.consultant_name : sessionInfo?.user_name}
             </h3>
-            <div className="flex items-center space-x-2 mt-0.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
-              <span className="text-[10px] text-slate-400 font-sans">
-                {partnerOnline ? 'Connected' : 'Waiting for partner...'}
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5 text-[10px] text-slate-400 font-sans">
+              {/* Our Connection Status */}
+              <span className="flex items-center space-x-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${lowInternet ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                <span>You: {lowInternet ? 'Low internet' : 'Online'}</span>
               </span>
+              
               <span className="text-slate-700">•</span>
-              <span className="text-[10px] text-slate-500 font-mono">
+              
+              {/* Partner Connection Status */}
+              <span className="flex items-center space-x-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                <span>Partner: {partnerOnline ? 'Connected' : 'Waiting...'}</span>
+              </span>
+
+              <span className="text-slate-700">•</span>
+              
+              <span className="text-slate-500 font-mono">
                 Tariff: ₹{sessionInfo?.price_per_minute || '--'}/min
               </span>
             </div>
@@ -682,6 +910,17 @@ export function ChatRoom({
       {/* Live messaging feed */}
       <div className="flex-1 bg-slate-950 border-x border-slate-900 p-6 overflow-y-auto space-y-4 min-h-[300px]">
         
+        {/* Sleek Low Internet Banner */}
+        {lowInternet && (
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold px-4 py-3 rounded-2xl flex items-center justify-center space-x-2.5 animate-pulse mb-3 max-w-md mx-auto shadow-lg shadow-rose-950/20">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+            </span>
+            <span>Connecting... Low internet detected</span>
+          </div>
+        )}
+
         {/* Sleek Toast Feedback Alert */}
         {toastMessage && (
           <div className={`p-3 rounded-xl border text-center text-xs font-sans max-w-md mx-auto ${
@@ -848,6 +1087,8 @@ export function ChatRoom({
                         </div>
                         <audio
                           controls
+                          controlsList="nodownload"
+                          onContextMenu={(e) => e.preventDefault()}
                           src={msg.text.substring('[VOICE_NOTE]:'.length)}
                           className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
                         />
@@ -861,7 +1102,12 @@ export function ChatRoom({
                     <span>{safeFormatTime(msg.created_at)}</span>
                     {isMe && (
                       <span>
-                        {msg.is_read === 1 ? (
+                        {msg.is_offline ? (
+                          <span className="text-amber-500/80 animate-pulse flex items-center space-x-0.5 font-sans font-semibold">
+                            <Clock className="w-2.5 h-2.5 animate-spin inline-block mr-0.5" />
+                            <span>Retry Queue...</span>
+                          </span>
+                        ) : msg.is_read === 1 ? (
                           <CheckCheck className="w-3.5 h-3.5 text-cyan-400" />
                         ) : (
                           <Check className="w-3.5 h-3.5" />
@@ -883,7 +1129,7 @@ export function ChatRoom({
               <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.2s]"></span>
               <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.4s]"></span>
             </div>
-            <span>Advisor partner typing...</span>
+            <span>Typing...</span>
           </div>
         )}
 

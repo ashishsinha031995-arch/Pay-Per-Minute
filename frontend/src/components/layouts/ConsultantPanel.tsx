@@ -3551,7 +3551,22 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         isMe ? 'bg-emerald-500 text-white rounded-tr-none' : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
                       }`}>
                         <span className="block text-[9px] text-slate-400 font-mono mb-0.5">{msg.sender_name}</span>
-                        <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
+                        {msg.text && msg.text.startsWith('[VOICE_NOTE]:') ? (
+                          <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
+                            <div className={`flex items-center space-x-1.5 text-[10px] font-mono uppercase tracking-wider ${isMe ? 'text-emerald-100' : 'text-slate-400'}`}>
+                              <span>🎙️ Voice Note</span>
+                            </div>
+                            <audio
+                              controls
+                              controlsList="nodownload"
+                              onContextMenu={(e) => e.preventDefault()}
+                              src={msg.text.substring('[VOICE_NOTE]:'.length)}
+                              className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
+                            />
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
+                        )}
                       </div>
                       <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">
                         {(() => {

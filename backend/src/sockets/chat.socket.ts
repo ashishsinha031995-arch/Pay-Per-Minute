@@ -4,18 +4,26 @@ import { db } from '../config/database.js';
 export function handleChatSocket(io: Server, socket: Socket) {
   // 1. Join Chat Session Room
   socket.on('join:room', async ({ session_id, role, username }) => {
-    socket.join(session_id);
+    await socket.join(session_id);
+    socket.data.role = role;
+    socket.data.session_id = session_id;
+    socket.data.username = username;
     console.log(`[Socket Server] Client ${username || 'Anonymous'} joined Room: ${session_id} as ${role}`);
 
     try {
-      // Let the partner in the room know someone joined
-      const roomObj = io.sockets.adapter.rooms.get(session_id);
-      const roomSize = roomObj ? roomObj.size : 0;
-      console.log(`[Socket Server] Room ${session_id} size is now ${roomSize}`);
-      if (roomSize >= 2) {
-        // Broadcast to entire room that both are connected and active
+      // Fetch all sockets currently in this session room
+      const roomSockets = await io.in(session_id).fetchSockets();
+      const rolesInRoom = roomSockets.map(s => s.data.role);
+      const hasUser = rolesInRoom.includes('user');
+      const hasConsultant = rolesInRoom.includes('consultant');
+
+      console.log(`[Socket Server] Room ${session_id} has roles:`, rolesInRoom);
+
+      if (hasUser && hasConsultant) {
+        // Both user and consultant are in the room! Broadcast to entire room.
         io.to(session_id).emit('partner:joined', { role: 'both', username: 'both' });
       } else {
+        // Only one of them is in the room. Inform any other listeners of the join
         socket.to(session_id).emit('partner:joined', { role, username });
       }
     } catch (err) {
@@ -93,5 +101,10 @@ export function handleChatSocket(io: Server, socket: Socket) {
     } catch (err) {
       console.error('Error marking messages as read:', err);
     }
+  });
+
+  // 5. Bidirectional Heartbeat / Ping-Pong
+  socket.on('ping:heartbeat', (data) => {
+    socket.emit('pong:heartbeat', data);
   });
 }

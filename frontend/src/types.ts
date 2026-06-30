@@ -82,13 +82,14 @@ export interface Session {
 }
 
 export interface Message {
-  id: number;
+  id: number | string;
   session_id: string;
   sender_type: 'user' | 'consultant';
   sender_name: string;
   text: string;
   created_at: string;
   is_read: number; // 0 or 1
+  is_offline?: boolean;
 }
 
 export interface Review {
