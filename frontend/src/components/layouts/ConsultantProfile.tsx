@@ -365,16 +365,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
     }
 
     // 2. If logged-in user is locked to specific consultant(s) and admin doesn't allow others, filter on frontend too for bulletproof enforcement
-    if (currentUser?.locked_consultant_id && currentUser?.admin_allow_others === 0) {
-      const lockedIds = String(currentUser.locked_consultant_id)
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s !== '')
-        .map(s => parseInt(s, 10))
-        .filter(n => !isNaN(n));
-      if (lockedIds.length > 0) {
-        list = list.filter(c => lockedIds.includes(c.id));
-      }
+    if (currentUser?.admin_allow_others === 0) {
+      const lockedIds = currentUser?.locked_consultant_id
+        ? String(currentUser.locked_consultant_id)
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s !== '')
+            .map(s => parseInt(s, 10))
+            .filter(n => !isNaN(n))
+        : [];
+      list = list.filter(c => lockedIds.includes(c.id));
     }
 
     return list;

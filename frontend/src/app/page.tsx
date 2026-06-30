@@ -15,6 +15,18 @@ export default function AppPage() {
       if (path === '/super-secret-owner-portal') {
         return 'admin';
       }
+      const sessionRole = sessionStorage.getItem('current_role');
+      if (sessionRole === 'consultant' || sessionRole === 'admin' || sessionRole === 'user') {
+        return sessionRole;
+      }
+      const savedRole = localStorage.getItem('current_role');
+      if (savedRole === 'consultant' || savedRole === 'admin' || savedRole === 'user') {
+        return savedRole;
+      }
+      const hasConsultantSession = localStorage.getItem('consultant_session');
+      if (hasConsultantSession) {
+        return 'consultant';
+      }
     }
     return 'user';
   });
@@ -245,6 +257,8 @@ export default function AppPage() {
         
         setCurrentUser(data.user);
         localStorage.setItem('logged_user_id', data.user.id.toString());
+        localStorage.setItem('current_role', 'user');
+        sessionStorage.setItem('current_role', 'user');
         setAuthSuccess('Welcome back! Logging in...');
         setTimeout(() => {
           setAuthModalOpen(false);
@@ -262,6 +276,8 @@ export default function AppPage() {
         
         // Save consultant session and switch role
         localStorage.setItem('consultant_session', JSON.stringify(data.consultant));
+        localStorage.setItem('current_role', 'consultant');
+        sessionStorage.setItem('current_role', 'consultant');
         setCurrentRole('consultant');
         setAuthSuccess(`Welcome, ${data.consultant.display_name}! Redirecting to Consultant Dashboard...`);
         
@@ -306,11 +322,17 @@ export default function AppPage() {
   // Logout handler
   const handleLogout = () => {
     localStorage.removeItem('logged_user_id');
+    localStorage.removeItem('consultant_session');
     localStorage.removeItem('advisor_active_session');
     localStorage.removeItem('clicked_consultant_username');
+    localStorage.removeItem('current_role');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('current_role');
+    }
     setTargetUsername(undefined);
     setCurrentUser(null);
     setActiveSession(null);
+    setCurrentRole('user');
   };
 
   return (
@@ -321,6 +343,8 @@ export default function AppPage() {
         currentRole={currentRole}
         onChangeRole={(role) => {
           setCurrentRole(role);
+          localStorage.setItem('current_role', role);
+          sessionStorage.setItem('current_role', role);
           // If switching role, reset target profile links
           if (role !== 'user') setTargetUsername(undefined);
           if (role !== 'admin' && window.location.pathname === '/super-secret-owner-portal') {
@@ -381,6 +405,7 @@ export default function AppPage() {
                 onSelectSession={handleSelectSession}
                 onNavigateToUserView={handleNavigateToUserView}
                 activeSessionId={activeSession?.sessionId}
+                onLogout={handleLogout}
               />
             )}
 

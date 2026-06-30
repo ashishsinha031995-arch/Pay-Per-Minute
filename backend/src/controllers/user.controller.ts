@@ -30,7 +30,7 @@ export const getActiveConsultants = (req: Request, res: Response) => {
 
     const allConsultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id FROM consultants WHERE is_active = 1').all();
 
-    if (adminAllowOthers === 0 && lockedConsultantIds.length > 0) {
+    if (adminAllowOthers === 0) {
       const filtered = allConsultants.filter((c: any) => lockedConsultantIds.includes(c.id));
       return res.json(filtered);
     }
@@ -573,7 +573,21 @@ export const lockUserReferral = (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Consultant not found' });
     }
 
-    db.prepare('UPDATE users SET locked_consultant_id = ? WHERE id = ?').run(consultant.id, userId);
+    // Instead of overwriting, append consultant.id if not already present in the user's locked_consultant_id!
+    const user = db.prepare('SELECT locked_consultant_id FROM users WHERE id = ?').get(userId) as any;
+    let newLockedStr = String(consultant.id);
+    if (user && user.locked_consultant_id !== null && user.locked_consultant_id !== undefined && String(user.locked_consultant_id).trim() !== '') {
+      const existingIds = String(user.locked_consultant_id)
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s !== '');
+      if (!existingIds.includes(String(consultant.id))) {
+        existingIds.push(String(consultant.id));
+      }
+      newLockedStr = existingIds.join(',');
+    }
+
+    db.prepare('UPDATE users SET locked_consultant_id = ? WHERE id = ?').run(newLockedStr, userId);
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
     res.json({ success: true, user: updatedUser });

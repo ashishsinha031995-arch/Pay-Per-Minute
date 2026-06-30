@@ -9,9 +9,10 @@ interface ConsultantPanelProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
   onNavigateToUserView: (username: string) => void;
   activeSessionId?: string;
+  onLogout?: () => void;
 }
 
-export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId }: ConsultantPanelProps) {
+export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId, onLogout }: ConsultantPanelProps) {
   // Authentication & Session States
   const [currentConsultant, setCurrentConsultant] = useState<Consultant | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
@@ -232,9 +233,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [newToTime, setNewToTime] = useState('');
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
 
-  const fetchSchedules = async (consultantId: number) => {
+  const fetchSchedules = async (consultantId: number, silent = false) => {
     try {
-      setScheduleLoading(true);
+      if (!silent) setScheduleLoading(true);
       const res = await fetch(`/api/consultants/${consultantId}/schedules`);
       if (res.ok) {
         const data = await res.json();
@@ -243,7 +244,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     } catch (err) {
       console.error('Failed to load schedules:', err);
     } finally {
-      setScheduleLoading(false);
+      if (!silent) setScheduleLoading(false);
     }
   };
 
@@ -429,7 +430,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   useEffect(() => {
     if (!currentConsultant) return;
     const interval = setInterval(() => {
-      loadConsultantStatsAndStatus(currentConsultant.id);
+      loadConsultantStatsAndStatus(currentConsultant.id, true);
     }, 4000);
     return () => clearInterval(interval);
   }, [currentConsultant]);
@@ -441,7 +442,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     socket.on('session:created', (data) => {
       if (Number(data.consultant_id) === Number(currentConsultant.id)) {
         console.log('[WebSocket] Instant incoming chat request detected! Refreshing sessions immediately...');
-        loadConsultantStatsAndStatus(currentConsultant.id);
+        loadConsultantStatsAndStatus(currentConsultant.id, true);
       }
     });
     return () => {
@@ -452,13 +453,17 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Trigger immediate refresh when a session finishes (activeSessionId transitions to falsy)
   useEffect(() => {
     if (currentConsultant && !activeSessionId) {
-      loadConsultantStatsAndStatus(currentConsultant.id);
+      loadConsultantStatsAndStatus(currentConsultant.id, true);
     }
   }, [activeSessionId, currentConsultant]);
 
   // Logout handler
   function handleLogout() {
     localStorage.removeItem('consultant_session');
+    localStorage.removeItem('current_role');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('current_role');
+    }
     setCurrentConsultant(null);
     setWallet(null);
     setSessions([]);
@@ -466,6 +471,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     setUsernameInput('');
     setPasswordInput('');
     hasInitializedProfileRef.current = false;
+    if (onLogout) {
+      onLogout();
+    }
   }
 
   // Block User Handler
@@ -516,7 +524,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   };
 
-  const loadConsultantStatsAndStatus = async (id: number) => {
+  const loadConsultantStatsAndStatus = async (id: number, isPolling = false) => {
     try {
       const res = await fetch(`/api/consultants/${id}/stats`);
       if (res.ok) {
@@ -538,8 +546,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setBlockedUsers(blockedData);
       }
 
-      // Fetch availability schedules
-      fetchSchedules(id);
+      // Fetch availability schedules only when not polling
+      if (!isPolling) {
+        fetchSchedules(id);
+      }
 
       // Fetch complete profile info (including KYC and Bank statuses)
       const profileRes = await fetch(`/api/consultants/${id}/profile`);
