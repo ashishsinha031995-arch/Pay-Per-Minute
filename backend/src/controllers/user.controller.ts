@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db, logWalletTransaction } from '../config/database.js';
 import { getSalaryCycleInfo, checkAndResetMonthlyWallets } from '../utils/salary.js';
+import { processNextInQueue } from './payment.controller.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -66,6 +67,18 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
     }
     if (is_busy !== undefined) {
       db.prepare('UPDATE consultants SET is_busy = ? WHERE id = ?').run(is_busy ? 1 : 0, id);
+      
+      // If the consultant marked themselves as free (not busy), check if there are users in queue after a 3-second delay
+      if (!is_busy) {
+        const io = req.app.get('io');
+        setTimeout(() => {
+          try {
+            processNextInQueue(Number(id), io);
+          } catch (e) {
+            console.error("Error running delayed processNextInQueue:", e);
+          }
+        }, 3000);
+      }
     }
 
     const updated = db.prepare('SELECT id, is_online, is_busy FROM consultants WHERE id = ?').get(id);
