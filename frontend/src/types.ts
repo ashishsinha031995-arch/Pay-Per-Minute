@@ -30,6 +30,7 @@ export interface Consultant {
   wallet_withdrawable: number;
   plan_expiry: string | null;
   plan_id?: number | null;
+  plan_name?: string;
   aadhaar_number?: string;
   aadhaar_photo_url?: string;
   pan_number?: string;

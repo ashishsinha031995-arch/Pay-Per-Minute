@@ -67,7 +67,12 @@ export const getSentEmailsLog = (req: Request, res: Response) => {
 
 export const getAdminConsultantsList = (req: Request, res: Response) => {
   try {
-    const consultants = db.prepare('SELECT * FROM consultants ORDER BY id DESC').all() as any[];
+    const consultants = db.prepare(`
+      SELECT c.*, p.name AS plan_name 
+      FROM consultants c 
+      LEFT JOIN plans p ON c.plan_id = p.id 
+      ORDER BY c.id DESC
+    `).all() as any[];
     
     // Attach detailed salary calculations for each consultant
     for (const cons of consultants) {

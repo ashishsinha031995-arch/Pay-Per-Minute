@@ -79,6 +79,17 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                 >
                   Logout
                 </button>
+                <div className="h-4 w-px bg-slate-800 mx-1" />
+                <button
+                  id="desktop-header-hamburger-btn"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('toggle-hamburger-menu'));
+                  }}
+                  className="p-1 text-slate-300 hover:text-white bg-slate-900 active:scale-95 hover:bg-slate-850 rounded-lg transition-all flex items-center justify-center w-7 h-7 border border-slate-800 shadow-sm shrink-0 cursor-pointer"
+                  title="Open Navigation Menu"
+                >
+                  <Menu className="w-4 h-4" />
+                </button>
               </div>
             ) : currentRole === 'user' ? (
               <button

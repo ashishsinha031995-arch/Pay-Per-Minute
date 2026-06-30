@@ -57,6 +57,8 @@ export function AdminPanel() {
   const [consBankIfscCode, setConsBankIfscCode] = useState('');
   const [consBankName, setConsBankName] = useState('');
   const [consBankStatus, setConsBankStatus] = useState('unsubmitted');
+  const [consPlanId, setConsPlanId] = useState<string>('');
+  const [consPlanExpiry, setConsPlanExpiry] = useState<string>('');
 
   // Expanded collapsible details row tracker for advisors
   const [expandedKycConsId, setExpandedKycConsId] = useState<number | null>(null);
@@ -547,6 +549,8 @@ export function AdminPanel() {
         bank_ifsc_code: consBankIfscCode,
         bank_name: consBankName,
         bank_status: consBankStatus,
+        plan_id: consPlanId ? parseInt(consPlanId) : (plans[0]?.id || null),
+        plan_expiry: consPlanExpiry || null,
       };
 
       let endpoint = '/api/consultants/register';
@@ -557,9 +561,7 @@ export function AdminPanel() {
         method = 'PUT';
       }
 
-      // If creating, we need a subscription plan assigned. We can default to plan 1.
-      const planToAssign = plans[0]?.id || 1;
-      const finalPayload = method === 'POST' ? { ...payload, plan_id: planToAssign, initial_price_per_minute: parseFloat(consRate) } : payload;
+      const finalPayload = method === 'POST' ? { ...payload, initial_price_per_minute: parseFloat(consRate) } : payload;
 
       const res = await fetch(endpoint, {
         method,
@@ -1522,6 +1524,8 @@ export function AdminPanel() {
                     setConsBio('');
                     setConsRate('20');
                     setConsCategory('Astrologers');
+                    setConsPlanId(plans[0]?.id?.toString() || '');
+                    setConsPlanExpiry('');
                     setShowConsultantModal(true);
                   }}
                   className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-bold py-2.5 px-4 rounded-xl transition-all flex items-center space-x-2"
@@ -1645,9 +1649,26 @@ export function AdminPanel() {
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                                {(cons as any).category || 'Consultants'}
-                              </span>
+                              <div className="space-y-1.5">
+                                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold block w-fit">
+                                  {(cons as any).category || 'Consultants'}
+                                </span>
+                                {cons.plan_name ? (
+                                  <div className="flex flex-col text-[10px] space-y-0.5">
+                                    <span className="text-slate-300 font-semibold flex items-center gap-1">
+                                      <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      {cons.plan_name}
+                                    </span>
+                                    {cons.plan_expiry && (
+                                      <span className="text-[9px] text-slate-500 font-mono">
+                                        Exp: {cons.plan_expiry}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 italic block">No Active Plan</span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="text-slate-200 font-mono text-[11px]">User: {cons.username}</div>
@@ -1728,6 +1749,8 @@ export function AdminPanel() {
                                     setConsBankIfscCode((cons as any).bank_ifsc_code || '');
                                     setConsBankName((cons as any).bank_name || '');
                                     setConsBankStatus((cons as any).bank_status || 'unsubmitted');
+                                    setConsPlanId(cons.plan_id ? cons.plan_id.toString() : '');
+                                    setConsPlanExpiry(cons.plan_expiry || '');
                                     
                                     setShowConsultantModal(true);
                                   }}
@@ -4107,6 +4130,43 @@ export function AdminPanel() {
                   rows={2}
                   className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 text-xs w-full focus:outline-none resize-none"
                 />
+              </div>
+
+              {/* Consultant Subscription Settings Section */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3">
+                <h4 className="text-[11px] font-bold text-slate-300 font-mono uppercase tracking-wider border-b border-slate-850 pb-1.5 flex items-center justify-between">
+                  <span>Subscription Settings</span>
+                  <span className="text-[9px] text-amber-400 font-sans normal-case font-normal font-mono">Assigned Plan</span>
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Active Subscription Plan *</label>
+                    <select
+                      value={consPlanId}
+                      onChange={e => setConsPlanId(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                      required
+                    >
+                      <option value="">Select a Plan</option>
+                      {plans.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase">Plan Expiry Date (YYYY-MM-DD)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 2026-12-31"
+                      value={consPlanExpiry}
+                      onChange={e => setConsPlanExpiry(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 text-xs w-full focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Extra KYC & Bank Information Section */}
