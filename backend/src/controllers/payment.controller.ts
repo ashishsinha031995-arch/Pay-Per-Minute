@@ -3,6 +3,14 @@ import crypto from 'crypto';
 import { db, logWalletTransaction } from '../config/database.js';
 import { getRazorpayClient } from '../services/payment.service.js';
 
+export function getMicrosecondISO(): string {
+  const now = new Date();
+  const iso = now.toISOString(); // e.g. "2026-06-30T08:38:31.123Z"
+  const ns = process.hrtime.bigint();
+  const micros = Number(ns % 1000000n).toString().padStart(6, '0').slice(-3); // get 3 digits for microseconds
+  return iso.replace('Z', `${micros}Z`); // becomes e.g. "2026-06-30T08:38:31.123456Z"
+}
+
 export const createRazorpayOrMockOrder = async (req: Request, res: Response) => {
   try {
     const { consultant_id, duration_minutes, user_name } = req.body;
@@ -165,7 +173,7 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
     const sessionStatus = isBusyNow ? 'queued' : 'pending';
 
     const session_id = `sess_${Math.random().toString(36).slice(2, 15)}`;
-    const created_at = new Date().toISOString();
+    const created_at = getMicrosecondISO();
 
     const final_order_id = order_id || `order_wallet_${Math.random().toString(36).slice(2, 11)}`;
     const final_payment_id = payment_id || (payment_method === 'wallet' ? `pay_wallet_${Math.random().toString(36).slice(2, 11)}` : `pay_mock_${Math.random().toString(36).slice(2, 11)}`);
@@ -493,56 +501,40 @@ export const endSessionManually = (req: Request, res: Response) => {
 
 export function processNextInQueue(consultantId: number, io: any) {
   try {
-    console.log(`[Queue System] Setting is_busy=1 for transition breather. Scheduling queue processing for consultant ${consultantId} in 10 seconds...`);
+    console.log(`[Queue System] Processing queue for consultant ${consultantId} immediately.`);
     
-    // Set is_busy to 1 during the transitional 10 seconds, so they aren't marked as free
-    db.prepare('UPDATE consultants SET is_busy = 1 WHERE id = ?').run(consultantId);
+    // Find the next queued session for this consultant ordered by created_at ascending (FIFO)
+    const nextQueuedSess = db.prepare(`
+      SELECT * FROM sessions 
+      WHERE consultant_id = ? AND status = 'queued' 
+      ORDER BY created_at ASC 
+      LIMIT 1
+    `).get(consultantId) as any;
     
-    // Trigger io broadcast to let clients know the status is busy / transitioning
-    if (io) {
-      io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 1 });
-    }
+    if (nextQueuedSess) {
+      const nowStr = getMicrosecondISO();
+      console.log(`[Queue System] Found next queued session ${nextQueuedSess.id} for user ${nextQueuedSess.user_name}. Transitioning to pending.`);
+      
+      // Update session status to pending, and set created_at to now (triggers 60s countdown)
+      db.prepare("UPDATE sessions SET status = 'pending', created_at = ? WHERE id = ?").run(nowStr, nextQueuedSess.id);
+      
+      // Keep consultant is_busy as 1
+      db.prepare('UPDATE consultants SET is_busy = 1 WHERE id = ?').run(consultantId);
 
-    setTimeout(() => {
-      try {
-        console.log(`[Queue System] Processing queue for consultant ${consultantId} now (after 10s breather).`);
-        
-        // Find the next queued session for this consultant ordered by created_at ascending (FIFO)
-        const nextQueuedSess = db.prepare(`
-          SELECT * FROM sessions 
-          WHERE consultant_id = ? AND status = 'queued' 
-          ORDER BY created_at ASC 
-          LIMIT 1
-        `).get(consultantId) as any;
-        
-        if (nextQueuedSess) {
-          const nowStr = new Date().toISOString();
-          console.log(`[Queue System] Found next queued session ${nextQueuedSess.id} for user ${nextQueuedSess.user_name}. Transitioning to pending.`);
-          
-          // Update session status to pending, and set created_at to now (triggers 60s countdown)
-          db.prepare("UPDATE sessions SET status = 'pending', created_at = ? WHERE id = ?").run(nowStr, nextQueuedSess.id);
-          
-          // Keep consultant is_busy as 1
-          db.prepare('UPDATE consultants SET is_busy = 1 WHERE id = ?').run(consultantId);
-  
-          // Notify clients
-          if (io) {
-            console.log(`[Queue System] Emitting session:created for newly activated queued session ${nextQueuedSess.id}`);
-            io.emit('session:created', { consultant_id: Number(consultantId), session_id: nextQueuedSess.id });
-            io.to(nextQueuedSess.id).emit('queue:activated', { session_id: nextQueuedSess.id });
-          }
-        } else {
-          console.log(`[Queue System] No queued sessions found for consultant ${consultantId}. Marking as not busy.`);
-          // Update is_busy = 0
-          db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
-          if (io) {
-            io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 0 });
-          }
-        }
-      } catch (err) {
-        console.error(`[Queue System] Error in delayed processNextInQueue inside setTimeout:`, err);
+      // Notify clients
+      if (io) {
+        console.log(`[Queue System] Emitting session:created for newly activated queued session ${nextQueuedSess.id}`);
+        io.emit('session:created', { consultant_id: Number(consultantId), session_id: nextQueuedSess.id });
+        io.to(nextQueuedSess.id).emit('queue:activated', { session_id: nextQueuedSess.id });
       }
-    }, 10000);
+    } else {
+      console.log(`[Queue System] No queued sessions found for consultant ${consultantId}. Marking as not busy.`);
+      // Update is_busy = 0
+      db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
+      if (io) {
+        io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 0 });
+      }
+    }
   } catch (err) {
     console.error(`[Queue System] Error processing queue for consultant ${consultantId}:`, err);
   }

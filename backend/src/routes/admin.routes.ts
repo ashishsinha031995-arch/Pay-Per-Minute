@@ -23,10 +23,13 @@ import {
   updateHeroSettings,
   refundSessionBySuperAdmin,
   addMoneyToWallet,
-  getManualWalletAdjustments
+  getManualWalletAdjustments,
+  getAdminLiveQueues
 } from '../controllers/admin.controller.js';
 
 const router = Router();
+
+router.get('/queues', getAdminLiveQueues);
 
 router.get('/stats', getAdminDashboardStats);
 router.put('/settings/hero', updateHeroSettings);

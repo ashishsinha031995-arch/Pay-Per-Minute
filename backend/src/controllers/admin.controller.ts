@@ -811,4 +811,85 @@ export const getManualWalletAdjustments = (req: Request, res: Response) => {
   }
 };
 
+// Fetch all live queues for Super Admin Panel
+export const getAdminLiveQueues = (req: Request, res: Response) => {
+  try {
+    const consultants = db.prepare('SELECT id, display_name, username, is_busy FROM consultants').all() as any[];
+    const now = new Date();
+
+    const liveQueues = consultants.map(cons => {
+      // 1. Get current active session
+      const activeSession = db.prepare(`
+        SELECT id, expires_at, status 
+        FROM sessions 
+        WHERE consultant_id = ? AND status = 'active'
+        LIMIT 1
+      `).get(cons.id) as any;
+
+      // 2. Get current pending session (60s ring timeout)
+      const pendingSession = db.prepare(`
+        SELECT id, created_at, status 
+        FROM sessions 
+        WHERE consultant_id = ? AND status = 'pending'
+        LIMIT 1
+      `).get(cons.id) as any;
+
+      let remainingSeconds = 0;
+      let activeSessionInfo = null;
+
+      if (activeSession) {
+        activeSessionInfo = { id: activeSession.id, status: 'active' };
+        if (activeSession.expires_at) {
+          const expiryTime = new Date(activeSession.expires_at);
+          remainingSeconds = Math.max(0, Math.floor((expiryTime.getTime() - now.getTime()) / 1000));
+        }
+      } else if (pendingSession) {
+        activeSessionInfo = { id: pendingSession.id, status: 'pending' };
+        const createdTime = new Date(pendingSession.created_at);
+        remainingSeconds = Math.max(0, Math.floor((createdTime.getTime() + 60 * 1000 - now.getTime()) / 1000));
+      }
+
+      // 3. Get all queued sessions
+      const queuedSessions = db.prepare(`
+        SELECT id, user_id, user_name, duration_minutes, created_at 
+        FROM sessions 
+        WHERE consultant_id = ? AND status = 'queued'
+        ORDER BY created_at ASC
+      `).all(cons.id) as any[];
+
+      // Calculate sequential wait times
+      let runningWaitTime = remainingSeconds;
+      const queueSequence = queuedSessions.map((q, idx) => {
+        const userWait = runningWaitTime;
+        runningWaitTime += q.duration_minutes * 60;
+        return {
+          session_id: q.id,
+          user_id: q.user_id,
+          user_name: q.user_name,
+          duration_minutes: q.duration_minutes,
+          position: idx + 1,
+          wait_time_seconds: userWait,
+          created_at: q.created_at
+        };
+      });
+
+      return {
+        consultant_id: cons.id,
+        display_name: cons.display_name,
+        username: cons.username,
+        is_busy: cons.is_busy,
+        active_session: activeSessionInfo,
+        active_session_remaining_seconds: remainingSeconds,
+        queue_count: queuedSessions.length,
+        queue: queueSequence
+      };
+    });
+
+    res.json({ success: true, liveQueues });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
 

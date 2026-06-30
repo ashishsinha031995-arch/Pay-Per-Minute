@@ -3,7 +3,7 @@ import {
   DollarSign, ShieldAlert, Sparkles, Plus, Settings, Users, Percent, ListCollapse, 
   ToggleLeft, ToggleRight, MessageSquare, Search, UserCheck, X, Calendar, BookOpen, 
   Award, CreditCard, Wallet, Landmark, BarChart3, Star, Megaphone, Bell, FileText, 
-  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins, Download
+  LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins, Download, Clock
 } from 'lucide-react';
 import { Plan, Consultant, Session, AdminStats } from '../../types';
 import { 
@@ -26,6 +26,7 @@ export function AdminPanel() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [blockedLogs, setBlockedLogs] = useState<any[]>([]);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [liveQueues, setLiveQueues] = useState<any[]>([]);
   
   // Navigation states (18 sections)
   const [activeTab, setActiveTab] = useState<string>('overview');
@@ -271,7 +272,7 @@ export function AdminPanel() {
       if (!silent) setLoading(true);
       setError(null);
 
-      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes] = await Promise.all([
+      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes, queuesRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/consultants'),
         fetch('/api/admin/sessions'),
@@ -280,10 +281,11 @@ export function AdminPanel() {
         fetch('/api/admin/users'),
         fetch('/api/admin/emails'),
         fetch('/api/admin/reviews'),
-        fetch('/api/admin/wallet/adjustments')
+        fetch('/api/admin/wallet/adjustments'),
+        fetch('/api/admin/queues')
       ]);
 
-      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok || !adjRes.ok) {
+      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok || !adjRes.ok || !queuesRes.ok) {
         throw new Error('Failed to load admin dataset');
       }
 
@@ -296,6 +298,7 @@ export function AdminPanel() {
       const emailsData = await emailsRes.json();
       const reviewsData = await reviewsRes.json();
       const adjData = await adjRes.json();
+      const queuesData = await queuesRes.json();
 
       setStats(statsData);
       setCommissionRateInput(statsData.commissionRate.toString());
@@ -308,6 +311,9 @@ export function AdminPanel() {
       setAdminUsers(usersData);
       setSentEmails(emailsData);
       setReviews(reviewsData);
+      if (queuesData.success) {
+        setLiveQueues(queuesData.liveQueues || []);
+      }
       if (adjData.success) {
         setManualAdjustments(adjData.adjustments || []);
         setTotalManualUsers(adjData.totalAddedToUsers || 0);
@@ -1067,6 +1073,7 @@ export function AdminPanel() {
   const sidebarMenus = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
     { id: 'consultants', label: 'Consultants Manager', icon: Users, badge: consultants.length },
+    { id: 'queues', label: 'Live Queue Manager', icon: Clock },
     { id: 'subscriptions', label: 'Subscription Plans', icon: Award, badge: plans.length },
     { id: 'users', label: 'User Accounts', icon: UserCheck, badge: adminUsers.length },
     { id: 'sessions', label: 'Chat Sessions', icon: MessageSquare, badge: sessions.length },
@@ -2140,6 +2147,124 @@ export function AdminPanel() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB: LIVE QUEUE MANAGER */}
+          {activeTab === 'queues' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Live Queue Dashboard</h3>
+                  <p className="text-xs text-slate-400 font-mono">Real-time status, active sessions, and FIFO queue sequence tracking across all consultants</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">Live Sync Active</span>
+                </div>
+              </div>
+
+              {/* Quick KPI stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">Total Consultants</span>
+                  <strong className="text-xl text-slate-100 block mt-1 font-mono">{liveQueues.length}</strong>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">Busy / On Call</span>
+                  <strong className="text-xl text-amber-400 block mt-1 font-mono">
+                    {liveQueues.filter(q => q.active_session || q.queue_count > 0).length}
+                  </strong>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">Total Users Queued</span>
+                  <strong className="text-xl text-emerald-400 block mt-1 font-mono">
+                    {liveQueues.reduce((acc, q) => acc + q.queue_count, 0)}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Grid of live queues */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {liveQueues.map(q => (
+                  <div key={q.consultant_id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 hover:border-slate-700 transition-all flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start gap-3">
+                        <div>
+                          <h4 className="font-bold text-sm text-slate-100">{q.display_name}</h4>
+                          <span className="text-[10px] text-slate-500 font-mono">@{q.username}</span>
+                        </div>
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                          q.active_session?.status === 'active' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10' :
+                          q.active_session?.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/10 animate-pulse' :
+                          'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
+                        }`}>
+                          {q.active_session?.status === 'active' ? 'Busy (In Session)' :
+                           q.active_session?.status === 'pending' ? 'Pending Accept' :
+                           'Available (Free)'}
+                        </span>
+                      </div>
+
+                      {q.active_session && (
+                        <div className="mt-3.5 bg-slate-950/60 border border-slate-850 p-3.5 rounded-2xl space-y-1.5">
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-400 uppercase font-mono tracking-wider">Active Chat ID</span>
+                            <span className="text-slate-200 font-mono font-bold">{q.active_session.id}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-400 uppercase font-mono tracking-wider">Remaining Time</span>
+                            <span className="text-rose-400 font-mono font-bold">
+                              {Math.floor(q.active_session_remaining_seconds / 60)}m {q.active_session_remaining_seconds % 60}s
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Queue Section */}
+                      <div className="mt-4 space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-400 font-bold">Queue Pipeline</span>
+                          <span className="text-emerald-400 font-mono text-[10px] font-bold">
+                            {q.queue_count} user(s) waiting
+                          </span>
+                        </div>
+
+                        {q.queue.length === 0 ? (
+                          <div className="bg-slate-950/40 border border-slate-850 border-dashed rounded-2xl p-4 text-center text-[10px] text-slate-500 font-mono">
+                            No users currently queued
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                            {q.queue.map((user: any) => (
+                              <div key={user.session_id} className="bg-slate-950 border border-slate-850/60 p-3 rounded-2xl flex items-center justify-between hover:border-slate-700 transition-all">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className="text-xs font-extrabold text-slate-200">#{user.position} {user.user_name}</span>
+                                    <span className="text-[10px] font-mono text-slate-500">(UID: {user.user_id})</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 font-mono">
+                                    Duration: {user.duration_minutes} mins
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[9px] text-slate-500 uppercase font-mono block">Wait Time</span>
+                                  <span className="text-[11px] font-mono text-emerald-400 font-black">
+                                    {Math.ceil(user.wait_time_seconds / 60)} mins
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

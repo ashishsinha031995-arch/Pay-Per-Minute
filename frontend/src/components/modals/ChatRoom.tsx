@@ -132,6 +132,17 @@ export function ChatRoom({
   // User real-time queue states
   const [userQueuePos, setUserQueuePos] = useState<number | null>(null);
   const [userQueueWaitSeconds, setUserQueueWaitSeconds] = useState<number>(0);
+  const [showBusyPopup, setShowBusyPopup] = useState(true);
+  const [activeChatRemainingSeconds, setActiveChatRemainingSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    if (activeChatRemainingSeconds > 0) {
+      const timer = setInterval(() => {
+        setActiveChatRemainingSeconds(prev => Math.max(0, prev - 1));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [activeChatRemainingSeconds]);
 
   useEffect(() => {
     if (role === 'user' && sessionInfo?.status === 'queued' && sessionInfo?.consultant_id) {
@@ -146,6 +157,7 @@ export function ChatRoom({
               setUserQueuePos(meInQueue.position);
               // Calculate wait time for this user: remaining seconds of current active chat + wait time of preceding users in queue
               let waitTime = data.remaining_seconds || 0;
+              setActiveChatRemainingSeconds(data.remaining_seconds || 0);
               for (const u of data.queue_users) {
                 if (u.position < meInQueue.position) {
                   waitTime += u.duration_minutes * 60;
@@ -750,7 +762,7 @@ export function ChatRoom({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
             </span>
-            <span>👥 {queueCount} user{queueCount > 1 ? 's' : ''} joined your queue (Aapki queue mein {queueCount} user{queueCount > 1 ? 's' : ''} hain)</span>
+            <span>👥 {queueCount} user(s) joined your queue</span>
           </span>
           <span className="text-[10px] font-mono tracking-wider uppercase bg-amber-500/15 px-2 py-0.5 rounded text-amber-300 font-bold">In Queue</span>
         </div>
@@ -1293,6 +1305,50 @@ export function ChatRoom({
           </form>
         )}
       </div>
+
+      {/* Busy Queue Popup Modal for Queued Users */}
+      {role === 'user' && sessionInfo?.status === 'queued' && showBusyPopup && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 text-center space-y-6 shadow-2xl relative overflow-hidden animate-in zoom-in duration-200">
+            <div className="mx-auto w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full flex items-center justify-center">
+              <Clock className="w-8 h-8 animate-bounce" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="font-extrabold text-base text-amber-400">Consultant is Busy</h3>
+              <p className="text-xs text-slate-200 leading-relaxed">
+                Your consultant is busy right now. You will be able to connect once the timer gets over.
+              </p>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-850 p-4 rounded-2xl flex justify-between items-center text-left">
+              <div>
+                <span className="text-[10px] text-slate-500 font-mono uppercase block">Queue Position</span>
+                <span className="text-sm font-extrabold text-amber-400 font-mono">
+                  #{userQueuePos !== null ? userQueuePos : '1'}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-500 font-mono uppercase block">Wait Time</span>
+                <span className="text-sm font-extrabold text-emerald-400 font-mono">
+                  {activeChatRemainingSeconds > 0 
+                    ? `${Math.floor(activeChatRemainingSeconds / 60)}m ${activeChatRemainingSeconds % 60}s` 
+                    : 'Calculating...'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowBusyPopup(false)}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs transition-all"
+              >
+                Got it, wait in queue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
