@@ -131,8 +131,8 @@ export const consultantRegister = (req: Request, res: Response) => {
       is_mock
     } = req.body;
 
-    if (!plan_id || !display_name) {
-      return res.status(400).json({ error: 'Plan and Display Name are required' });
+    if (!display_name) {
+      return res.status(400).json({ error: 'Display Name is required' });
     }
     if (!email) {
       return res.status(400).json({ error: 'Email address is required so login credentials can be sent to you.' });
@@ -147,42 +147,47 @@ export const consultantRegister = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another.' });
     }
 
-    const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
-    if (!plan) {
-      return res.status(404).json({ error: 'Subscription plan not found' });
-    }
+    let plan: any = null;
+    let price = initial_price_per_minute ? parseFloat(initial_price_per_minute) : 15.0;
+    let expiryDate: Date | null = null;
 
-    const price = initial_price_per_minute ? parseFloat(initial_price_per_minute) : 15.0;
-    if (plan.max_consultant_rate !== undefined && price > plan.max_consultant_rate) {
-      return res.status(400).json({ error: `Selected plan "${plan.name}" ke mutabik, maximum call rate ₹${plan.max_consultant_rate}/minute hi allow hai. Please select a lower rate.` });
-    }
+    if (plan_id) {
+      plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
+      if (!plan) {
+        return res.status(404).json({ error: 'Subscription plan not found' });
+      }
 
-    // Razorpay checkout verification for paid plans
-    const basePrice = parseFloat(plan.price);
-    if (basePrice > 0) {
-      const razorpayClient = getRazorpayClient();
-      if (!is_mock && razorpayClient) {
-        if (!order_id || !payment_id || !signature) {
-          return res.status(400).json({ error: 'Payment verification details are missing for this subscription plan.' });
-        }
-        const text = order_id + "|" + payment_id;
-        const generated_signature = crypto
-          .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
-          .update(text)
-          .digest('hex');
+      if (plan.max_consultant_rate !== undefined && price > plan.max_consultant_rate) {
+        return res.status(400).json({ error: `Selected plan "${plan.name}" ke mutabik, maximum call rate ₹${plan.max_consultant_rate}/minute hi allow hai. Please select a lower rate.` });
+      }
 
-        if (generated_signature !== signature) {
-          return res.status(400).json({ error: 'Payment signature verification failed. Transaction is invalid.' });
+      // Razorpay checkout verification for paid plans
+      const basePrice = parseFloat(plan.price);
+      if (basePrice > 0) {
+        const razorpayClient = getRazorpayClient();
+        if (!is_mock && razorpayClient) {
+          if (!order_id || !payment_id || !signature) {
+            return res.status(400).json({ error: 'Payment verification details are missing for this subscription plan.' });
+          }
+          const text = order_id + "|" + payment_id;
+          const generated_signature = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+            .update(text)
+            .digest('hex');
+
+          if (generated_signature !== signature) {
+            return res.status(400).json({ error: 'Payment signature verification failed. Transaction is invalid.' });
+          }
         }
       }
+
+      expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
     }
 
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const username = `expert_${display_name.toLowerCase().replace(/[^a-z0-9]/g, '')}_${randomSuffix}`;
     const password = Math.random().toString(36).slice(-8);
-
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
 
     const defaultPhoto = `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=300`;
     const catValue = category || 'Consultants';
@@ -204,9 +209,9 @@ export const consultantRegister = (req: Request, res: Response) => {
       1, // online
       0, // not busy
       1, // active
-      expiryDate.toISOString(),
+      expiryDate ? expiryDate.toISOString() : null,
       catValue,
-      plan.id
+      plan ? plan.id : null
     );
 
     // Dispatch credentials email asynchronously using the professional Gmail dispatch system
@@ -221,8 +226,8 @@ export const consultantRegister = (req: Request, res: Response) => {
       display_name,
       email: cleanEmail,
       phone: phone.trim(),
-      plan_name: plan.name,
-      plan_expiry: expiryDate.toLocaleDateString(),
+      plan_name: plan ? plan.name : null,
+      plan_expiry: expiryDate ? expiryDate.toLocaleDateString() : null,
       consultant_id: result.lastInsertRowid,
     });
   } catch (err: any) {
@@ -312,6 +317,73 @@ export const consultantRegisterCreateOrder = async (req: Request, res: Response)
       base_price: basePrice,
       gst_amount: gstAmount,
       gst_rate: gstRate,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const consultantBuyPlan = async (req: Request, res: Response) => {
+  try {
+    const { 
+      consultant_id,
+      plan_id, 
+      order_id,
+      payment_id,
+      signature,
+      is_mock
+    } = req.body;
+
+    if (!consultant_id || !plan_id) {
+      return res.status(400).json({ error: 'Consultant ID and Plan ID are required.' });
+    }
+
+    const consultant = db.prepare('SELECT * FROM consultants WHERE id = ?').get(consultant_id) as any;
+    if (!consultant) {
+      return res.status(404).json({ error: 'Consultant not found.' });
+    }
+
+    const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
+    if (!plan) {
+      return res.status(404).json({ error: 'Subscription plan not found.' });
+    }
+
+    // Razorpay checkout verification for paid plans
+    const basePrice = parseFloat(plan.price);
+    if (basePrice > 0) {
+      const razorpayClient = getRazorpayClient();
+      if (!is_mock && razorpayClient) {
+        if (!order_id || !payment_id || !signature) {
+          return res.status(400).json({ error: 'Payment verification details are missing for this subscription plan.' });
+        }
+        const text = order_id + "|" + payment_id;
+        const generated_signature = crypto
+          .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+          .update(text)
+          .digest('hex');
+
+        if (generated_signature !== signature) {
+          return res.status(400).json({ error: 'Payment signature verification failed. Transaction is invalid.' });
+        }
+      }
+    }
+
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
+
+    db.prepare(`
+      UPDATE consultants 
+      SET plan_id = ?, plan_expiry = ?, is_active = 1
+      WHERE id = ?
+    `).run(plan.id, expiryDate.toISOString(), consultant_id);
+
+    // Fetch the updated consultant info to return
+    const updatedConsultant = db.prepare('SELECT * FROM consultants WHERE id = ?').get(consultant_id);
+
+    res.json({
+      success: true,
+      message: 'Subscription plan activated successfully.',
+      consultant: updatedConsultant,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

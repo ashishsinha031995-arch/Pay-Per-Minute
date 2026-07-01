@@ -5,7 +5,8 @@ import {
   userForgotPassword, 
   consultantLogin, 
   consultantRegister,
-  consultantRegisterCreateOrder
+  consultantRegisterCreateOrder,
+  consultantBuyPlan
 } from '../controllers/auth.controller.js';
 
 const router = Router();
@@ -18,5 +19,6 @@ router.post('/user/forgot-password', userForgotPassword);
 router.post('/consultants/login', consultantLogin);
 router.post('/consultants/register', consultantRegister);
 router.post('/consultants/register/create-order', consultantRegisterCreateOrder);
+router.post('/consultants/buy-plan', consultantBuyPlan);
 
 export default router;

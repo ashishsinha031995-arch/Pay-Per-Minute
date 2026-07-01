@@ -21,12 +21,58 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Registration States
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-  const [registerDisplayName, setRegisterDisplayName] = useState('');
-  const [registerEmail, setRegisterEmail] = useState('');
-  const [registerPhone, setRegisterPhone] = useState('');
+  const [registerDisplayName, setRegisterDisplayName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('pre_filled_consultant_signup');
+        if (stored) {
+          return JSON.parse(stored).displayName || '';
+        }
+      } catch (e) {}
+    }
+    return '';
+  });
+  const [registerEmail, setRegisterEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('pre_filled_consultant_signup');
+        if (stored) {
+          return JSON.parse(stored).email || '';
+        }
+      } catch (e) {}
+    }
+    return '';
+  });
+  const [registerPhone, setRegisterPhone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('pre_filled_consultant_signup');
+        if (stored) {
+          return JSON.parse(stored).phone || '';
+        }
+      } catch (e) {}
+    }
+    return '';
+  });
   const [registerPrice, setRegisterPrice] = useState('20');
-  const [registerCategory, setRegisterCategory] = useState<'Astrologers' | 'Influencers' | 'Coaches' | 'Consultants' | 'Lawyers' | 'Mentors' | 'Doctors' | 'Singers' | 'Advisors' | 'Friends'>('Consultants');
+  const [registerCategory, setRegisterCategory] = useState<'Astrologers' | 'Influencers' | 'Coaches' | 'Consultants' | 'Lawyers' | 'Mentors' | 'Doctors' | 'Singers' | 'Advisors' | 'Friends'>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('pre_filled_consultant_signup');
+        if (stored) {
+          return JSON.parse(stored).category || 'Consultants';
+        }
+      } catch (e) {}
+    }
+    return 'Consultants';
+  });
   const [credentialsGenerated, setCredentialsGenerated] = useState<{username: string, password: string, displayName: string} | null>(null);
+  const [isPrefilled, setIsPrefilled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem('pre_filled_consultant_signup');
+    }
+    return false;
+  });
 
   // Stats & Sessions list
   const [wallet, setWallet] = useState<any>(null);
@@ -121,9 +167,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Status Toggles
   const [isOnline, setIsOnline] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [buyingPlanId, setBuyingPlanId] = useState<number | null>(null);
 
   // Common UI feedback
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   // Specific local feedback for KYC & Bank forms (displayed directly under buttons)
@@ -386,6 +434,32 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   }, [activeTab, currentConsultant?.id]);
 
+  // Pre-fill consultant details from pre-signup form
+  useEffect(() => {
+    const syncPreSignupDetails = () => {
+      const stored = localStorage.getItem('pre_filled_consultant_signup');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.displayName) setRegisterDisplayName(parsed.displayName);
+          if (parsed.email) setRegisterEmail(parsed.email);
+          if (parsed.phone) setRegisterPhone(parsed.phone);
+          if (parsed.category) setRegisterCategory(parsed.category);
+          setIsPrefilled(true);
+        } catch (e) {
+          console.error('Error parsing pre-filled consultant signup:', e);
+        }
+      } else {
+        setIsPrefilled(false);
+      }
+    };
+
+    syncPreSignupDetails();
+
+    window.addEventListener('storage', syncPreSignupDetails);
+    return () => window.removeEventListener('storage', syncPreSignupDetails);
+  }, []);
+
   // Load plans on mount
   useEffect(() => {
     const fetchPlans = async () => {
@@ -565,6 +639,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           setBankStatus(matching.bank_status || 'unsubmitted');
           setBankRejectReason(matching.bank_reject_reason || '');
 
+          setCurrentConsultant(matching);
+
           // Sync input states with server-side values on first load only so typing isn't interrupted
           if (!hasInitializedProfileRef.current) {
             setPhotoUrl(matching.photo_url || '');
@@ -615,6 +691,125 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   };
 
+  const handleBuyPlanDirect = async (planId: number) => {
+    if (!currentConsultant) return;
+    setBuyingPlanId(planId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // 1. Create the order on the backend
+      const orderRes = await fetch('/api/consultants/register/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan_id: planId,
+          email: currentConsultant.email,
+          phone: currentConsultant.phone,
+        }),
+      });
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        throw new Error(orderData.error || 'Failed to initiate plan subscription order.');
+      }
+
+      // If the plan is free (is_free === true)
+      if (orderData.is_free) {
+        const buyRes = await fetch('/api/consultants/buy-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            consultant_id: currentConsultant.id,
+            plan_id: planId,
+            is_mock: true,
+          }),
+        });
+        const buyData = await buyRes.json();
+        if (!buyRes.ok) throw new Error(buyData.error || 'Failed to activate plan.');
+        
+        setSuccess('🎉 Plan activated successfully! You are now ready to start earning.');
+        loadConsultantStatsAndStatus(currentConsultant.id);
+        setBuyingPlanId(null);
+        return;
+      }
+
+      // Paid plan: Razorpay checkout
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+      }
+
+      // Initialize Razorpay Options
+      const options: any = {
+        key: orderData.key_id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "CallMint Partner Subscription",
+        description: `Activate Plan: ${orderData.plan_name || 'Partner Plan'}` + (orderData.is_mock ? ' (Test Mode)' : ''),
+        handler: async function (response: any) {
+          try {
+            setSuccess('Payment successful! Activating your subscription plan...');
+            const buyRes = await fetch('/api/consultants/buy-plan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                consultant_id: currentConsultant.id,
+                plan_id: planId,
+                order_id: response.razorpay_order_id || orderData.order_id,
+                payment_id: response.razorpay_payment_id || 'pay_mock_' + Math.random().toString(36).slice(2, 11),
+                signature: response.razorpay_signature || 'sig_mock',
+                is_mock: orderData.is_mock,
+              }),
+            });
+            const buyData = await buyRes.json();
+            if (!buyRes.ok) throw new Error(buyData.error || 'Failed to activate plan.');
+
+            setSuccess('🎉 Plan activated successfully! You are now ready to start earning.');
+            loadConsultantStatsAndStatus(currentConsultant.id);
+          } catch (err: any) {
+            setError(err.message);
+          } finally {
+            setBuyingPlanId(null);
+          }
+        },
+        prefill: {
+          name: currentConsultant.display_name,
+          email: currentConsultant.email,
+          contact: currentConsultant.phone,
+        },
+        theme: {
+          color: '#10B981',
+        },
+      };
+
+      if (!orderData.is_mock) {
+        options.order_id = orderData.order_id;
+      }
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', function (resp: any) {
+        setError(`Plan Payment failed: ${resp.error.description || 'Unknown error'}`);
+        setBuyingPlanId(null);
+      });
+      rzp.open();
+
+      // If it is mock, immediately auto-trigger success helper to simulate seamless flow
+      if (orderData.is_mock) {
+        setTimeout(() => {
+          options.handler({
+            razorpay_order_id: orderData.order_id,
+            razorpay_payment_id: 'pay_mock_' + Math.random().toString(36).slice(2, 11),
+            razorpay_signature: 'sig_mock',
+          });
+        }, 1500);
+      }
+    } catch (err: any) {
+      setError(err.message);
+      setBuyingPlanId(null);
+    }
+  };
+
   // Helper to dynamically load the Razorpay checkout script on-demand
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -635,6 +830,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setEmailError(null);
     if (!registerDisplayName) {
       setError('Please provide your Display Name');
       return;
@@ -689,6 +885,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setRegisterPhone('');
         setUsernameInput(data.username);
         setPasswordInput(data.password);
+        localStorage.removeItem('pre_filled_consultant_signup');
+        setIsPrefilled(false);
       } else {
         // Paid plan: Razorpay flow (Mock or Real)
         const scriptLoaded = await loadRazorpayScript();
@@ -734,6 +932,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               setRegisterPhone('');
               setUsernameInput(data.username);
               setPasswordInput(data.password);
+              localStorage.removeItem('pre_filled_consultant_signup');
+              setIsPrefilled(false);
             } catch (err: any) {
               setError(err.message);
             }
@@ -760,7 +960,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         rzp.open();
       }
     } catch (err: any) {
-      setError(err.message);
+      const errMsg = err.message || '';
+      if (errMsg.toLowerCase().includes('already registered') || errMsg.toLowerCase().includes('email is already registered')) {
+        setEmailError(errMsg);
+      } else {
+        setError(errMsg);
+      }
     }
   };
 
@@ -1065,7 +1270,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-      
+
       {/* Alert states */}
       {error && (
         <div className="bg-rose-50 border-l-4 border-rose-500 p-4 rounded-r-xl text-rose-800 text-sm">
@@ -1621,18 +1826,34 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     type="email"
                     placeholder="e.g. raj.astrologer@gmail.com"
                     value={registerEmail}
-                    onChange={(e) => setRegisterEmail(e.target.value)}
-                    className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all"
+                    onChange={(e) => {
+                      if (isPrefilled) return;
+                      setRegisterEmail(e.target.value);
+                      setEmailError(null);
+                    }}
+                    readOnly={isPrefilled}
+                    className={`bg-slate-950 border rounded-xl px-4 py-2.5 text-sm w-full transition-all ${
+                      isPrefilled ? 'cursor-not-allowed bg-slate-900/50 text-slate-400 border-slate-800' :
+                      emailError ? 'border-rose-500 text-slate-100 focus:outline-none focus:ring-1 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-850 text-slate-100 focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500'
+                    }`}
                     required
                   />
-                  <span className="text-[9px] text-slate-500 block">We will use this email to associate your security record.</span>
+                  {emailError ? (
+                    <span className="text-[11px] text-rose-400 font-bold block mt-1 animate-pulse">{emailError}</span>
+                  ) : (
+                    <span className="text-[9px] text-slate-500 block">
+                      {isPrefilled ? 'This field is locked as verified from signup form.' : 'We will use this email to associate your security record.'}
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
                     Consultant Phone Number (Mandatory)
                   </label>
-                  <div className="relative flex rounded-xl border border-slate-850 bg-slate-950 items-center focus-within:border-emerald-500 transition-colors overflow-hidden">
+                  <div className={`relative flex rounded-xl border items-center transition-colors overflow-hidden ${
+                    isPrefilled ? 'border-slate-800 bg-slate-900/50 cursor-not-allowed' : 'border-slate-850 bg-slate-950 focus-within:border-emerald-500'
+                  }`}>
                     <div className="flex items-center pl-3.5 pr-2 py-2.5 bg-slate-900 border-r border-slate-850 shrink-0">
                       <span className="text-xs font-bold text-slate-300 font-mono">+91</span>
                     </div>
@@ -1642,15 +1863,21 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       placeholder="9876543210"
                       value={registerPhone}
                       onChange={(e) => {
+                        if (isPrefilled) return;
                         const val = e.target.value.replace(/\D/g, '');
                         if (val.length <= 10) {
                           setRegisterPhone(val);
                         }
                       }}
-                      className="w-full bg-transparent border-0 pl-3 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                      readOnly={isPrefilled}
+                      className={`w-full bg-transparent border-0 pl-3 pr-4 py-2.5 text-xs focus:outline-none ${
+                        isPrefilled ? 'text-slate-400 cursor-not-allowed' : 'text-slate-100'
+                      }`}
                     />
                   </div>
-                  <span className="text-[9px] text-slate-500 block">Required for authentication and communication.</span>
+                  <span className="text-[9px] text-slate-500 block">
+                    {isPrefilled ? 'This field is locked as verified from signup form.' : 'Required for authentication and communication.'}
+                  </span>
                 </div>
 
                 <div className="space-y-2">
@@ -1990,114 +2217,178 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             </div>
           </div>
 
-          {/* MOBILE NAVIGATION DROPDOWN DRAWER */}
+          {/* UNIVERSAL HAMBURGER DRAWER OVERLAY (For both mobile & desktop) */}
           {isMobileMenuOpen && (
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="md:hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2 shadow-xl"
-            >
-              <button
-                onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
-              >
-                <TrendingUp className="w-4 h-4" />
-                <span>🏠 Dashboard & Earnings</span>
-              </button>
-              
-              <button
-                onClick={() => { setActiveTab('status'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
-              >
-                <Flame className="w-4 h-4" />
-                <span>🔥 Availability & Active Plan</span>
-              </button>
-              
-              <button
-                onClick={() => { setActiveTab('profile'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
-              >
-                <Settings2 className="w-4 h-4" />
-                <span>⚙️ Edit Profile & Call Rates</span>
-              </button>
+            <div className="fixed inset-0 z-50 flex justify-end">
+              {/* Dark backdrop */}
+              <div 
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                onClick={() => setIsMobileMenuOpen(false)}
+              />
 
-              <button
-                onClick={() => { setActiveTab('schedules'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
+              {/* Sliding Drawer Body */}
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="relative w-full max-w-md h-full bg-slate-900 border-l border-slate-800 p-6 shadow-2xl flex flex-col overflow-y-auto text-left"
               >
-                <Calendar className="w-4 h-4" />
-                <span>📅 Availability Schedule</span>
-              </button>
+                {/* Header */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
+                  <div className="flex items-center space-x-2">
+                    <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
+                      <Sparkles className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm text-slate-100 font-sans tracking-wide">Advisor Profile Menu</h3>
+                      <span className="text-[10px] text-slate-400 font-mono">Account Settings & Subscription</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-2 bg-slate-950 border border-slate-850 hover:border-slate-750 text-slate-400 hover:text-white rounded-xl transition-all flex items-center justify-center"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-              <button
-                onClick={() => { setActiveTab('kyc'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black' : 'text-slate-300 hover:bg-slate-800'}`}
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>🔒 KYC Verification {kycStatus === 'approved' ? '✅' : kycStatus === 'pending' ? '⏳' : '❌'}</span>
-              </button>
+                {/* Body Content */}
+                <div className="flex-1 space-y-6">
+                  {/* Basic Consultant Fields */}
+                  <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 space-y-3.5">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">Registered Partner Details</span>
+                    
+                    <div className="space-y-2 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-900 gap-1">
+                        <span className="text-slate-400 font-medium">Full Name:</span>
+                        <strong className="text-slate-200 truncate">{currentConsultant.display_name}</strong>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-900 gap-1">
+                        <span className="text-slate-400 font-medium">Email Address:</span>
+                        <strong className="text-slate-200 break-all">{currentConsultant.email}</strong>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-900 gap-1">
+                        <span className="text-slate-400 font-medium">Phone Number:</span>
+                        <strong className="text-slate-200 font-mono">+91 {currentConsultant.phone}</strong>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <span className="text-slate-400 font-medium">Professional Category:</span>
+                        <span className="bg-emerald-500/10 text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20 self-start sm:self-auto">
+                          {currentConsultant.category || 'Consultants'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-              <button
-                onClick={() => { setActiveTab('bank'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black' : 'text-slate-300 hover:bg-slate-800'}`}
-              >
-                <Wallet className="w-4 h-4" />
-                <span>🏦 Bank Details {bankStatus === 'approved' ? '✅' : bankStatus === 'pending' ? '⏳' : '❌'}</span>
-              </button>
-              
-              <button
-                onClick={() => { setActiveTab('sessions'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
-              >
-                <FileText className="w-4 h-4" />
-                <span>💬 Consultations & Blocklist</span>
-              </button>
+                  {/* Buy Plan / Active Plan Section */}
+                  <div className="space-y-3">
+                    {(() => {
+                      const activePlanId = wallet?.plan_id || currentConsultant.plan_id;
+                      const activePlan = plans.find((p: any) => p.id === activePlanId);
+                      
+                      if (activePlan) {
+                        return (
+                          <div className="bg-emerald-950/20 border border-emerald-900/50 rounded-2xl p-4 space-y-2">
+                            <div className="flex items-center space-x-1.5 text-emerald-400 font-bold text-xs uppercase font-mono">
+                              <Award className="w-4 h-4" />
+                              <span>Active Partnership Subscription</span>
+                            </div>
+                            <div className="text-xs text-slate-300">
+                              Currently Subscribed to: <strong className="text-emerald-400 font-black">{activePlan.name}</strong>
+                            </div>
+                            <div className="text-[10px] text-slate-500 italic font-mono">
+                              Max rate permitted: ₹{activePlan.max_consultant_rate}/min
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="bg-amber-500/10 border border-dashed border-amber-500/30 rounded-2xl p-4 space-y-3 text-center">
+                            <div className="flex items-center justify-center space-x-1.5 text-amber-400 font-black text-xs uppercase font-mono animate-pulse">
+                              <Flame className="w-5 h-5" />
+                              <span>Start Earning Instantly</span>
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                              Aapke paas abhi koi active partnership plan nahi hai. Active clients se call requests receive karne ke liye aur earning start karne ke liye niche se ek plan buy karein.
+                            </p>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </div>
 
-              <button
-                onClick={() => { setActiveTab('support'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
-              >
-                <HelpCircle className="w-4 h-4" />
-                <span>🙋 Help & Customer Support</span>
-              </button>
+                  {/* Plan Purchasing Choices */}
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">Available Partnership Plans</span>
+                    
+                    <div className="space-y-3">
+                      {plans.map((p) => {
+                        const activePlanId = wallet?.plan_id || currentConsultant.plan_id;
+                        const isCurrent = activePlanId === p.id;
+                        return (
+                          <div 
+                            key={p.id}
+                            className={`p-3.5 rounded-xl border transition-all text-xs flex items-center justify-between ${
+                              isCurrent 
+                                ? 'bg-emerald-950/10 border-emerald-500/40 text-slate-200' 
+                                : 'bg-slate-950 border-slate-850 hover:border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            <div className="space-y-1">
+                              <div className="font-extrabold text-slate-200 flex items-center gap-1.5">
+                                <span>{p.name}</span>
+                                {isCurrent && <span className="bg-emerald-500 text-slate-950 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Active</span>}
+                              </div>
+                              <div className="text-[10px] text-slate-500 leading-tight">
+                                Max call rate: ₹{p.max_consultant_rate}/min • {p.commission_rate}% Comm.
+                              </div>
+                              <div className="text-[11px] font-mono font-black text-emerald-400 mt-0.5">
+                                ₹{p.price} <span className="text-[9px] text-slate-500 font-normal">/ {p.duration_days} days</span>
+                              </div>
+                            </div>
 
-              {/* Shareable Link directly inside drawer */}
-              <div className="border-t border-slate-800/80 pt-3 mt-3 space-y-1.5">
-                <span className="block text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-1">My Shareable Link</span>
-                <div className="flex items-center justify-between bg-slate-950 border border-slate-800/80 rounded-xl p-1.5 pl-3">
-                  <span className="text-xs font-mono text-emerald-400 truncate max-w-[180px]">{`/u/${currentConsultant.username}`}</span>
-                  <div className="flex items-center space-x-1">
-                    <button
-                      onClick={handleCopyProfileUrl}
-                      className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center"
-                      title="Copy Profile URL"
-                    >
-                      {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        onNavigateToUserView(currentConsultant.username);
-                      }}
-                      className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center"
-                      title="Open Booking Page"
-                    >
-                      <Globe className="w-3.5 h-3.5" />
-                    </button>
+                            {!isCurrent && (
+                              <button
+                                onClick={() => {
+                                  setIsMobileMenuOpen(false);
+                                  handleBuyPlanDirect(p.id);
+                                }}
+                                disabled={buyingPlanId !== null}
+                                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[10px] uppercase px-3 py-2 rounded-lg shadow transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-1"
+                              >
+                                {buyingPlanId === p.id ? (
+                                  <span>Buying...</span>
+                                ) : (
+                                  <>
+                                    <span>Buy Plan</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="border-t border-slate-800/80 pt-2 mt-2">
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-extrabold text-rose-400 hover:bg-rose-500/10 transition-all border border-rose-500/20"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Log Out Portal</span>
-                </button>
-              </div>
-            </motion.div>
+
+                {/* Footer Section with Logout */}
+                <div className="border-t border-slate-800/80 pt-4 mt-6">
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-xs font-black uppercase text-rose-400 hover:bg-rose-500/10 transition-all border border-rose-500/20 active:scale-98"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Log Out Partner Portal</span>
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           )}
 
           {/* MOBILE SHAREABLE PROFILE LINK CARD (Visible on mobile only) */}
@@ -2175,6 +2466,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </div>
                   </div>
                 </div>
+
+                {/* Desktop Hamburger Trigger */}
+                <button
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-emerald-500/40 text-slate-200 text-xs font-extrabold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center space-x-2 shadow-sm"
+                >
+                  <Menu className="w-4 h-4 text-emerald-400 animate-pulse" />
+                  <span>View Partner Drawer</span>
+                </button>
               </div>
 
               {/* Profile Completion Circular Graph */}

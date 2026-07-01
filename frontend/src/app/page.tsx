@@ -5,7 +5,7 @@ import { AdminPanel } from '../components/layouts/AdminPanel';
 import { ConsultantPanel } from '../components/layouts/ConsultantPanel';
 import { ConsultantProfile } from '../components/layouts/ConsultantProfile';
 import { ChatRoom } from '../components/modals/ChatRoom';
-import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone } from 'lucide-react';
+import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy } from 'lucide-react';
 
 export default function AppPage() {
   // Navigation & Role states
@@ -80,7 +80,8 @@ export default function AppPage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<'login' | 'signup' | 'forgot'>('login');
   const [authRole, setAuthRole] = useState<'user' | 'consultant'>('user');
-  const [signUpType, setSignUpType] = useState<'choose' | 'user'>('choose');
+  const [signUpType, setSignUpType] = useState<'choose' | 'user' | 'consultant'>('choose');
+  const [consultantCategory, setConsultantCategory] = useState('Consultants');
 
   // Auth Inputs
   const [username, setUsername] = useState('');
@@ -92,6 +93,7 @@ export default function AppPage() {
   const [newPassword, setNewPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [generatedCredentials, setGeneratedCredentials] = useState<{username: string, password: string, displayName: string} | null>(null);
 
   // Sync user profile state from database
   const refreshUserProfile = async (id: number) => {
@@ -195,6 +197,69 @@ export default function AppPage() {
   const handleNavigateToUserView = (username: string) => {
     setTargetUsername(username);
     setCurrentRole('user');
+  };
+
+  // Consultant Sign Up handler to register directly without storing locally
+  const handleConsultantRegisterDirect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSuccess(null);
+
+    if (!displayName.trim() || !email.trim() || !phone.trim()) {
+      setAuthError('All fields are required');
+      return;
+    }
+
+    const numericPhone = phone.replace(/\D/g, '');
+    if (numericPhone.length !== 10) {
+      setAuthError('Mobile number must be exactly 10 digits.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/consultants/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          display_name: displayName.trim(),
+          email: email.trim().toLowerCase(),
+          phone: numericPhone,
+          category: consultantCategory,
+          plan_id: null // No plan chosen yet
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+      setGeneratedCredentials({
+        username: data.username,
+        password: data.password,
+        displayName: data.display_name
+      });
+
+      setAuthSuccess('Consultant Account Created Successfully! Please save your credentials.');
+
+      // Auto-login preparer
+      const newConsultantSession = {
+        id: data.consultant_id,
+        username: data.username,
+        display_name: data.display_name,
+        email: data.email,
+        phone: data.phone,
+        category: consultantCategory,
+        plan_id: null,
+        plan_expiry: null,
+        is_active: 1
+      };
+
+      // Store session
+      localStorage.setItem('consultant_session', JSON.stringify(newConsultantSession));
+      localStorage.setItem('current_role', 'consultant');
+      sessionStorage.setItem('current_role', 'consultant');
+    } catch (err: any) {
+      setAuthError(err.message);
+    }
   };
 
   // Sign up handler
@@ -435,13 +500,20 @@ export default function AppPage() {
                 <Sparkles className="w-5 h-5 animate-pulse" />
                 <span>
                   {authTab === 'login' && (authRole === 'user' ? 'User Login' : 'Consultant Login')}
-                  {authTab === 'signup' && (signUpType === 'choose' ? 'Join CallMint' : 'User Sign Up')}
+                  {authTab === 'signup' && (
+                    signUpType === 'choose' ? 'Join CallMint' : 
+                    signUpType === 'consultant' ? 'Consultant Sign Up' : 'User Sign Up'
+                  )}
                   {authTab === 'forgot' && 'Reset Password'}
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
                 {authTab === 'login' && 'Log in to start high-quality secured audio chats instantly.'}
-                {authTab === 'signup' && (signUpType === 'choose' ? 'Select an account type to get started.' : 'Create your client account with username & email address.')}
+                {authTab === 'signup' && (
+                  signUpType === 'choose' ? 'Select an account type to get started.' : 
+                  signUpType === 'consultant' ? 'Enter your professional details to create a consultant account.' : 
+                  'Create your client account with username & email address.'
+                )}
                 {authTab === 'forgot' && 'Enter your username and set a brand new password securely.'}
               </p>
             </div>
@@ -492,10 +564,8 @@ export default function AppPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setCurrentRole('consultant');
-                      setAuthRole('consultant');
-                      setAuthModalOpen(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      setSignUpType('consultant');
+                      setAuthError(null);
                     }}
                     className="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-4 text-left transition-all duration-200 group active:scale-[0.98] flex items-center justify-between"
                   >
@@ -527,6 +597,160 @@ export default function AppPage() {
                   </button>
                 </div>
               </div>
+            ) : authTab === 'signup' && signUpType === 'consultant' ? (
+              generatedCredentials ? (
+                <div className="space-y-4 text-left p-4 bg-slate-950 rounded-2xl border border-slate-800 animate-in fade-in zoom-in duration-200">
+                  <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs uppercase font-mono mb-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 font-bold" />
+                    <span>Portal Account Registered!</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Welcome <strong className="text-slate-200">{generatedCredentials.displayName}</strong>! We have registered your advisor profile and sent the secure login credentials to your email.
+                  </p>
+                  
+                  <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl space-y-2.5 relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const copyTxt = `Username: ${generatedCredentials.username}\nPassword: ${generatedCredentials.password}`;
+                        navigator.clipboard.writeText(copyTxt);
+                        alert('Credentials copied securely!');
+                      }}
+                      className="absolute top-2.5 right-2.5 text-[10px] text-slate-500 hover:text-white flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </button>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-mono">USERNAME</span>
+                      <strong className="text-xs font-mono text-slate-200 select-all">{generatedCredentials.username}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-mono">PASSWORD</span>
+                      <strong className="text-xs font-mono text-slate-200 select-all">{generatedCredentials.password}</strong>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 italic">
+                    💡 Click below to open your Consultant Dashboard and buy a subscription plan to start earning.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Trigger routing update and close modal
+                      setCurrentRole('consultant');
+                      setAuthModalOpen(false);
+                      setDisplayName('');
+                      setEmail('');
+                      setPhone('');
+                      setGeneratedCredentials(null);
+                      // Dispatch storage event so other components sync
+                      window.dispatchEvent(new Event('storage'));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-3 rounded-xl text-xs transition-all shadow-md flex items-center justify-center space-x-1.5"
+                  >
+                    <span>Go to Consultant Dashboard</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleConsultantRegisterDirect} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">Full Name / Display Name *</label>
+                    <div className="relative">
+                      <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Acharya Raj Shastri"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">Email Address *</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">@</span>
+                      <input
+                        type="email"
+                        required
+                        placeholder="e.g. raj.astrologer@gmail.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">Mobile Number *</label>
+                    <div className="relative flex rounded-xl border border-slate-800 bg-slate-950 items-center focus-within:border-emerald-500 transition-colors overflow-hidden">
+                      <div className="flex items-center pl-3.5 pr-2 py-2.5 bg-slate-900 border-r border-slate-800 shrink-0">
+                        <Phone className="w-4 h-4 text-slate-500 mr-1.5" />
+                        <span className="text-xs font-bold text-slate-300 font-mono">+91</span>
+                      </div>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="9876543210"
+                        value={phone}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          if (val.length <= 10) {
+                            setPhone(val);
+                          }
+                        }}
+                        className="w-full bg-transparent border-0 pl-3 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">My Professional Category *</label>
+                    <select
+                      value={consultantCategory}
+                      onChange={(e) => setConsultantCategory(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
+                      required
+                    >
+                      <option value="Astrologers">Astrologers</option>
+                      <option value="Influencers">Influencers</option>
+                      <option value="Mentors">Mentors</option>
+                      <option value="Doctors">Doctors</option>
+                      <option value="Lawyers">Lawyers</option>
+                      <option value="Singers">Singers</option>
+                      <option value="Advisors">Advisors</option>
+                      <option value="Friends">Friends</option>
+                      <option value="Coaches">Coaches</option>
+                      <option value="Consultants">Consultants</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-xl text-xs transition-all shadow-sm animate-pulse"
+                  >
+                    Create Account & Open Dashboard
+                  </button>
+
+                  <div className="flex justify-between items-center px-1 pt-2 border-t border-slate-850/60 text-center text-xs text-slate-400 font-mono">
+                    <button type="button" onClick={() => setSignUpType('choose')} className="text-slate-400 hover:text-white flex items-center gap-1 text-[11px]">
+                      ← Change Type
+                    </button>
+                    <div className="flex space-x-1 text-[11px]">
+                      <span>Already have an account?</span>
+                      <button type="button" onClick={() => { setAuthTab('login'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold">
+                        Login
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )
             ) : (
               <>
                 <form onSubmit={authTab === 'login' ? handleLogin : authTab === 'signup' ? handleSignUp : handleForgotPassword} className="space-y-4">
