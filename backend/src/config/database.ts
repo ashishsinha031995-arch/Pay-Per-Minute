@@ -1,11 +1,295 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import mongoose from 'mongoose';
 
 const dbPath = path.resolve(process.cwd(), 'database.sqlite');
-const db = new Database(dbPath);
+const originalDb = new Database(dbPath);
 
 // Enable WAL mode for performance
-db.pragma('journal_mode = WAL');
+originalDb.pragma('journal_mode = WAL');
+
+// --- MongoDB Schemas & Synchronizer ---
+
+const tables = [
+  'admin_settings',
+  'plans',
+  'consultants',
+  'users',
+  'sessions',
+  'messages',
+  'reviews',
+  'blocked_users',
+  'wallet_transactions',
+  'sent_emails',
+  'support_tickets',
+  'support_ticket_replies',
+  'manual_wallet_adjustments',
+  'consultant_schedules'
+];
+
+const mongoSchemas: Record<string, mongoose.Schema> = {};
+const mongoModels: Record<string, mongoose.Model<any>> = {};
+
+for (const table of tables) {
+  // Define _id explicitly as Mixed and disable default ObjectId generator
+  const schema = new mongoose.Schema({
+    _id: mongoose.Schema.Types.Mixed
+  }, { strict: false, versionKey: false, _id: false });
+  mongoSchemas[table] = schema;
+  mongoModels[table] = mongoose.models[table] || mongoose.model(table, schema, table);
+}
+
+function getTableName(sql: string): string | null {
+  const match = sql.match(/(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|REPLACE\s+INTO)\s+([a-zA-Z0-9_]+)/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function getAffectedIds(sql: string, params: any[], primaryKey: string): any[] {
+  const whereIndex = sql.toUpperCase().indexOf('WHERE');
+  if (whereIndex === -1) return [];
+
+  const whereClause = sql.substring(whereIndex);
+  const tableName = getTableName(sql);
+  if (!tableName) return [];
+
+  try {
+    const W = (whereClause.match(/\?/g) || []).length;
+    const whereParams = W > 0 ? params.slice(-W) : [];
+
+    const selectSql = `SELECT ${primaryKey} FROM ${tableName} ${whereClause}`;
+    const stmt = originalDb.prepare(selectSql);
+    const rows = stmt.all(...whereParams) as any[];
+    return rows.map(r => r[primaryKey]).filter(val => val !== undefined && val !== null);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function syncRowidToMongo(tableName: string, rowid: number, primaryKey: string) {
+  try {
+    if (!mongoose.connection.readyState) return;
+    const row = originalDb.prepare(`SELECT * FROM ${tableName} WHERE rowid = ?`).get(rowid) as any;
+    if (!row) return;
+
+    const Model = mongoModels[tableName];
+    if (!Model) return;
+
+    const pkValue = row[primaryKey];
+    const query = { _id: pkValue };
+    const mongoDoc = {
+      _id: pkValue,
+      ...row
+    };
+
+    await Model.replaceOne(query, mongoDoc, { upsert: true });
+  } catch (err) {
+    console.error(`[MongoDB Sync] Error syncing rowid ${rowid} for table ${tableName}:`, err);
+  }
+}
+
+async function syncIdsToMongo(tableName: string, ids: any[], primaryKey: string) {
+  try {
+    if (!mongoose.connection.readyState) return;
+    const Model = mongoModels[tableName];
+    if (!Model) return;
+
+    for (const id of ids) {
+      const row = originalDb.prepare(`SELECT * FROM ${tableName} WHERE ${primaryKey} = ?`).get(id) as any;
+      if (row) {
+        const pkValue = row[primaryKey];
+        const query = { _id: pkValue };
+        const mongoDoc = {
+          _id: pkValue,
+          ...row
+        };
+        await Model.replaceOne(query, mongoDoc, { upsert: true });
+      }
+    }
+  } catch (err) {
+    console.error(`[MongoDB Sync] Error syncing IDs for table ${tableName}:`, err);
+  }
+}
+
+async function deleteIdsFromMongo(tableName: string, ids: any[], primaryKey: string) {
+  try {
+    if (!mongoose.connection.readyState) return;
+    const Model = mongoModels[tableName];
+    if (!Model) return;
+
+    await Model.deleteMany({ _id: { $in: ids } });
+  } catch (err) {
+    console.error(`[MongoDB Sync] Error deleting IDs for table ${tableName}:`, err);
+  }
+}
+
+async function syncFromMongoToSQLite() {
+  if (!mongoose.connection.readyState) return;
+  console.log('[MongoDB] Fetching and loading existing data from MongoDB to local cache...');
+
+  originalDb.pragma('foreign_keys = OFF');
+
+  for (const table of tables) {
+    const Model = mongoModels[table];
+    const docs = await Model.find({}).lean();
+
+    originalDb.prepare(`DELETE FROM ${table}`).run();
+
+    if (docs.length === 0) continue;
+
+    const allKeys = Array.from(new Set(docs.flatMap(doc => Object.keys(doc).filter(k => k !== '_id'))));
+    if (allKeys.length === 0) continue;
+
+    const columns = allKeys.map(k => `"${k}"`).join(', ');
+    const placeholders = allKeys.map(() => '?').join(', ');
+    const insertSql = `INSERT INTO ${table} (${columns}) VALUES (${placeholders})`;
+
+    const stmt = originalDb.prepare(insertSql);
+
+    const transaction = originalDb.transaction((rows: any[]) => {
+      for (const row of rows) {
+        const values = allKeys.map(k => {
+          const val = row[k];
+          if (val === undefined || val === null) return null;
+          if (typeof val === 'object') return JSON.stringify(val);
+          return val;
+        });
+        stmt.run(...values);
+      }
+    });
+
+    transaction(docs);
+  }
+
+  originalDb.pragma('foreign_keys = ON');
+  console.log('[MongoDB] Cache sync completed.');
+}
+
+async function syncFromSQLiteToMongo() {
+  if (!mongoose.connection.readyState) return;
+  console.log('[MongoDB] MongoDB is empty. Seeding MongoDB with initial database data...');
+
+  for (const table of tables) {
+    const Model = mongoModels[table];
+    await Model.deleteMany({});
+
+    const primaryKey = table === 'admin_settings' ? 'key' : 'id';
+    const rows = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+    if (rows.length === 0) continue;
+
+    const docs = rows.map(row => ({
+      _id: row[primaryKey],
+      ...row
+    }));
+
+    await Model.insertMany(docs);
+  }
+  console.log('[MongoDB] Database seeding to MongoDB completed successfully.');
+}
+
+class StatementWrapper {
+  private stmt: any;
+  private sql: string;
+
+  constructor(stmt: any, sql: string) {
+    this.stmt = stmt;
+    this.sql = sql;
+  }
+
+  get reader() { return this.stmt.reader; }
+  get source() { return this.stmt.source; }
+
+  run(...params: any[]) {
+    const isWrite = /^\s*(INSERT|UPDATE|DELETE|REPLACE)/i.test(this.sql);
+    if (!isWrite) {
+      return this.stmt.run(...params);
+    }
+
+    const tableName = getTableName(this.sql);
+    const primaryKey = tableName === 'admin_settings' ? 'key' : 'id';
+    let affectedIds: any[] = [];
+    if (tableName && /^\s*(UPDATE|DELETE)/i.test(this.sql)) {
+      affectedIds = getAffectedIds(this.sql, params, primaryKey);
+    }
+
+    const result = this.stmt.run(...params);
+
+    if (tableName) {
+      if (/^\s*(INSERT|REPLACE)/i.test(this.sql)) {
+        const rowid = result.lastInsertRowid;
+        if (rowid) {
+          syncRowidToMongo(tableName, rowid, primaryKey);
+        }
+      } else if (/^\s*UPDATE/i.test(this.sql)) {
+        if (affectedIds.length > 0) {
+          syncIdsToMongo(tableName, affectedIds, primaryKey);
+        }
+      } else if (/^\s*DELETE/i.test(this.sql)) {
+        if (affectedIds.length > 0) {
+          deleteIdsFromMongo(tableName, affectedIds, primaryKey);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  get(...params: any[]) {
+    return this.stmt.get(...params);
+  }
+
+  all(...params: any[]) {
+    return this.stmt.all(...params);
+  }
+
+  iterate(...params: any[]) {
+    return this.stmt.iterate(...params);
+  }
+
+  bind(...params: any[]) {
+    this.stmt.bind(...params);
+    return this;
+  }
+
+  pluck(state?: boolean) {
+    this.stmt.pluck(state);
+    return this;
+  }
+
+  expand(state?: boolean) {
+    this.stmt.expand(state);
+    return this;
+  }
+
+  raw(state?: boolean) {
+    this.stmt.raw(state);
+    return this;
+  }
+
+  columns() {
+    return this.stmt.columns();
+  }
+}
+
+const db = {
+  prepare(sql: string) {
+    const stmt = originalDb.prepare(sql);
+    return new StatementWrapper(stmt, sql);
+  },
+  exec(sql: string) {
+    const result = originalDb.exec(sql);
+    return result;
+  },
+  pragma(sql: string) {
+    return originalDb.pragma(sql);
+  },
+  transaction(fn: any) {
+    const originalTx = originalDb.transaction(fn);
+    return (...args: any[]) => {
+      return originalTx(...args);
+    };
+  }
+} as any;
+
 
 // Initialize schema
 export function initDb() {
@@ -585,11 +869,33 @@ export function initDb() {
     })();
 
     // Turn foreign keys ON outside transaction
-    db.pragma('foreign_keys = ON');
+    originalDb.pragma('foreign_keys = ON');
     console.log('Database IDs migrated to 5-digit format successfully');
   } catch (err) {
-    try { db.pragma('foreign_keys = ON'); } catch (_) {}
+    try { originalDb.pragma('foreign_keys = ON'); } catch (_) {}
     console.error('Error migrating IDs to 5-digit format:', err);
+  }
+
+  // Connect to MongoDB asynchronously so it doesn't block server startup
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  if (!mongoUri) {
+    console.warn('[MongoDB] MONGODB_URI not set. Running with local SQLite fallback mode. Please configure MONGODB_URI to enable full MongoDB persistence.');
+  } else {
+    console.log('[MongoDB] MONGODB_URI is configured. Connecting...');
+    mongoose.connect(mongoUri, { dbName: 'callmint' })
+      .then(async () => {
+        console.log('[MongoDB] Connected successfully to database: callmint.');
+        const AdminSettingsModel = mongoModels['admin_settings'];
+        const count = await AdminSettingsModel.countDocuments();
+        if (count > 0) {
+          await syncFromMongoToSQLite();
+        } else {
+          await syncFromSQLiteToMongo();
+        }
+      })
+      .catch(err => {
+        console.error('[MongoDB] Connection or Sync failed. Continuing with local SQLite fallback:', err);
+      });
   }
 }
 
