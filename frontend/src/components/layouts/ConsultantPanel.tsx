@@ -692,98 +692,68 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
         }
 
-        if (orderData.is_mock) {
-          // Simulation flow
-          const confirmPayment = window.confirm(
-            `[Razorpay Plan Checkout Simulation]\n\nAap is plan ko register karne ke liye payment simulate karna chahte hain?\n(Do you want to simulate a successful plan subscription payment to complete registration?)`
-          );
-          if (!confirmPayment) return;
+        // Initialize REAL Razorpay Checkout Modal
+        const options: any = {
+          key: orderData.key_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: "CallMint Consultant Partnership",
+          description: `Subscribe to plan: ${orderData.plan_name || 'Partner Plan'}` + (orderData.is_mock ? ' (Test Mode)' : ''),
+          handler: async function (response: any) {
+            try {
+              const res = await fetch('/api/consultants/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  plan_id: selectedPlanId,
+                  display_name: registerDisplayName,
+                  email: registerEmail,
+                  phone: '+91' + numericPhone,
+                  initial_price_per_minute: parseFloat(registerPrice),
+                  category: registerCategory,
+                  order_id: orderData.order_id,
+                  payment_id: response.razorpay_payment_id || 'mock_payment_id',
+                  signature: response.razorpay_signature || 'mock_signature',
+                  is_mock: orderData.is_mock
+                })
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || 'Verification & registration failed');
 
-          const res = await fetch('/api/consultants/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              plan_id: selectedPlanId,
-              display_name: registerDisplayName,
-              email: registerEmail,
-              phone: '+91' + numericPhone,
-              initial_price_per_minute: parseFloat(registerPrice),
-              category: registerCategory,
-              order_id: orderData.order_id,
-              payment_id: `mock_sub_tx_${Math.random().toString(36).slice(2, 10)}`,
-              is_mock: true
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Mock registration verification failed');
-
-          setCredentialsGenerated({
-            username: data.username,
-            password: data.password,
-            displayName: data.display_name,
-          });
-          setRegisterDisplayName('');
-          setRegisterEmail('');
-          setRegisterPhone('');
-          setUsernameInput(data.username);
-          setPasswordInput(data.password);
-        } else {
-          // Real Razorpay Checkout modal
-          const options = {
-            key: orderData.key_id,
-            amount: orderData.amount,
-            currency: orderData.currency,
-            name: "CallMint Consultant Partnership",
-            description: `Subscribe to plan: ${orderData.plan_name || 'Partner Plan'}`,
-            order_id: orderData.order_id,
-            handler: async function (response: any) {
-              try {
-                const res = await fetch('/api/consultants/register', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    plan_id: selectedPlanId,
-                    display_name: registerDisplayName,
-                    email: registerEmail,
-                    phone: '+91' + numericPhone,
-                    initial_price_per_minute: parseFloat(registerPrice),
-                    category: registerCategory,
-                    order_id: orderData.order_id,
-                    payment_id: response.razorpay_payment_id,
-                    signature: response.razorpay_signature,
-                    is_mock: false
-                  })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Verification & registration failed');
-
-                setCredentialsGenerated({
-                  username: data.username,
-                  password: data.password,
-                  displayName: data.display_name,
-                });
-                setRegisterDisplayName('');
-                setRegisterEmail('');
-                setRegisterPhone('');
-                setUsernameInput(data.username);
-                setPasswordInput(data.password);
-              } catch (err: any) {
-                setError(err.message);
-              }
-            },
-            prefill: {
-              name: registerDisplayName,
-              email: registerEmail,
-              contact: '+91' + numericPhone,
-            },
-            theme: {
-              color: "#10b981"
+              setCredentialsGenerated({
+                username: data.username,
+                password: data.password,
+                displayName: data.display_name,
+              });
+              setRegisterDisplayName('');
+              setRegisterEmail('');
+              setRegisterPhone('');
+              setUsernameInput(data.username);
+              setPasswordInput(data.password);
+            } catch (err: any) {
+              setError(err.message);
             }
-          };
+          },
+          prefill: {
+            name: registerDisplayName,
+            email: registerEmail,
+            contact: '+91' + numericPhone,
+          },
+          theme: {
+            color: '#10B981'
+          }
+        };
 
-          const rzp = new (window as any).Razorpay(options);
-          rzp.open();
+        // Only pass order_id if it's NOT a mock order to avoid Razorpay validation error
+        if (!orderData.is_mock) {
+          options.order_id = orderData.order_id;
         }
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (resp: any) {
+          setError(`Registration Payment failed: ${resp.error.description || 'Unknown error'}`);
+        });
+        rzp.open();
       }
     } catch (err: any) {
       setError(err.message);
@@ -4007,6 +3977,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           </div>
         </div>
       )}
+
+
 
     </div>
   );

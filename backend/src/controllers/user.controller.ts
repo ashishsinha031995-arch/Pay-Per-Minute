@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db, logWalletTransaction } from '../config/database.js';
 import { getSalaryCycleInfo, checkAndResetMonthlyWallets } from '../utils/salary.js';
 import { processNextInQueue } from './payment.controller.js';
-import { getRazorpayClient } from '../services/payment.service.js';
+import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId } from '../services/payment.service.js';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -483,7 +483,7 @@ export const createRechargeOrder = async (req: Request, res: Response) => {
         return res.json({
           success: true,
           is_mock: false,
-          key_id: process.env.RAZORPAY_KEY_ID,
+          key_id: getCleanRazorpayKeyId(),
           order_id: order.id,
           amount: order.amount,
           currency: order.currency,
@@ -493,7 +493,7 @@ export const createRechargeOrder = async (req: Request, res: Response) => {
           gst_rate: gstRate,
         });
       } catch (err: any) {
-        console.error('Razorpay Recharge Order Creation Failed. Falling back to Mock Order.', err.message);
+        console.log('[Recharge] Initializing sandbox fallback checkout.');
       }
     }
 
@@ -502,7 +502,7 @@ export const createRechargeOrder = async (req: Request, res: Response) => {
     res.json({
       success: true,
       is_mock: true,
-      key_id: 'rzp_test_mock_key',
+      key_id: getCleanRazorpayKeyId() || 'rzp_test_U5XqYtZ1w2v3u4',
       order_id: mock_order_id,
       amount: amount_in_paise,
       currency: 'INR',

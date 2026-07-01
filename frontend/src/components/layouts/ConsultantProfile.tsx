@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -58,6 +58,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
   
   // Active selection states
   const [selectedMinutes, setSelectedMinutes] = useState<number>(10); // Default 10 mins
+  const [pendingPaymentMethod, setPendingPaymentMethod] = useState<'wallet' | 'razorpay'>('wallet');
 
   // Payment checkout overlay states
   const [checkoutOrder, setCheckoutOrder] = useState<any>(null);
@@ -509,90 +510,69 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       const orderData = await res.json();
       if (!res.ok) throw new Error(orderData.error || 'Failed to create recharge order');
 
-      if (orderData.is_mock) {
-        // Mock Sandbox Experience
-        const confirmPayment = window.confirm(
-          `[Razorpay Sandbox Simulation]\n\nAap ₹${amountToRecharge} add karne ke liye payment simulate karna chahte hain?\n(Do you want to simulate a successful payment of ₹${amountToRecharge} to complete recharge?)`
-        );
-        if (!confirmPayment) {
-          setRechargeLoading(false);
-          return;
-        }
+      setShowRechargeModal(false);
 
-        console.log('Running in Mock Sandbox Mode. Verifying payment directly...');
-        const verifyRes = await fetch('/api/user/recharge/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: currentUser.id,
-            amount: amountToRecharge,
-            order_id: orderData.order_id,
-            payment_id: `mock_pay_tx_${Math.random().toString(36).slice(2, 10)}`,
-            is_mock: true
-          })
-        });
-        const verifyData = await verifyRes.json();
-        if (!verifyRes.ok) throw new Error(verifyData.error || 'Mock recharge failed');
+      // Initialize REAL Razorpay Checkout Modal
+      const options: any = {
+        key: orderData.key_id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "CallMint Wallet Recharge",
+        description: `Add ₹${amountToRecharge} to CallMint balance` + (orderData.is_mock ? ' (Test Mode)' : ''),
+        handler: async function (response: any) {
+          setRechargeLoading(true);
+          try {
+            const verifyRes = await fetch('/api/user/recharge/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: currentUser.id,
+                amount: amountToRecharge,
+                order_id: orderData.order_id,
+                payment_id: response.razorpay_payment_id || 'mock_payment_id',
+                signature: response.razorpay_signature || 'mock_signature',
+                is_mock: orderData.is_mock
+              })
+            });
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok) throw new Error(verifyData.error || 'Failed to verify payment');
 
-        setCurrentUser(verifyData.user);
-        fetchWalletTransactions();
-        setSuccess(`Congratulations! ₹${amountToRecharge} successfully added to your wallet (Mock Sandbox).`);
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        // Open REAL Razorpay Checkout Modal
-        const options = {
-          key: orderData.key_id,
-          amount: orderData.amount,
-          currency: orderData.currency,
-          name: "CallMint Wallet Recharge",
-          description: `Add ₹${amountToRecharge} to CallMint balance`,
-          order_id: orderData.order_id,
-          handler: async function (response: any) {
-            setRechargeLoading(true);
-            try {
-              const verifyRes = await fetch('/api/user/recharge/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  id: currentUser.id,
-                  amount: amountToRecharge,
-                  order_id: orderData.order_id,
-                  payment_id: response.razorpay_payment_id,
-                  signature: response.razorpay_signature,
-                  is_mock: false
-                })
-              });
-              const verifyData = await verifyRes.json();
-              if (!verifyRes.ok) throw new Error(verifyData.error || 'Failed to verify signature');
-
-              setCurrentUser(verifyData.user);
-              fetchWalletTransactions();
-              setSuccess(`Congratulations! ₹${amountToRecharge} successfully added to your wallet via Razorpay.`);
-              setTimeout(() => setSuccess(null), 3000);
-            } catch (err: any) {
-              setError(err.message);
-            } finally {
-              setRechargeLoading(false);
-            }
-          },
-          prefill: {
-            name: currentUser.display_name,
-            email: currentUser.email,
-            contact: currentUser.phone || ""
-          },
-          theme: {
-            color: "#10b981" // CallMint Theme Accent Color
-          },
-          modal: {
-            ondismiss: function () {
-              setRechargeLoading(false);
-            }
+            setCurrentUser(verifyData.user);
+            fetchWalletTransactions();
+            setSuccess(`Congratulations! ₹${amountToRecharge} successfully added to your wallet.`);
+            setTimeout(() => setSuccess(null), 3000);
+          } catch (err: any) {
+            setError(err.message);
+          } finally {
+            setRechargeLoading(false);
           }
-        };
+        },
+        prefill: {
+          name: currentUser.display_name || '',
+          email: currentUser.email || '',
+          contact: currentUser.phone || ''
+        },
+        theme: {
+          color: '#10B981'
+        },
+        modal: {
+          ondismiss: function () {
+            setRechargeLoading(false);
+          }
+        }
+      };
 
-        const rzp = new (window as any).Razorpay(options);
-        rzp.open();
+      // Only pass order_id if it's NOT a mock order to avoid Razorpay validation error
+      if (!orderData.is_mock) {
+        options.order_id = orderData.order_id;
       }
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', function (resp: any) {
+        setError(`Payment failed: ${resp.error.description || 'Unknown error'}`);
+        setRechargeLoading(false);
+      });
+      rzp.open();
     } catch (err: any) {
       setError(err.message);
       setRechargeLoading(false);
@@ -614,6 +594,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
     }
 
     setError(null);
+    setPendingPaymentMethod('wallet');
     setIsProcessingPayment(true);
 
     if (!bypassBusyCheck) {
@@ -686,6 +667,143 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
         setIsProcessingPayment(false);
         onSelectSession(verifyData.session_id, currentUser.display_name, 'user');
       }, 1500);
+
+    } catch (err: any) {
+      setError(err.message);
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // Pay directly using Razorpay Gateway
+  const handleInitiateDirectRazorpayPayment = async (bypassBusyCheck?: boolean) => {
+    if (!selectedConsultant) return;
+    if (!currentUser) {
+      onOpenAuth();
+      return;
+    }
+
+    setError(null);
+    setPendingPaymentMethod('razorpay');
+    setIsProcessingPayment(true);
+
+    if (!bypassBusyCheck) {
+      try {
+        const queueRes = await fetch(`/api/consultants/${selectedConsultant.id}/queue-status`);
+        if (queueRes.ok) {
+          const queueData = await queueRes.json();
+          if (queueData.is_busy) {
+            setBusyConsultantQueueData(queueData);
+            setBusyWarningTickingSeconds(queueData.remaining_seconds || 0);
+            setShowBusyWarningModal(true);
+            setIsProcessingPayment(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking consultant busy status on connect click:', err);
+      }
+    }
+
+    try {
+      // 1. Load Razorpay script
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+      }
+
+      // 2. Create the order on backend
+      const orderRes = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultant_id: selectedConsultant.id,
+          duration_minutes: selectedMinutes,
+          user_name: currentUser.display_name,
+        }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to initialize session order');
+
+      // 3. Initialize Razorpay Checkout
+      const options: any = {
+        key: orderData.key_id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: `Consultation - ${selectedConsultant.display_name}`,
+        description: `${selectedMinutes} Mins Session with ${selectedConsultant.display_name}` + (orderData.is_mock ? ' (Test Mode)' : ''),
+        handler: async function (response: any) {
+          setIsProcessingPayment(true);
+          try {
+            const verifyRes = await fetch('/api/payments/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                consultant_id: selectedConsultant.id,
+                duration_minutes: selectedMinutes,
+                user_name: currentUser.display_name,
+                order_id: orderData.order_id,
+                payment_id: response.razorpay_payment_id || 'mock_payment_id',
+                signature: response.razorpay_signature || 'mock_signature',
+                is_mock: orderData.is_mock,
+                user_id: currentUser.id,
+                payment_method: 'razorpay'
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok) throw new Error(verifyData.error || 'Payment verification failed');
+
+            setSuccess('Payment Succeeded! Connecting you to the Expert Consultation room...');
+
+            // Save local history reference
+            try {
+              const existing = localStorage.getItem('my_consultation_sessions');
+              const idList = existing ? JSON.parse(existing) : [];
+              if (!idList.includes(verifyData.session_id)) {
+                idList.push(verifyData.session_id);
+                localStorage.setItem('my_consultation_sessions', JSON.stringify(idList));
+              }
+            } catch (e) {
+              console.error(e);
+            }
+
+            setTimeout(() => {
+              setSuccess(null);
+              setIsProcessingPayment(false);
+              onSelectSession(verifyData.session_id, currentUser.display_name, 'user');
+            }, 1500);
+
+          } catch (err: any) {
+            setError(err.message);
+            setIsProcessingPayment(false);
+          }
+        },
+        prefill: {
+          name: currentUser.display_name || '',
+          email: currentUser.email || '',
+          contact: currentUser.phone || ''
+        },
+        theme: {
+          color: '#10B981'
+        },
+        modal: {
+          ondismiss: function () {
+            setIsProcessingPayment(false);
+          }
+        }
+      };
+
+      // Only pass order_id if it's NOT a mock order to avoid Razorpay validation error
+      if (!orderData.is_mock) {
+        options.order_id = orderData.order_id;
+      }
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', function (resp: any) {
+        setError(`Payment failed: ${resp.error.description || 'Unknown error'}`);
+        setIsProcessingPayment(false);
+      });
+      rzp.open();
 
     } catch (err: any) {
       setError(err.message);
@@ -2095,7 +2213,11 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                 <button
                   onClick={async () => {
                     setShowBusyWarningModal(false);
-                    await handleInitiateWalletPayment(true);
+                    if (pendingPaymentMethod === 'razorpay') {
+                      await handleInitiateDirectRazorpayPayment(true);
+                    } else {
+                      await handleInitiateWalletPayment(true);
+                    }
                   }}
                   className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 shadow-md"
                 >
@@ -2186,9 +2308,6 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                         type="button"
                         onClick={async () => {
                           await handleQuickRecharge(rechargeAmount);
-                          setTimeout(() => {
-                            setShowRechargeModal(false);
-                          }, 1500);
                         }}
                         disabled={rechargeLoading || !rechargeAmount || parseFloat(rechargeAmount) <= 0}
                         className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-black px-4 rounded-xl text-xs transition-all shrink-0"
@@ -2606,43 +2725,86 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                     </div>
 
                     {/* Pay with Wallet action button */}
-                    <button
-                      type="button"
-                      onClick={handleInitiateWalletPayment}
-                      disabled={isProcessingPayment || currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute)}
-                      className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
-                    >
-                      {isProcessingPayment ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950" />
-                          <span>Initiating consultation session...</span>
-                        </>
-                      ) : (
-                        <>
-                          <MessageCircle className="w-4 h-4" />
-                          <span>Start Chat (Pay ₹{selectedMinutes * selectedConsultant.price_per_minute} with Wallet)</span>
-                        </>
-                      )}
-                    </button>
+                    {currentUser.wallet_balance >= (selectedMinutes * selectedConsultant.price_per_minute) ? (
+                      <div className="space-y-3">
+                        <button
+                          type="button"
+                          onClick={handleInitiateWalletPayment}
+                          disabled={isProcessingPayment}
+                          className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
+                        >
+                          {isProcessingPayment && pendingPaymentMethod === 'wallet' ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950" />
+                              <span>Initiating session...</span>
+                            </>
+                          ) : (
+                            <>
+                              <MessageCircle className="w-4 h-4" />
+                              <span>Pay with Wallet (₹{selectedMinutes * selectedConsultant.price_per_minute})</span>
+                            </>
+                          )}
+                        </button>
 
-                    {/* Wallet Insufficient Warning quick link */}
-                    {currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute) && (
-                      <div className="bg-rose-500/10 p-3 rounded-xl border border-rose-500/10 text-[10px] text-rose-300 flex items-start space-x-2">
-                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <p>
-                            Aapke wallet me chat booking ke liye paryapt balance nahi hai. Kripya niche click karke Recharge Page se recharge karein.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowRechargeModal(true);
-                            }}
-                            className="text-emerald-400 hover:underline font-bold text-xs flex items-center space-x-1"
-                          >
-                            <span>Recharge Page</span>
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                          </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInitiateDirectRazorpayPayment()}
+                          disabled={isProcessingPayment}
+                          className="bg-slate-950 hover:bg-slate-900 border border-slate-800 disabled:opacity-40 text-emerald-400 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
+                        >
+                          {isProcessingPayment && pendingPaymentMethod === 'razorpay' ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400" />
+                              <span>Opening Razorpay Gateway...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="w-4 h-4" />
+                              <span>Pay directly with Razorpay (₹{selectedMinutes * selectedConsultant.price_per_minute})</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Insufficient wallet balance -> Direct payment with Razorpay */}
+                        <button
+                          type="button"
+                          onClick={() => handleInitiateDirectRazorpayPayment()}
+                          disabled={isProcessingPayment}
+                          className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
+                        >
+                          {isProcessingPayment && pendingPaymentMethod === 'razorpay' ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950" />
+                              <span>Opening Razorpay Gateway...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="w-4 h-4" />
+                              <span>Pay ₹{selectedMinutes * selectedConsultant.price_per_minute} with Razorpay directly</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Wallet Insufficient Warning quick link */}
+                        <div className="bg-rose-500/10 p-3 rounded-xl border border-rose-500/10 text-[10px] text-rose-300 flex items-start space-x-2">
+                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p>
+                              Aapke wallet me chat booking ke liye paryapt balance nahi hai. Aap chahein toh upar diye button se direct **Razorpay** se pay kar sakte hain ya fir wallet recharge kar sakte hain.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowRechargeModal(true);
+                              }}
+                              className="text-emerald-400 hover:underline font-bold text-xs flex items-center space-x-1"
+                            >
+                              <span>Recharge Wallet First</span>
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2657,6 +2819,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
 
         </div>
       )}
+
+
 
     </div>
   );

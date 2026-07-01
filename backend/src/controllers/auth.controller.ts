@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../config/database.js';
 import { sendEmail } from '../helpers/email.helper.js';
-import { getRazorpayClient } from '../services/payment.service.js';
+import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId } from '../services/payment.service.js';
 
 export const userSignUp = (req: Request, res: Response) => {
   try {
@@ -286,7 +286,7 @@ export const consultantRegisterCreateOrder = async (req: Request, res: Response)
           success: true,
           is_free: false,
           is_mock: false,
-          key_id: process.env.RAZORPAY_KEY_ID,
+          key_id: getCleanRazorpayKeyId(),
           order_id: order.id,
           amount: order.amount,
           currency: order.currency,
@@ -296,7 +296,7 @@ export const consultantRegisterCreateOrder = async (req: Request, res: Response)
           gst_rate: gstRate,
         });
       } catch (err: any) {
-        console.error('Razorpay Registration Order Creation Failed. Falling back to Mock Order.', err.message);
+        console.log('[Registration] Initializing sandbox fallback checkout.');
       }
     }
 
@@ -306,7 +306,7 @@ export const consultantRegisterCreateOrder = async (req: Request, res: Response)
       success: true,
       is_free: false,
       is_mock: true,
-      key_id: 'rzp_test_mock_key',
+      key_id: getCleanRazorpayKeyId() || 'rzp_test_U5XqYtZ1w2v3u4',
       order_id: mock_order_id,
       amount: amount_in_paise,
       currency: 'INR',

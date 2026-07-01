@@ -141,7 +141,7 @@ async function syncFromMongoToSQLite() {
 
     const columns = allKeys.map(k => `"${k}"`).join(', ');
     const placeholders = allKeys.map(() => '?').join(', ');
-    const insertSql = `INSERT INTO ${table} (${columns}) VALUES (${placeholders})`;
+    const insertSql = `INSERT OR REPLACE INTO ${table} (${columns}) VALUES (${placeholders})`;
 
     const stmt = originalDb.prepare(insertSql);
 
