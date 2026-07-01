@@ -649,11 +649,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       return;
     }
     try {
-      // 1. Create order on the backend
+      // 1. Create order on the backend with pre-verification of credentials
       const orderRes = await fetch('/api/consultants/register/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan_id: selectedPlanId }),
+        body: JSON.stringify({ 
+          plan_id: selectedPlanId,
+          email: registerEmail,
+          phone: '+91' + numericPhone,
+        }),
       });
       const orderData = await orderRes.json();
       if (!orderRes.ok) throw new Error(orderData.error || 'Failed to initiate plan order');

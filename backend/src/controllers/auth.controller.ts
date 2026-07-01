@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../config/database.js';
-import { sendEmail } from '../helpers/email.helper.js';
+import { sendEmail, sendConsultantCredentials } from '../helpers/email.helper.js';
 import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId } from '../services/payment.service.js';
 
 export const userSignUp = (req: Request, res: Response) => {
@@ -209,21 +209,10 @@ export const consultantRegister = (req: Request, res: Response) => {
       plan.id
     );
 
-    const subject = `Welcome to Consulting Portal! Your Consultant Login Credentials`;
-    const body = `Dear ${display_name},
-
-Thank you for registering on our platform using the ${plan.name}!
-
-Your expert account has been successfully set up. Here are your credentials to log in:
-• Username: ${username} (or you can use your email: ${cleanEmail})
-• Password: ${password}
-
-Please keep these credentials safe and change your password in your settings once logged in.
-
-Best wishes,
-Support Team`;
-    
-    sendEmail(cleanEmail, subject, body);
+    // Dispatch credentials email asynchronously using the professional Gmail dispatch system
+    sendConsultantCredentials(cleanEmail, display_name, username, password).catch(err => {
+      console.error('[Auth Controller] Error during background sendConsultantCredentials:', err);
+    });
 
     res.json({
       success: true,
@@ -243,9 +232,18 @@ Support Team`;
 
 export const consultantRegisterCreateOrder = async (req: Request, res: Response) => {
   try {
-    const { plan_id } = req.body;
+    const { plan_id, email, phone } = req.body;
     if (!plan_id) {
       return res.status(400).json({ error: 'Subscription plan ID is required' });
+    }
+    if (!email) {
+      return res.status(400).json({ error: 'Email address is required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
+    if (existingConsultantEmail) {
+      return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another or login.' });
     }
 
     const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
