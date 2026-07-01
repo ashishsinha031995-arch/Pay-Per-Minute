@@ -615,6 +615,22 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   };
 
+  // Helper to dynamically load the Razorpay checkout script on-demand
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   // Register / Purchase Plan
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -633,32 +649,142 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       return;
     }
     try {
-      const res = await fetch('/api/consultants/register', {
+      // 1. Create order on the backend
+      const orderRes = await fetch('/api/consultants/register/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan_id: selectedPlanId,
-          display_name: registerDisplayName,
-          email: registerEmail,
-          phone: '+91' + numericPhone,
-          initial_price_per_minute: parseFloat(registerPrice),
-          category: registerCategory,
-        }),
+        body: JSON.stringify({ plan_id: selectedPlanId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Registration failed');
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to initiate plan order');
 
-      setCredentialsGenerated({
-        username: data.username,
-        password: data.password,
-        displayName: data.display_name,
-      });
-      setRegisterDisplayName('');
-      setRegisterEmail('');
-      setRegisterPhone('');
-      // Autocomplete login fields for them
-      setUsernameInput(data.username);
-      setPasswordInput(data.password);
+      if (orderData.is_free) {
+        // Direct free registration
+        const res = await fetch('/api/consultants/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan_id: selectedPlanId,
+            display_name: registerDisplayName,
+            email: registerEmail,
+            phone: '+91' + numericPhone,
+            initial_price_per_minute: parseFloat(registerPrice),
+            category: registerCategory,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+        setCredentialsGenerated({
+          username: data.username,
+          password: data.password,
+          displayName: data.display_name,
+        });
+        setRegisterDisplayName('');
+        setRegisterEmail('');
+        setRegisterPhone('');
+        setUsernameInput(data.username);
+        setPasswordInput(data.password);
+      } else {
+        // Paid plan: Razorpay flow (Mock or Real)
+        const scriptLoaded = await loadRazorpayScript();
+        if (!scriptLoaded) {
+          throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+        }
+
+        if (orderData.is_mock) {
+          // Simulation flow
+          const confirmPayment = window.confirm(
+            `[Razorpay Plan Checkout Simulation]\n\nAap is plan ko register karne ke liye payment simulate karna chahte hain?\n(Do you want to simulate a successful plan subscription payment to complete registration?)`
+          );
+          if (!confirmPayment) return;
+
+          const res = await fetch('/api/consultants/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              plan_id: selectedPlanId,
+              display_name: registerDisplayName,
+              email: registerEmail,
+              phone: '+91' + numericPhone,
+              initial_price_per_minute: parseFloat(registerPrice),
+              category: registerCategory,
+              order_id: orderData.order_id,
+              payment_id: `mock_sub_tx_${Math.random().toString(36).slice(2, 10)}`,
+              is_mock: true
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Mock registration verification failed');
+
+          setCredentialsGenerated({
+            username: data.username,
+            password: data.password,
+            displayName: data.display_name,
+          });
+          setRegisterDisplayName('');
+          setRegisterEmail('');
+          setRegisterPhone('');
+          setUsernameInput(data.username);
+          setPasswordInput(data.password);
+        } else {
+          // Real Razorpay Checkout modal
+          const options = {
+            key: orderData.key_id,
+            amount: orderData.amount,
+            currency: orderData.currency,
+            name: "CallMint Consultant Partnership",
+            description: `Subscribe to plan: ${orderData.plan_name || 'Partner Plan'}`,
+            order_id: orderData.order_id,
+            handler: async function (response: any) {
+              try {
+                const res = await fetch('/api/consultants/register', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    plan_id: selectedPlanId,
+                    display_name: registerDisplayName,
+                    email: registerEmail,
+                    phone: '+91' + numericPhone,
+                    initial_price_per_minute: parseFloat(registerPrice),
+                    category: registerCategory,
+                    order_id: orderData.order_id,
+                    payment_id: response.razorpay_payment_id,
+                    signature: response.razorpay_signature,
+                    is_mock: false
+                  })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Verification & registration failed');
+
+                setCredentialsGenerated({
+                  username: data.username,
+                  password: data.password,
+                  displayName: data.display_name,
+                });
+                setRegisterDisplayName('');
+                setRegisterEmail('');
+                setRegisterPhone('');
+                setUsernameInput(data.username);
+                setPasswordInput(data.password);
+              } catch (err: any) {
+                setError(err.message);
+              }
+            },
+            prefill: {
+              name: registerDisplayName,
+              email: registerEmail,
+              contact: '+91' + numericPhone,
+            },
+            theme: {
+              color: "#10b981"
+            }
+          };
+
+          const rzp = new (window as any).Razorpay(options);
+          rzp.open();
+        }
+      }
     } catch (err: any) {
       setError(err.message);
     }
@@ -1601,7 +1727,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 text-xs text-slate-400 flex items-start space-x-3">
                 <Shield className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                 <span className="leading-relaxed">
-                  By clicking register, you simulate a successful Razorpay gateway checkout. This instantly deploys your public bio page at <strong className="text-slate-200">/u/[username]</strong> and prepares secure login credentials.
+                  By clicking register, you will pay using our secure Razorpay gateway checkout. This instantly deploys your public bio page at <strong className="text-slate-200">/u/[username]</strong> and prepares secure login credentials.
                 </span>
               </div>
 
@@ -1612,7 +1738,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 rounded-xl font-bold text-xs uppercase tracking-widest w-full transition-all flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>Simulate Plan Checkout & Register</span>
+                <span>Pay & Register Account</span>
               </button>
             </form>
 

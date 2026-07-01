@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { db } from '../config/database.js';
 import { sendEmail } from '../helpers/email.helper.js';
+import { getRazorpayClient } from '../services/payment.service.js';
 
 export const userSignUp = (req: Request, res: Response) => {
   try {
@@ -116,7 +118,19 @@ export const consultantLogin = (req: Request, res: Response) => {
 
 export const consultantRegister = (req: Request, res: Response) => {
   try {
-    const { plan_id, display_name, initial_price_per_minute, category, email, phone } = req.body;
+    const { 
+      plan_id, 
+      display_name, 
+      initial_price_per_minute, 
+      category, 
+      email, 
+      phone,
+      order_id,
+      payment_id,
+      signature,
+      is_mock
+    } = req.body;
+
     if (!plan_id || !display_name) {
       return res.status(400).json({ error: 'Plan and Display Name are required' });
     }
@@ -141,6 +155,26 @@ export const consultantRegister = (req: Request, res: Response) => {
     const price = initial_price_per_minute ? parseFloat(initial_price_per_minute) : 15.0;
     if (plan.max_consultant_rate !== undefined && price > plan.max_consultant_rate) {
       return res.status(400).json({ error: `Selected plan "${plan.name}" ke mutabik, maximum call rate ₹${plan.max_consultant_rate}/minute hi allow hai. Please select a lower rate.` });
+    }
+
+    // Razorpay checkout verification for paid plans
+    const basePrice = parseFloat(plan.price);
+    if (basePrice > 0) {
+      const razorpayClient = getRazorpayClient();
+      if (!is_mock && razorpayClient) {
+        if (!order_id || !payment_id || !signature) {
+          return res.status(400).json({ error: 'Payment verification details are missing for this subscription plan.' });
+        }
+        const text = order_id + "|" + payment_id;
+        const generated_signature = crypto
+          .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+          .update(text)
+          .digest('hex');
+
+        if (generated_signature !== signature) {
+          return res.status(400).json({ error: 'Payment signature verification failed. Transaction is invalid.' });
+        }
+      }
     }
 
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
@@ -201,6 +235,85 @@ Support Team`;
       plan_name: plan.name,
       plan_expiry: expiryDate.toLocaleDateString(),
       consultant_id: result.lastInsertRowid,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const consultantRegisterCreateOrder = async (req: Request, res: Response) => {
+  try {
+    const { plan_id } = req.body;
+    if (!plan_id) {
+      return res.status(400).json({ error: 'Subscription plan ID is required' });
+    }
+
+    const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
+    if (!plan) {
+      return res.status(404).json({ error: 'Subscription plan not found' });
+    }
+
+    const basePrice = parseFloat(plan.price);
+    if (basePrice === 0) {
+      return res.json({
+        success: true,
+        is_free: true,
+        total_paid: 0,
+      });
+    }
+
+    const gstRate = 18.0;
+    const gstAmount = parseFloat((basePrice * 0.18).toFixed(2));
+    const totalPaid = parseFloat((basePrice + gstAmount).toFixed(2));
+    const amount_in_paise = Math.round(totalPaid * 100);
+
+    const razorpayClient = getRazorpayClient();
+
+    if (razorpayClient) {
+      try {
+        const order = await razorpayClient.orders.create({
+          amount: amount_in_paise,
+          currency: 'INR',
+          receipt: `receipt_sub_${Date.now()}`,
+          notes: {
+            plan_id: plan_id.toString(),
+            plan_name: plan.name,
+            total_paid: totalPaid.toString(),
+          },
+        });
+
+        return res.json({
+          success: true,
+          is_free: false,
+          is_mock: false,
+          key_id: process.env.RAZORPAY_KEY_ID,
+          order_id: order.id,
+          amount: order.amount,
+          currency: order.currency,
+          total_paid: totalPaid,
+          base_price: basePrice,
+          gst_amount: gstAmount,
+          gst_rate: gstRate,
+        });
+      } catch (err: any) {
+        console.error('Razorpay Registration Order Creation Failed. Falling back to Mock Order.', err.message);
+      }
+    }
+
+    // Fallback Mock Order
+    const mock_order_id = `order_sub_mock_${Math.random().toString(36).slice(2, 11)}`;
+    res.json({
+      success: true,
+      is_free: false,
+      is_mock: true,
+      key_id: 'rzp_test_mock_key',
+      order_id: mock_order_id,
+      amount: amount_in_paise,
+      currency: 'INR',
+      total_paid: totalPaid,
+      base_price: basePrice,
+      gst_amount: gstAmount,
+      gst_rate: gstRate,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
