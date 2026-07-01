@@ -3,6 +3,7 @@ import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, Che
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
+import { CallMintLandingPage } from './CallMintLandingPage';
 
 const formatToLocalDateString = (dateStr: any) => {
   if (!dateStr) return '';
@@ -2136,7 +2137,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
 
       {/* 1. SHOW PUBLIC DIRECTORY OF CONSULTANTS */}
       {!selectedConsultant && (!currentUser || activeDashboardTab === 'advisors') && (
-        <div className="space-y-8">
+        currentUser ? (
+          <div className="space-y-8">
           
           {/* Resolve and Render Dynamic 3D Hero Section */}
           {(() => {
@@ -2289,6 +2291,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
             )}
           </div>
         </div>
+        ) : (
+          <CallMintLandingPage 
+            consultants={consultants} 
+            onOpenAuth={onOpenAuth} 
+            onSelectConsultant={(cons) => fetchFullProfile(cons)} 
+          />
+        )
       )}
 
       {/* 2. SHOW SPECIFIC SELECTED PROFILE BOOKING PAGE */}
