@@ -465,7 +465,23 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
     }
   };
 
-  // Fast Wallet Recharge
+  // Helper to dynamically load the Razorpay checkout script on-demand
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  // Fast Wallet Recharge via Razorpay Checkout Gateway
   const handleQuickRecharge = async (amountToRecharge: string) => {
     if (!currentUser) {
       onOpenAuth();
@@ -475,7 +491,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch('/api/user/recharge', {
+      // 1. Load Razorpay script
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+      }
+
+      // 2. Create the order on backend (real or mock depending on env keys)
+      const res = await fetch('/api/user/recharge/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -483,16 +506,95 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
           amount: amountToRecharge
         })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to recharge wallet');
+      const orderData = await res.json();
+      if (!res.ok) throw new Error(orderData.error || 'Failed to create recharge order');
 
-      setCurrentUser(data.user);
-      fetchWalletTransactions();
-      setSuccess(`Congratulations! ₹${amountToRecharge} successfully added to your wallet.`);
-      setTimeout(() => setSuccess(null), 3000);
+      if (orderData.is_mock) {
+        // Mock Sandbox Experience
+        const confirmPayment = window.confirm(
+          `[Razorpay Sandbox Simulation]\n\nAap ₹${amountToRecharge} add karne ke liye payment simulate karna chahte hain?\n(Do you want to simulate a successful payment of ₹${amountToRecharge} to complete recharge?)`
+        );
+        if (!confirmPayment) {
+          setRechargeLoading(false);
+          return;
+        }
+
+        console.log('Running in Mock Sandbox Mode. Verifying payment directly...');
+        const verifyRes = await fetch('/api/user/recharge/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentUser.id,
+            amount: amountToRecharge,
+            order_id: orderData.order_id,
+            payment_id: `mock_pay_tx_${Math.random().toString(36).slice(2, 10)}`,
+            is_mock: true
+          })
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyRes.ok) throw new Error(verifyData.error || 'Mock recharge failed');
+
+        setCurrentUser(verifyData.user);
+        fetchWalletTransactions();
+        setSuccess(`Congratulations! ₹${amountToRecharge} successfully added to your wallet (Mock Sandbox).`);
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        // Open REAL Razorpay Checkout Modal
+        const options = {
+          key: orderData.key_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: "CallMint Wallet Recharge",
+          description: `Add ₹${amountToRecharge} to CallMint balance`,
+          order_id: orderData.order_id,
+          handler: async function (response: any) {
+            setRechargeLoading(true);
+            try {
+              const verifyRes = await fetch('/api/user/recharge/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: currentUser.id,
+                  amount: amountToRecharge,
+                  order_id: orderData.order_id,
+                  payment_id: response.razorpay_payment_id,
+                  signature: response.razorpay_signature,
+                  is_mock: false
+                })
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok) throw new Error(verifyData.error || 'Failed to verify signature');
+
+              setCurrentUser(verifyData.user);
+              fetchWalletTransactions();
+              setSuccess(`Congratulations! ₹${amountToRecharge} successfully added to your wallet via Razorpay.`);
+              setTimeout(() => setSuccess(null), 3000);
+            } catch (err: any) {
+              setError(err.message);
+            } finally {
+              setRechargeLoading(false);
+            }
+          },
+          prefill: {
+            name: currentUser.display_name,
+            email: currentUser.email,
+            contact: currentUser.phone || ""
+          },
+          theme: {
+            color: "#10b981" // CallMint Theme Accent Color
+          },
+          modal: {
+            ondismiss: function () {
+              setRechargeLoading(false);
+            }
+          }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+      }
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setRechargeLoading(false);
     }
   };

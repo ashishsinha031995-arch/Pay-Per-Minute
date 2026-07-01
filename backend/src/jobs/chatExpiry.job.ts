@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { db, logWalletTransaction } from '../config/database.js';
 import { processNextInQueue } from '../controllers/payment.controller.js';
+import { ChatMemoryService } from '../services/chatMemory.js';
 
 export function startChatExpiryJob(io: Server) {
   // Periodically check all active sessions, decrement or check expiry against system clock,
@@ -52,13 +53,10 @@ export function startChatExpiryJob(io: Server) {
             // Session has expired!
             console.log(`[Timer Engine] Session ${sess.id} expired. Auto-completing.`);
             
-            // 1. Fetch transcript (group all chat messages)
-            const msgs = db.prepare('SELECT sender_type, sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
-            const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text.startsWith('[VOICE_NOTE]:') ? '[Voice Note 🎙️]' : m.text}`).join('\n');
+            // Consolidate in-memory messages and save to SQLite/MongoDB database!
+            const { transcript, consultantMsgCount } = ChatMemoryService.consolidateAndSave(sess.id);
 
-            const consultantMsgs = msgs.filter(m => m.sender_type === 'consultant');
-
-            if (consultantMsgs.length === 0) {
+            if (consultantMsgCount === 0) {
               // Consultant did not reply or participate at all!
               // Treat this as missed / cancelled! No money deducted from user wallet (refund).
               console.log(`[Timer Engine] Session ${sess.id} expired with 0 consultant replies. Refunded user fully.`);

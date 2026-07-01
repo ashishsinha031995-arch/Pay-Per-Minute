@@ -3,6 +3,8 @@ import {
   getUserProfileInfo,
   updateUserProfile,
   rechargeUserWallet,
+  createRechargeOrder,
+  verifyRechargePayment,
   getUserWalletTransactions,
   getUserPastSessions,
   getActiveConsultants,
@@ -36,6 +38,8 @@ router.get('/user/profile/:id', getUserProfileInfo);
 router.post('/user/update-profile', updateUserProfile);
 router.post('/user/upload-photo', uploadPhoto);
 router.post('/user/recharge', rechargeUserWallet);
+router.post('/user/recharge/create-order', createRechargeOrder);
+router.post('/user/recharge/verify', verifyRechargePayment);
 router.post('/user/lock-referral', lockUserReferral);
 router.get('/user/wallet-transactions/:userId', getUserWalletTransactions);
 router.get('/user/sessions', getUserPastSessions);

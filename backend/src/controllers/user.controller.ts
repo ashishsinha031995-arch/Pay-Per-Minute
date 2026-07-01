@@ -2,8 +2,10 @@ import { Request, Response } from 'express';
 import { db, logWalletTransaction } from '../config/database.js';
 import { getSalaryCycleInfo, checkAndResetMonthlyWallets } from '../utils/salary.js';
 import { processNextInQueue } from './payment.controller.js';
+import { getRazorpayClient } from '../services/payment.service.js';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 // Get All Active Consultants (Public Listings page)
 export const getActiveConsultants = (req: Request, res: Response) => {
@@ -439,6 +441,155 @@ export const rechargeUserWallet = (req: Request, res: Response) => {
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     res.json({ success: true, user: updatedUser, gst_rate: gstRate, gst_amount: gstAmount, total_paid: totalPaid });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Create Razorpay Order for Wallet Recharge
+export const createRechargeOrder = async (req: Request, res: Response) => {
+  try {
+    const { id, amount } = req.body;
+    if (!id || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid user ID or recharge amount' });
+    }
+
+    const user = db.prepare('SELECT id, display_name FROM users WHERE id = ?').get(id) as any;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const rechargeVal = parseFloat(amount);
+    const gstRate = 18.0; // 18% GST
+    const gstAmount = parseFloat((rechargeVal * 0.18).toFixed(2));
+    const totalPaid = parseFloat((rechargeVal + gstAmount).toFixed(2));
+    const amount_in_paise = Math.round(totalPaid * 100);
+
+    const razorpayClient = getRazorpayClient();
+
+    if (razorpayClient) {
+      try {
+        const order = await razorpayClient.orders.create({
+          amount: amount_in_paise,
+          currency: 'INR',
+          receipt: `receipt_recharge_${Date.now()}`,
+          notes: {
+            user_id: id.toString(),
+            recharge_amount: rechargeVal.toString(),
+            total_paid: totalPaid.toString(),
+          },
+        });
+
+        return res.json({
+          success: true,
+          is_mock: false,
+          key_id: process.env.RAZORPAY_KEY_ID,
+          order_id: order.id,
+          amount: order.amount,
+          currency: order.currency,
+          total_paid: totalPaid,
+          recharge_amount: rechargeVal,
+          gst_amount: gstAmount,
+          gst_rate: gstRate,
+        });
+      } catch (err: any) {
+        console.error('Razorpay Recharge Order Creation Failed. Falling back to Mock Order.', err.message);
+      }
+    }
+
+    // Fallback Mock Recharge Order
+    const mock_order_id = `order_recharge_mock_${Math.random().toString(36).slice(2, 11)}`;
+    res.json({
+      success: true,
+      is_mock: true,
+      key_id: 'rzp_test_mock_key',
+      order_id: mock_order_id,
+      amount: amount_in_paise,
+      currency: 'INR',
+      total_paid: totalPaid,
+      recharge_amount: rechargeVal,
+      gst_amount: gstAmount,
+      gst_rate: gstRate,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Verify Razorpay Recharge Payment and credit wallet
+export const verifyRechargePayment = async (req: Request, res: Response) => {
+  try {
+    const {
+      id,
+      amount,
+      order_id,
+      payment_id,
+      signature,
+      is_mock
+    } = req.body;
+
+    if (!id || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Missing required validation fields' });
+    }
+
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id) as any;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const rechargeVal = parseFloat(amount);
+    const gstRate = 18.0;
+    const gstAmount = parseFloat((rechargeVal * 0.18).toFixed(2));
+    const totalPaid = parseFloat((rechargeVal + gstAmount).toFixed(2));
+
+    const razorpayClient = getRazorpayClient();
+
+    if (!is_mock && razorpayClient) {
+      if (!order_id || !payment_id || !signature) {
+        return res.status(400).json({ error: 'Payment verification details are missing.' });
+      }
+
+      // Verify the Razorpay signature
+      const text = order_id + "|" + payment_id;
+      const generated_signature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+        .update(text)
+        .digest('hex');
+
+      if (generated_signature !== signature) {
+        return res.status(400).json({ error: 'Payment signature verification failed. Transaction is invalid.' });
+      }
+    }
+
+    // Update user balance
+    db.prepare(`
+      UPDATE users 
+      SET wallet_balance = wallet_balance + ?, 
+          lifetime_recharge = lifetime_recharge + ? 
+      WHERE id = ?
+    `).run(rechargeVal, rechargeVal, id);
+
+    logWalletTransaction(
+      Number(id),
+      'recharge',
+      rechargeVal,
+      `Wallet Recharge of ₹${rechargeVal.toFixed(2)} (Paid ₹${totalPaid.toFixed(2)} incl. 18% GST via Razorpay)`,
+      gstRate,
+      gstAmount,
+      totalPaid
+    );
+
+    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+
+    res.json({
+      success: true,
+      user: updatedUser,
+      gst_rate: gstRate,
+      gst_amount: gstAmount,
+      total_paid: totalPaid,
+      payment_id: payment_id || `mock_pay_${Math.random().toString(36).slice(2, 10)}`
+    });
+
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

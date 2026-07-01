@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db, logWalletTransaction } from '../config/database.js';
 import { getRazorpayClient } from '../services/payment.service.js';
+import { ChatMemoryService } from '../services/chatMemory.js';
 
 export function getMicrosecondISO(): string {
   const now = new Date();
@@ -235,7 +236,11 @@ export const getSessionById = (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Chat session not found' });
     }
 
-    const messages = db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY id ASC').all(id);
+    // Attempt to fetch from active in-memory messages first, fallback to DB
+    let messages = ChatMemoryService.getMessages(id) as any[];
+    if (messages.length === 0) {
+      messages = db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY id ASC').all(id);
+    }
 
     res.json({
       session,
@@ -264,21 +269,8 @@ export const postSessionMessageREST = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'This session is not active.' });
     }
 
-    const created_at = new Date().toISOString();
-    const result = db.prepare(`
-      INSERT INTO messages (session_id, sender_type, sender_name, text, created_at, is_read)
-      VALUES (?, ?, ?, ?, ?, 0)
-    `).run(session_id, sender_type, sender_name, text, created_at);
-
-    const savedMessage = {
-      id: Number(result.lastInsertRowid),
-      session_id,
-      sender_type,
-      sender_name,
-      text,
-      created_at,
-      is_read: 0,
-    };
+    // Save in-memory during active session
+    const savedMessage = ChatMemoryService.addMessage(session_id, sender_type, sender_name, text);
 
     const io = req.app.get('io');
     if (io) {
@@ -350,6 +342,7 @@ export const rejectSession = (req: Request, res: Response) => {
     const consultantId = sess.consultant_id;
 
     db.prepare("UPDATE sessions SET status = 'rejected', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(session_id);
+    ChatMemoryService.clearMemory(session_id);
 
     if (userId && totalPaid > 0) {
       db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
@@ -397,10 +390,7 @@ export const endSessionManually = (req: Request, res: Response) => {
     // even if client payload is modified or missing keys.
     const isUserEnding = ended_by === 'user' || ended_by !== 'consultant';
 
-    const msgs = db.prepare('SELECT sender_type, sender_name, text, created_at FROM messages WHERE session_id = ? ORDER BY id ASC').all(sess.id) as any[];
-    const transcript = msgs.map(m => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.sender_name}: ${m.text.startsWith('[VOICE_NOTE]:') ? '[Voice Note 🎙️]' : m.text}`).join('\n');
-
-    const consultantMsgs = msgs.filter(m => m.sender_type === 'consultant');
+    const { transcript, consultantMsgCount } = ChatMemoryService.consolidateAndSave(sess.id);
 
     let actualMinutes = sess.duration_minutes;
     let actualCost = sess.price_per_minute * actualMinutes;
@@ -409,7 +399,7 @@ export const endSessionManually = (req: Request, res: Response) => {
     let actual_consultant_earnings = 0;
     let finalStatus = 'completed';
 
-    if (consultantMsgs.length === 0 && !isUserEnding) {
+    if (consultantMsgCount === 0 && !isUserEnding) {
       // Consultant did not reply or participate at all! Refund user 100%!
       actualMinutes = 0;
       actualCost = 0.0;
@@ -484,7 +474,7 @@ export const endSessionManually = (req: Request, res: Response) => {
     processNextInQueue(cid, io);
 
     if (io) {
-      if (consultantMsgs.length === 0) {
+      if (consultantMsgCount === 0) {
         io.to(sess.id).emit('session:missed', {
           session_id: sess.id,
           message: 'Session has ended as advisor failed to participate.'
@@ -636,6 +626,7 @@ export const cancelQueuedSession = (req: Request, res: Response) => {
 
     // Update status to cancelled and zero out earnings
     db.prepare("UPDATE sessions SET status = 'cancelled', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(session_id);
+    ChatMemoryService.clearMemory(session_id);
 
     if (userId && totalPaid > 0) {
       db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);

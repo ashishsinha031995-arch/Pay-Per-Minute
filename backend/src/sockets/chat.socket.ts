@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { db } from '../config/database.js';
+import { ChatMemoryService } from '../services/chatMemory.js';
 
 export function handleChatSocket(io: Server, socket: Socket) {
   // 1. Join Chat Session Room
@@ -58,23 +59,9 @@ export function handleChatSocket(io: Server, socket: Socket) {
         return;
       }
 
-      const created_at = new Date().toISOString();
-      const result = db.prepare(`
-        INSERT INTO messages (session_id, sender_type, sender_name, text, created_at, is_read)
-        VALUES (?, ?, ?, ?, ?, 0)
-      `).run(session_id, sender_type, sender_name, text, created_at);
-
-      console.log(`[Socket Server] Message inserted successfully. Row ID:`, result.lastInsertRowid);
-
-      const savedMessage = {
-        id: Number(result.lastInsertRowid),
-        session_id,
-        sender_type,
-        sender_name,
-        text,
-        created_at,
-        is_read: 0,
-      };
+      // Store message in-memory during active session
+      const savedMessage = ChatMemoryService.addMessage(session_id, sender_type, sender_name, text);
+      console.log(`[Socket Server] Message added in-memory:`, savedMessage.id);
 
       console.log(`[Socket Server] Broadcasting message to session room ${session_id}:`, savedMessage);
       // Broadcast message to everyone in the room
@@ -92,9 +79,8 @@ export function handleChatSocket(io: Server, socket: Socket) {
   // 4. Mark messages as read
   socket.on('read:messages', ({ session_id, sender_type }) => {
     try {
-      // Mark all incoming messages from partner as read
-      const partnerType = sender_type === 'user' ? 'consultant' : 'user';
-      db.prepare('UPDATE messages SET is_read = 1 WHERE session_id = ? AND sender_type = ?').run(session_id, partnerType);
+      // Mark all incoming messages from partner as read in-memory
+      ChatMemoryService.markAsRead(session_id, sender_type);
       
       // Broadcast read receipt event to the room
       io.to(session_id).emit('messages:read_receipt', { session_id, reader_type: sender_type });
