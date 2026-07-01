@@ -293,6 +293,11 @@ const db = {
 
 // Initialize schema
 export function initDb() {
+  // Disable foreign keys during initialization, migrations, and seeding
+  try {
+    db.pragma('foreign_keys = OFF');
+  } catch (_) {}
+
   // Create tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS admin_settings (
@@ -804,12 +809,23 @@ export function initDb() {
       4.9
     );
 
+    const astro = db.prepare('SELECT id FROM consultants WHERE username = ?').get('astro_pandit') as { id: number } | undefined;
+    const karan = db.prepare('SELECT id FROM consultants WHERE username = ?').get('influencer_karan') as { id: number } | undefined;
+    const rahul = db.prepare('SELECT id FROM consultants WHERE username = ?').get('coach_rahul') as { id: number } | undefined;
+
     const insertReview = db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    insertReview.run(1, 'Aman', 5, 'Highly accurate predictions! Saved my relationship.', now);
-    insertReview.run(1, 'Neha', 4, 'Very polite and knowledgeable astrologer.', now);
-    insertReview.run(2, 'Rohit', 5, 'Super motivational session. Cleared my job selection dilemma.', now);
-    insertReview.run(3, 'Sanya', 5, 'Loved the tarot reading, so on point!', now);
+
+    if (astro) {
+      insertReview.run(astro.id, 'Aman', 5, 'Highly accurate predictions! Saved my relationship.', now);
+      insertReview.run(astro.id, 'Neha', 4, 'Very polite and knowledgeable astrologer.', now);
+    }
+    if (karan) {
+      insertReview.run(karan.id, 'Rohit', 5, 'Super motivational session. Cleared my job selection dilemma.', now);
+    }
+    if (rahul) {
+      insertReview.run(rahul.id, 'Sanya', 5, 'Loved the tarot reading, so on point!', now);
+    }
   }
 
   // Migrate existing IDs to be at least 5 digits with completely separate ranges to prevent any ID collisions (users: 10000+, consultants: 20000+)
