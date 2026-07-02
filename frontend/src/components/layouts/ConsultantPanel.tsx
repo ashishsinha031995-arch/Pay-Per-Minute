@@ -668,7 +668,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   };
 
-  const loadConsultantStatsAndStatus = async (id: number, isPolling = false) => {
+  const loadConsultantStatsAndStatus = async (id: number, isPolling = false, forceRefreshInputs = false) => {
     try {
       const res = await fetch(`/api/consultants/${id}/stats`);
       if (res.ok) {
@@ -712,7 +712,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           setCurrentConsultant(matching);
 
           // Sync input states with server-side values on first load only so typing isn't interrupted
-          if (!hasInitializedProfileRef.current) {
+          if (!hasInitializedProfileRef.current || forceRefreshInputs) {
             setPhotoUrl(matching.photo_url || '');
             setBio(matching.bio || '');
             setPricePerMin(matching.price_per_minute.toString());
@@ -816,7 +816,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           setCurrentConsultant(null);
           localStorage.removeItem('consultant_session');
         } else {
-          loadConsultantStatsAndStatus(currentConsultant.id);
+          loadConsultantStatsAndStatus(currentConsultant.id, false, true);
         }
         setBuyingPlanId(null);
         return;
@@ -866,7 +866,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               setCurrentConsultant(null);
               localStorage.removeItem('consultant_session');
             } else {
-              loadConsultantStatsAndStatus(currentConsultant.id);
+              loadConsultantStatsAndStatus(currentConsultant.id, false, true);
             }
           } catch (err: any) {
             setError(err.message);

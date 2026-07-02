@@ -41,6 +41,7 @@ const normalizeCategory = (cat: string) => {
 interface ConsultantProfileProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
   targetUsername?: string; // If navigated from Consultant Panel profile URL
+  onClearTargetUsername?: () => void;
   currentUser: any;
   setCurrentUser: (user: any) => void;
   onOpenAuth: () => void;
@@ -48,7 +49,7 @@ interface ConsultantProfileProps {
   onLogout?: () => void;
 }
 
-export function ConsultantProfile({ onSelectSession, targetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout }: ConsultantProfileProps) {
+export function ConsultantProfile({ onSelectSession, targetUsername, onClearTargetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout }: ConsultantProfileProps) {
   // Directory or profile selection
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
@@ -379,6 +380,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
         const matched = data.find((c: Consultant) => c.username.toLowerCase() === targetUsername.toLowerCase());
         if (matched) {
           fetchFullProfile(matched);
+        } else {
+          // If the targetUsername is not in the list of available/permitted consultants, clear it!
+          console.warn(`Target username ${targetUsername} is not in your permitted advisor list. Clearing filter.`);
+          if (onClearTargetUsername) {
+            onClearTargetUsername();
+          }
         }
       }
     } catch (err: any) {
@@ -390,7 +397,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
 
   useEffect(() => {
     fetchConsultants();
-  }, [targetUsername, currentUser?.id]);
+  }, [targetUsername, currentUser?.id, currentUser?.locked_consultant_id, currentUser?.admin_allow_others]);
 
   const getFilteredConsultants = () => {
     let list = consultants;
@@ -410,7 +417,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
             .map(s => parseInt(s, 10))
             .filter(n => !isNaN(n))
         : [];
-      list = list.filter(c => lockedIds.includes(c.id));
+      if (lockedIds.length > 0) {
+        list = list.filter(c => lockedIds.includes(c.id));
+      }
     }
 
     return list;
@@ -920,6 +929,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
                   <span>Recharge Page</span>
                 </button>
               </div>
+            )}
+            {onClearTargetUsername && (
+              <button
+                onClick={() => {
+                  onClearTargetUsername();
+                }}
+                className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-bold py-2.5 px-4 rounded-xl transition-all border border-emerald-500/20 shadow-sm"
+              >
+                ✨ Show All My Advisors
+              </button>
             )}
             <button
               onClick={() => {

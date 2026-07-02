@@ -32,7 +32,7 @@ export const getActiveConsultants = (req: Request, res: Response) => {
 
     const allConsultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id FROM consultants WHERE is_active = 1').all();
 
-    if (adminAllowOthers === 0) {
+    if (adminAllowOthers === 0 && lockedConsultantIds.length > 0) {
       const filtered = allConsultants.filter((c: any) => lockedConsultantIds.includes(c.id));
       return res.json(filtered);
     }

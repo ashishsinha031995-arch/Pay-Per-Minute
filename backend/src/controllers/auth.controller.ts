@@ -428,6 +428,19 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
       consultant_id
     );
 
+    // Log the plan purchase and rate update to audit_logs!
+    const logId = 'AUD-' + Math.floor(100000 + Math.random() * 900000);
+    const timestamp = new Date().toISOString();
+    const details = `Consultant ${updatedDisplayName} (#${consultant_id}) subscribed to plan "${plan.name}". Rate configured at ₹${updatedPrice}/minute (Max plan allowance: ₹${plan.max_consultant_rate || 1000}/minute)`;
+    try {
+      db.prepare(`
+        INSERT INTO audit_logs (id, timestamp, actor, role, action, details, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(logId, timestamp, updatedDisplayName, 'Consultant', 'Plan Subscription', details, 'Success');
+    } catch (logErr) {
+      console.error('Failed to write subscription audit log:', logErr);
+    }
+
     // Send the professional credentials email asynchronously
     sendConsultantCredentials(consultant.email, updatedDisplayName, updatedUsername, newPassword).catch(err => {
       console.error('[Auth Controller] Error during background sendConsultantCredentials on buy-plan:', err);

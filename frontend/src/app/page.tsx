@@ -450,6 +450,13 @@ export default function AppPage() {
               <ConsultantProfile
                 onSelectSession={handleSelectSession}
                 targetUsername={targetUsername}
+                onClearTargetUsername={() => {
+                  localStorage.removeItem('clicked_consultant_username');
+                  setTargetUsername(undefined);
+                  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/u/')) {
+                    window.history.pushState({}, '', '/');
+                  }
+                }}
                 currentUser={currentUser}
                 setCurrentUser={setCurrentUser}
                 onOpenAuth={() => {

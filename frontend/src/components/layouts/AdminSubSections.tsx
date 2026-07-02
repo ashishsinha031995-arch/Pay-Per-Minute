@@ -2146,6 +2146,9 @@ export function SupportTicketsPanel() {
 export function AuditLogsPanel() {
   const [logs, setLogs] = useState<any[]>(mockAuditLogs);
   const [filter, setFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('ALL');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -2168,16 +2171,40 @@ export function AuditLogsPanel() {
     fetchLogs();
   }, []);
 
-  const filtered = logs.filter(l => 
-    l.actor.toLowerCase().includes(filter.toLowerCase()) || 
-    l.action.toLowerCase().includes(filter.toLowerCase()) ||
-    l.details.toLowerCase().includes(filter.toLowerCase())
-  );
+  const uniqueActions = Array.from(new Set(logs.map(l => l.action).filter(Boolean))).sort();
+  const uniqueRoles = Array.from(new Set(logs.map(l => l.role).filter(Boolean))).sort();
+
+  const filtered = logs.filter(l => {
+    const searchStr = filter.toLowerCase();
+    const matchesSearch = filter ? (
+      String(l.id || '').toLowerCase().includes(searchStr) ||
+      String(l.actor || '').toLowerCase().includes(searchStr) ||
+      String(l.action || '').toLowerCase().includes(searchStr) ||
+      String(l.details || '').toLowerCase().includes(searchStr) ||
+      String(l.role || '').toLowerCase().includes(searchStr) ||
+      String(l.status || '').toLowerCase().includes(searchStr)
+    ) : true;
+
+    const matchesAction = actionFilter !== 'ALL' ? l.action === actionFilter : true;
+    const matchesRole = roleFilter !== 'ALL' ? l.role === roleFilter : true;
+    const matchesStatus = statusFilter !== 'ALL' ? l.status === statusFilter : true;
+
+    return matchesSearch && matchesAction && matchesRole && matchesStatus;
+  });
+
+  const hasActiveFilters = filter !== '' || actionFilter !== 'ALL' || roleFilter !== 'ALL' || statusFilter !== 'ALL';
+
+  const clearFilters = () => {
+    setFilter('');
+    setActionFilter('ALL');
+    setRoleFilter('ALL');
+    setStatusFilter('ALL');
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-left">
       <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-800 mb-4 gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-slate-800 mb-6 gap-4">
           <div>
             <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider flex items-center gap-2">
               <span>Chronological System Audit Ledger</span>
@@ -2185,44 +2212,138 @@ export function AuditLogsPanel() {
             </h3>
             <p className="text-xs text-slate-500 font-mono mt-0.5">Records all core administrative actions to maintain platform compliance</p>
           </div>
-          <input
-            type="text"
-            placeholder="Search audit trail..."
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full md:w-56"
-          />
+          
+          <div className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-850">
+            <span>Filtered Logs:</span>
+            <strong className="text-emerald-400">{filtered.length}</strong>
+            {logs.length !== filtered.length && (
+              <>
+                <span className="text-slate-600">/</span>
+                <span className="text-slate-500">{logs.length} total</span>
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Filter Toolbar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3 mb-6">
+          {/* Search Input */}
+          <div className="relative col-span-1 sm:col-span-2 md:col-span-1 xl:col-span-2">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500">
+              <Search className="w-4 h-4" />
+            </span>
+            <input
+              type="text"
+              placeholder="Search actor, action, details..."
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full placeholder:text-slate-600"
+            />
+          </div>
+
+          {/* Action Filter */}
+          <div className="relative">
+            <select
+              value={actionFilter}
+              onChange={e => setActionFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full appearance-none cursor-pointer"
+            >
+              <option value="ALL">All Actions</option>
+              {uniqueActions.map(action => (
+                <option key={action} value={action}>{action}</option>
+              ))}
+            </select>
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[10px]">▼</span>
+          </div>
+
+          {/* Role Filter */}
+          <div className="relative">
+            <select
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full appearance-none cursor-pointer"
+            >
+              <option value="ALL">All Roles</option>
+              {uniqueRoles.map(role => (
+                <option key={role} value={role}>{role}</option>
+              ))}
+            </select>
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[10px]">▼</span>
+          </div>
+
+          {/* Status Filter */}
+          <div className="relative text-xs">
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full appearance-none cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="Success">Success</option>
+              <option value="Failed">Failed</option>
+            </select>
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[10px]">▼</span>
+          </div>
+
+          {/* Clear Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 rounded-xl py-2 px-4 text-xs font-mono transition-all flex items-center justify-center gap-1.5 h-[38px] w-full"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset Filters</span>
+            </button>
+          )}
+        </div>
+
+        {/* Audit Logs Table */}
+        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px]">
-                <th className="px-4 py-3">UUID</th>
-                <th className="px-4 py-3">Timestamp</th>
-                <th className="px-4 py-3">Administrator</th>
-                <th className="px-4 py-3">Action Type</th>
-                <th className="px-4 py-3">Details</th>
-                <th className="px-4 py-3 text-right">Status</th>
+              <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px] bg-slate-900/60">
+                <th className="px-4 py-3.5">ID</th>
+                <th className="px-4 py-3.5">Timestamp</th>
+                <th className="px-4 py-3.5">Actor & Role</th>
+                <th className="px-4 py-3.5">Action Event</th>
+                <th className="px-4 py-3.5">Details</th>
+                <th className="px-4 py-3.5 text-right pr-6">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono text-[11px] text-slate-300">
-              {filtered.map(l => (
-                <tr key={l.id} className="hover:bg-slate-950/40">
-                  <td className="px-4 py-3.5 text-cyan-400 font-bold">{l.id}</td>
-                  <td className="px-4 py-3.5 text-slate-500">{new Date(l.timestamp).toLocaleString()}</td>
-                  <td className="px-4 py-3.5 text-slate-200 font-sans">{l.actor} ({l.role})</td>
-                  <td className="px-4 py-3.5 text-slate-100">{l.action}</td>
-                  <td className="px-4 py-3.5 text-slate-400 font-sans max-w-xs truncate" title={l.details}>{l.details}</td>
-                  <td className="px-4 py-3.5 text-right">
-                    <span className={`px-2 py-0.5 rounded font-bold ${
-                      l.status === 'Success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                    }`}>
-                      {l.status}
-                    </span>
+            <tbody className="divide-y divide-slate-800/50 font-mono text-[11px] text-slate-300">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-slate-500 font-mono text-xs">
+                    No matching compliance logs found. Try adjusting your search filters.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filtered.map(l => (
+                  <tr key={l.id} className="hover:bg-slate-900/30 transition-colors">
+                    <td className="px-4 py-3 text-cyan-400 font-bold font-mono">{l.id}</td>
+                    <td className="px-4 py-3 text-slate-500">{new Date(l.timestamp).toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-slate-200 font-sans font-medium">{l.actor}</div>
+                      <div className="text-[9px] text-slate-500 uppercase tracking-wider">{l.role}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="bg-slate-900 text-slate-300 border border-slate-800/80 rounded px-2 py-0.5 text-[10px] font-semibold">
+                        {l.action}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 font-sans max-w-sm" title={l.details}>
+                      {l.details}
+                    </td>
+                    <td className="px-4 py-3 text-right pr-6">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        l.status === 'Success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : 'bg-rose-500/10 text-rose-400 border border-rose-500/10'
+                      }`}>
+                        {l.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
