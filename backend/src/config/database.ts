@@ -868,6 +868,37 @@ export function initDb() {
     }
   }
 
+  // Auto-assign plans to any consultants who have no active plan assigned
+  try {
+    const unassignedConsultants = db.prepare('SELECT id, price_per_minute FROM consultants WHERE plan_id IS NULL').all() as any[];
+    if (unassignedConsultants.length > 0) {
+      console.log(`[Database] Auto-assigning subscription plans to ${unassignedConsultants.length} consultants with no active plan...`);
+      const plans = db.prepare('SELECT id, max_consultant_rate FROM plans ORDER BY max_consultant_rate ASC').all() as any[];
+      if (plans.length > 0) {
+        const updatePlanStmt = db.prepare('UPDATE consultants SET plan_id = ?, plan_expiry = ? WHERE id = ?');
+        const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        for (const cons of unassignedConsultants) {
+          // Find the lowest plan that allows their price_per_minute
+          let assignedPlanId = plans[0].id;
+          for (const plan of plans) {
+            if (cons.price_per_minute <= plan.max_consultant_rate) {
+              assignedPlanId = plan.id;
+              break;
+            }
+          }
+          // If rate exceeds all plans, give them the highest plan
+          if (cons.price_per_minute > plans[plans.length - 1].max_consultant_rate) {
+            assignedPlanId = plans[plans.length - 1].id;
+          }
+          updatePlanStmt.run(assignedPlanId, futureDate, cons.id);
+        }
+        console.log(`[Database] Auto-assigned plans successfully.`);
+      }
+    }
+  } catch (err) {
+    console.error('Error auto-assigning plans:', err);
+  }
+
   // Migrate existing IDs to be at least 5 digits with completely separate ranges to prevent any ID collisions (users: 10000+, consultants: 20000+)
   try {
     // Turn foreign keys OFF outside transaction
