@@ -136,8 +136,13 @@ async function syncFromMongoToSQLite() {
 
     if (docs.length === 0) continue;
 
-    const allKeys = Array.from(new Set(docs.flatMap(doc => Object.keys(doc).filter(k => k !== '_id'))));
-    if (allKeys.length === 0) continue;
+    const primaryKey = table === 'admin_settings' ? 'key' : 'id';
+    let allKeys = Array.from(new Set(docs.flatMap(doc => Object.keys(doc).filter(k => k !== '_id'))));
+    
+    // Ensure primaryKey column is always in allKeys so we write the ID correctly to SQLite
+    if (!allKeys.includes(primaryKey)) {
+      allKeys.push(primaryKey);
+    }
 
     const columns = allKeys.map(k => `"${k}"`).join(', ');
     const placeholders = allKeys.map(() => '?').join(', ');
@@ -148,7 +153,10 @@ async function syncFromMongoToSQLite() {
     const transaction = originalDb.transaction((rows: any[]) => {
       for (const row of rows) {
         const values = allKeys.map(k => {
-          const val = row[k];
+          let val = row[k];
+          if (k === primaryKey && (val === undefined || val === null)) {
+            val = row._id;
+          }
           if (val === undefined || val === null) return null;
           if (typeof val === 'object') return JSON.stringify(val);
           return val;

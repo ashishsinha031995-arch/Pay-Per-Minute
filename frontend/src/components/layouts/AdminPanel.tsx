@@ -3522,7 +3522,7 @@ export function AdminPanel() {
                               {(sess.status === 'completed' || sess.status === 'active') && maxRefundable > 0 ? (
                                 <button
                                   onClick={() => {
-                                    if (refundingSessionId === sess.id) {
+                                    if (refundingSessionId && refundingSessionId === sess.id) {
                                       setRefundingSessionId(null);
                                     } else {
                                       setRefundingSessionId(sess.id);
@@ -3531,7 +3531,7 @@ export function AdminPanel() {
                                   }}
                                   className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 rounded text-[10px] px-2 py-1 font-bold transition-all"
                                 >
-                                  {refundingSessionId === sess.id ? 'Cancel' : 'Refund'}
+                                  {refundingSessionId && refundingSessionId === sess.id ? 'Cancel' : 'Refund'}
                                 </button>
                               ) : (sess.refunded_amount || 0) > 0 && maxRefundable === 0 ? (
                                 <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 border border-rose-500/20 rounded px-2 py-1">
@@ -3543,7 +3543,7 @@ export function AdminPanel() {
                         </tr>
                       ];
 
-                      if (refundingSessionId === sess.id) {
+                      if (refundingSessionId && refundingSessionId === sess.id) {
                         rows.push(
                           <tr key={`${sess.id}-refund`} className="bg-slate-950/40">
                             <td colSpan={8} className="px-6 py-4 border-t border-b border-slate-800">
