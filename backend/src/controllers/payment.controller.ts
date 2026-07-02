@@ -227,7 +227,7 @@ export const getSessionById = (req: Request, res: Response) => {
     const session = db.prepare(`
       SELECT s.*, c.display_name as consultant_name, c.photo_url as consultant_photo, c.price_per_minute as consultant_price, u.photo_url as user_photo
       FROM sessions s
-      JOIN consultants c ON s.consultant_id = c.id
+      LEFT JOIN consultants c ON s.consultant_id = c.id
       LEFT JOIN users u ON s.user_id = u.id
       WHERE s.id = ?
     `).get(id) as any;

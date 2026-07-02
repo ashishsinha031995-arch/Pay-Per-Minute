@@ -933,9 +933,19 @@ export function initDb() {
     mongoose.connect(mongoUri, { dbName: 'callmint' })
       .then(async () => {
         console.log('[MongoDB] Connected successfully to database: callmint.');
-        const AdminSettingsModel = mongoModels['admin_settings'];
-        const count = await AdminSettingsModel.countDocuments();
-        if (count > 0) {
+        let hasMongoData = false;
+        for (const table of tables) {
+          const Model = mongoModels[table];
+          if (Model) {
+            const docCount = await Model.countDocuments();
+            if (docCount > 0) {
+              hasMongoData = true;
+              break;
+            }
+          }
+        }
+
+        if (hasMongoData) {
           await syncFromMongoToSQLite();
         } else {
           await syncFromSQLiteToMongo();

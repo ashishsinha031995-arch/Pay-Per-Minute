@@ -275,7 +275,7 @@ export const getAllSessionsFinancialLogs = (req: Request, res: Response) => {
     const sessions = db.prepare(`
       SELECT s.*, c.display_name as consultant_name 
       FROM sessions s 
-      JOIN consultants c ON s.consultant_id = c.id 
+      LEFT JOIN consultants c ON s.consultant_id = c.id 
       ORDER BY s.created_at DESC
     `).all();
     res.json(sessions);

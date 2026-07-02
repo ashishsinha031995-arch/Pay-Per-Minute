@@ -637,7 +637,7 @@ export const getUserPastSessions = (req: Request, res: Response) => {
       sessionsList = db.prepare(`
         SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
         FROM sessions s
-        JOIN consultants c ON s.consultant_id = c.id
+        LEFT JOIN consultants c ON s.consultant_id = c.id
         LEFT JOIN reviews r ON s.id = r.session_id
         WHERE LOWER(s.user_name) = LOWER(?)
         ORDER BY s.id DESC
@@ -649,7 +649,7 @@ export const getUserPastSessions = (req: Request, res: Response) => {
         sessionsList = db.prepare(`
           SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
           FROM sessions s
-          JOIN consultants c ON s.consultant_id = c.id
+          LEFT JOIN consultants c ON s.consultant_id = c.id
           LEFT JOIN reviews r ON s.id = r.session_id
           WHERE s.id IN (${placeholders})
           ORDER BY s.id DESC
@@ -806,7 +806,7 @@ export const getActiveQueuedSessionForUser = (req: Request, res: Response) => {
     const sess = db.prepare(`
       SELECT s.*, c.display_name as consultant_name 
       FROM sessions s
-      JOIN consultants c ON s.consultant_id = c.id
+      LEFT JOIN consultants c ON s.consultant_id = c.id
       WHERE s.user_id = ? AND s.status IN ('queued', 'pending', 'active')
       LIMIT 1
     `).get(userId) as any;
