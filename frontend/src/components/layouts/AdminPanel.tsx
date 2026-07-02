@@ -75,8 +75,12 @@ export function AdminPanel() {
         const data = await res.json();
         setAdminSchedules(data);
       }
-    } catch (err) {
-      console.error('Failed to load consultant schedules:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection starting up. Retrying schedules shortly...');
+      } else {
+        console.error('Failed to load consultant schedules:', err);
+      }
     } finally {
       setAdminSchedulesLoading(false);
     }
@@ -198,8 +202,12 @@ export function AdminPanel() {
           setExpandedConsQueueData(data);
           setLoadingQueueData(false);
         })
-        .catch(err => {
-          console.error('Error fetching consultant queue details for admin:', err);
+        .catch((err: any) => {
+          if (err && err.message && err.message.includes('Failed to fetch')) {
+            console.warn('Network connection starting up. Retrying queue details shortly...');
+          } else {
+            console.error('Error fetching consultant queue details for admin:', err);
+          }
           setLoadingQueueData(false);
         });
     } else {

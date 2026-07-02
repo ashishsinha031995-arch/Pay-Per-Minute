@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
@@ -67,6 +67,38 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return 'Consultants';
   });
   const [credentialsGenerated, setCredentialsGenerated] = useState<{username: string, password: string, displayName: string} | null>(null);
+  const [registerUsername, setRegisterUsername] = useState('');
+  const [buyingPlan, setBuyingPlan] = useState<Plan | null>(null);
+  const [buyDisplayName, setBuyDisplayName] = useState('');
+  const [buyUsername, setBuyUsername] = useState('');
+  const [buyCategory, setBuyCategory] = useState('Consultants');
+  const [buyRate, setBuyRate] = useState('20');
+  const isUsernameManuallyEditedRef = useRef(false);
+  const [usernameSuffix] = useState(() => Math.floor(1000 + Math.random() * 9000));
+  const lastBuyingPlanIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (buyingPlan) {
+      if (lastBuyingPlanIdRef.current !== buyingPlan.id) {
+        if (currentConsultant) {
+          setBuyDisplayName(currentConsultant.display_name || '');
+          setBuyUsername(currentConsultant.username || '');
+          setBuyCategory(currentConsultant.category || 'Consultants');
+          
+          const maxRate = buyingPlan.max_consultant_rate ?? 1000.0;
+          const initialRate = currentConsultant.price_per_minute ?? 20;
+          if (initialRate > maxRate) {
+            setBuyRate(maxRate.toString());
+          } else {
+            setBuyRate(initialRate.toString());
+          }
+        }
+        lastBuyingPlanIdRef.current = buyingPlan.id;
+      }
+    } else {
+      lastBuyingPlanIdRef.current = null;
+    }
+  }, [buyingPlan, currentConsultant]);
   const [isPrefilled, setIsPrefilled] = useState(() => {
     if (typeof window !== 'undefined') {
       return !!localStorage.getItem('pre_filled_consultant_signup');
@@ -188,6 +220,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [simulatedMinutes, setSimulatedMinutes] = useState(45);
   const [simulatedRate, setSimulatedRate] = useState(30);
 
+  // Helper to determine if the consultant has an active plan
+  const hasActivePlan = !!(wallet?.plan_id || (currentConsultant && currentConsultant.plan_id));
+
+  const handleScrollToPlans = () => {
+    setActiveTab('dashboard');
+    setIsMobileMenuOpen(false);
+    setTimeout(() => {
+      const el = document.getElementById(currentConsultant ? 'pricing-section-active' : 'pricing-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -289,8 +335,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         const data = await res.json();
         setSchedules(data);
       }
-    } catch (err) {
-      console.error('Failed to load schedules:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection is starting up or temporarily disconnected. Retrying schedules shortly...');
+      } else {
+        console.error('Failed to load schedules:', err);
+      }
     } finally {
       if (!silent) setScheduleLoading(false);
     }
@@ -392,8 +442,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           setConsultantTickets(data.tickets);
         }
       }
-    } catch (err) {
-      console.error('Failed to fetch consultant support tickets:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection is starting up or temporarily disconnected. Retrying tickets shortly...');
+      } else {
+        console.error('Failed to fetch consultant support tickets:', err);
+      }
     } finally {
       setLoadingConsultantTickets(false);
     }
@@ -460,6 +514,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return () => window.removeEventListener('storage', syncPreSignupDetails);
   }, []);
 
+  // Reactive username generation based on display name
+  useEffect(() => {
+    if (!isUsernameManuallyEditedRef.current) {
+      const cleanName = registerDisplayName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanName) {
+        setRegisterUsername(`expert_${cleanName}_${usernameSuffix}`);
+      } else {
+        setRegisterUsername('');
+      }
+    }
+  }, [registerDisplayName, usernameSuffix]);
+
   // Load plans on mount
   useEffect(() => {
     const fetchPlans = async () => {
@@ -470,8 +536,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           setPlans(data);
           if (data.length > 0) setSelectedPlanId(data[0].id);
         }
-      } catch (err) {
-        console.error('Failed to load plans:', err);
+      } catch (err: any) {
+        if (err && err.message && err.message.includes('Failed to fetch')) {
+          console.warn('Network connection is starting up or temporarily disconnected. Retrying plans shortly...');
+        } else {
+          console.error('Failed to load plans:', err);
+        }
       }
     };
     fetchPlans();
@@ -661,8 +731,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           }
         }
       }
-    } catch (err) {
-      console.error('Error fetching consultant dataset:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection is starting up or temporarily disconnected. Retrying consultant dataset shortly...');
+      } else {
+        console.error('Error fetching consultant dataset:', err);
+      }
     }
   };
 
@@ -691,7 +765,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   };
 
-  const handleBuyPlanDirect = async (planId: number) => {
+  const handleBuyPlanDirect = async (planId: number, customDetails?: { username?: string; display_name?: string; category?: string; price_per_minute?: number }) => {
     if (!currentConsultant) return;
     setBuyingPlanId(planId);
     setError(null);
@@ -706,6 +780,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           plan_id: planId,
           email: currentConsultant.email,
           phone: currentConsultant.phone,
+          consultant_id: currentConsultant.id,
         }),
       });
 
@@ -723,13 +798,26 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             consultant_id: currentConsultant.id,
             plan_id: planId,
             is_mock: true,
+            ...customDetails,
           }),
         });
         const buyData = await buyRes.json();
         if (!buyRes.ok) throw new Error(buyData.error || 'Failed to activate plan.');
         
-        setSuccess('🎉 Plan activated successfully! You are now ready to start earning.');
-        loadConsultantStatsAndStatus(currentConsultant.id);
+        setSuccess('🎉 Plan activated successfully!');
+        if (buyData.credentials) {
+          setCredentialsGenerated({
+            username: buyData.credentials.username,
+            password: buyData.credentials.password,
+            displayName: buyData.credentials.displayName,
+          });
+          setUsernameInput(buyData.credentials.username);
+          setPasswordInput(buyData.credentials.password);
+          setCurrentConsultant(null);
+          localStorage.removeItem('consultant_session');
+        } else {
+          loadConsultantStatsAndStatus(currentConsultant.id);
+        }
         setBuyingPlanId(null);
         return;
       }
@@ -760,13 +848,26 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 payment_id: response.razorpay_payment_id || 'pay_mock_' + Math.random().toString(36).slice(2, 11),
                 signature: response.razorpay_signature || 'sig_mock',
                 is_mock: orderData.is_mock,
+                ...customDetails,
               }),
             });
             const buyData = await buyRes.json();
             if (!buyRes.ok) throw new Error(buyData.error || 'Failed to activate plan.');
 
-            setSuccess('🎉 Plan activated successfully! You are now ready to start earning.');
-            loadConsultantStatsAndStatus(currentConsultant.id);
+            setSuccess('🎉 Plan activated successfully!');
+            if (buyData.credentials) {
+              setCredentialsGenerated({
+                username: buyData.credentials.username,
+                password: buyData.credentials.password,
+                displayName: buyData.credentials.displayName,
+              });
+              setUsernameInput(buyData.credentials.username);
+              setPasswordInput(buyData.credentials.password);
+              setCurrentConsultant(null);
+              localStorage.removeItem('consultant_session');
+            } else {
+              loadConsultantStatsAndStatus(currentConsultant.id);
+            }
           } catch (err: any) {
             setError(err.message);
           } finally {
@@ -774,7 +875,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           }
         },
         prefill: {
-          name: currentConsultant.display_name,
+          name: customDetails?.display_name || currentConsultant.display_name,
           email: currentConsultant.email,
           contact: currentConsultant.phone,
         },
@@ -844,6 +945,16 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       setError('Mobile number must be exactly 10 digits.');
       return;
     }
+    const rateVal = parseFloat(registerPrice);
+    if (isNaN(rateVal) || rateVal < 1) {
+      setError('Please provide a valid Custom Audio/Chat Rate.');
+      return;
+    }
+    const selectedPlan = plans.find(p => p.id === selectedPlanId);
+    if (selectedPlan && selectedPlan.max_consultant_rate !== undefined && rateVal > selectedPlan.max_consultant_rate) {
+      setError(`Your rate cannot be higher than the selected plan's maximum rate of ₹${selectedPlan.max_consultant_rate}/minute.`);
+      return;
+    }
     try {
       // 1. Create order on the backend with pre-verification of credentials
       const orderRes = await fetch('/api/consultants/register/create-order', {
@@ -866,6 +977,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           body: JSON.stringify({
             plan_id: selectedPlanId,
             display_name: registerDisplayName,
+            username: registerUsername,
             email: registerEmail,
             phone: '+91' + numericPhone,
             initial_price_per_minute: parseFloat(registerPrice),
@@ -909,6 +1021,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 body: JSON.stringify({
                   plan_id: selectedPlanId,
                   display_name: registerDisplayName,
+                  username: registerUsername,
                   email: registerEmail,
                   phone: '+91' + numericPhone,
                   initial_price_per_minute: parseFloat(registerPrice),
@@ -1820,6 +1933,24 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                 <div className="space-y-2">
                   <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
+                    Custom Advisor Username
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. expert_raj"
+                    value={registerUsername}
+                    onChange={(e) => {
+                      isUsernameManuallyEditedRef.current = true;
+                      setRegisterUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    }}
+                    className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all font-mono"
+                    required
+                  />
+                  <span className="text-[9px] text-slate-500 block">Your public listing profile URL will be <strong className="text-slate-300">/u/{registerUsername || 'username'}</strong>.</span>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
                     Consultant Email Address (for Credentials)
                   </label>
                   <input
@@ -1890,12 +2021,28 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     min="1"
                     placeholder="25"
                     value={registerPrice}
-                    readOnly
-                    className="bg-slate-950/60 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-400 text-sm w-full transition-all font-mono font-bold cursor-not-allowed"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const selectedPlan = plans.find(p => p.id === selectedPlanId);
+                      const maxRate = selectedPlan?.max_consultant_rate ?? 1000.0;
+                      if (val === '') {
+                        setRegisterPrice('');
+                      } else {
+                        const num = parseFloat(val);
+                        if (!isNaN(num)) {
+                          if (num <= maxRate) {
+                            setRegisterPrice(val);
+                          } else {
+                            setRegisterPrice(maxRate.toString());
+                          }
+                        }
+                      }
+                    }}
+                    className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-sm w-full transition-all font-mono font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                     required
                   />
-                  <div className="flex items-center space-x-1 text-amber-400 font-semibold text-[10px] mt-1">
-                    <span>⚠️ Note: you can edit price after the plan.</span>
+                  <div className="flex items-center space-x-1 text-emerald-400 font-semibold text-[10px] mt-1">
+                    <span>Max rate allowed by chosen plan: ₹{plans.find(p => p.id === selectedPlanId)?.max_consultant_rate ?? 25}/minute. You can type any rate up to this.</span>
                   </div>
                 </div>
 
@@ -2351,20 +2498,17 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             {!isCurrent && (
                               <button
                                 onClick={() => {
-                                  setIsMobileMenuOpen(false);
-                                  handleBuyPlanDirect(p.id);
+                                  if (currentConsultant) {
+                                    setBuyingPlan(p);
+                                    setIsMobileMenuOpen(false);
+                                  } else {
+                                    handleScrollToPlans();
+                                  }
                                 }}
-                                disabled={buyingPlanId !== null}
-                                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[10px] uppercase px-3 py-2 rounded-lg shadow transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-1"
+                                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[10px] uppercase px-3 py-2 rounded-lg shadow transition-all active:scale-95 flex items-center space-x-1"
                               >
-                                {buyingPlanId === p.id ? (
-                                  <span>Buying...</span>
-                                ) : (
-                                  <>
-                                    <span>Buy Plan</span>
-                                    <ArrowRight className="w-3 h-3" />
-                                  </>
-                                )}
+                                <span>Buy Plan</span>
+                                <ArrowRight className="w-3 h-3" />
                               </button>
                             )}
                           </div>
@@ -2517,7 +2661,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 <span className="block text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 px-2 mb-3">Navigation Menu</span>
                 
                 <button
-                  onClick={() => setActiveTab('dashboard')}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setActiveTab('dashboard');
+                  }}
                   className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <TrendingUp className="w-4 h-4 shrink-0" />
@@ -2525,15 +2673,29 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </button>
                 
                 <button
-                  onClick={() => setActiveTab('status')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    if (!hasActivePlan) {
+                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Presence Settings).");
+                      handleScrollToPlans();
+                    } else {
+                      setActiveTab('status');
+                    }
+                  }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <Flame className="w-4 h-4 shrink-0" />
                   <span>🔥 Availability & Plan</span>
+                  {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
                 
                 <button
-                  onClick={() => setActiveTab('profile')}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setActiveTab('profile');
+                  }}
                   className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <Settings2 className="w-4 h-4 shrink-0" />
@@ -2541,45 +2703,95 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('schedules')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    if (!hasActivePlan) {
+                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Availability Schedule).");
+                      handleScrollToPlans();
+                    } else {
+                      setActiveTab('schedules');
+                    }
+                  }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <Calendar className="w-4 h-4 shrink-0" />
                   <span>📅 Availability Schedule</span>
+                  {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('kyc')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    if (!hasActivePlan) {
+                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock KYC Verification).");
+                      handleScrollToPlans();
+                    } else {
+                      setActiveTab('kyc');
+                    }
+                  }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <UserCheck className="w-4 h-4 shrink-0" />
                   <span>🔒 KYC Verification</span>
-                  <span className={`text-[9px] ml-auto px-1.5 py-0.5 rounded font-bold ${kycStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : kycStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
-                    {kycStatus === 'approved' ? 'Approved' : kycStatus === 'pending' ? 'Review' : 'Update'}
-                  </span>
+                  {hasActivePlan ? (
+                    <span className={`text-[9px] ml-auto px-1.5 py-0.5 rounded font-bold ${kycStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : kycStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
+                      {kycStatus === 'approved' ? 'Approved' : kycStatus === 'pending' ? 'Review' : 'Update'}
+                    </span>
+                  ) : (
+                    <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />
+                  )}
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('bank')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    if (!hasActivePlan) {
+                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Bank Details).");
+                      handleScrollToPlans();
+                    } else {
+                      setActiveTab('bank');
+                    }
+                  }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <Wallet className="w-4 h-4 shrink-0" />
                   <span>🏦 Bank Details</span>
-                  <span className={`text-[9px] ml-auto px-1.5 py-0.5 rounded font-bold ${bankStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : bankStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
-                    {bankStatus === 'approved' ? 'Verified' : bankStatus === 'pending' ? 'Review' : 'Update'}
-                  </span>
+                  {hasActivePlan ? (
+                    <span className={`text-[9px] ml-auto px-1.5 py-0.5 rounded font-bold ${bankStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : bankStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
+                      {bankStatus === 'approved' ? 'Verified' : bankStatus === 'pending' ? 'Review' : 'Update'}
+                    </span>
+                  ) : (
+                    <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />
+                  )}
                 </button>
                 
                 <button
-                  onClick={() => setActiveTab('sessions')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    if (!hasActivePlan) {
+                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Consultation History).");
+                      handleScrollToPlans();
+                    } else {
+                      setActiveTab('sessions');
+                    }
+                  }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <FileText className="w-4 h-4 shrink-0" />
                   <span>💬 Consultation History</span>
+                  {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('support')}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setActiveTab('support');
+                  }}
                   className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <HelpCircle className="w-4 h-4 shrink-0" />
@@ -2610,8 +2822,333 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   transition={{ duration: 0.4 }}
                   className="space-y-6"
                 >
-                  {/* Dynamic Greeting Card */}
-                  <div className="relative bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-slate-900/95 border border-slate-800 rounded-3xl p-6 overflow-hidden shadow-2xl">
+                  {!hasActivePlan ? (
+                    /* LANDING/ONBOARDING VIEW FOR UN-SUBSCRIBED LOGGED-IN CONSULTANTS */
+                    <div className="space-y-12 animate-in fade-in duration-300">
+                      
+                      {/* Sundar Banner */}
+                      <div className="relative bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border-2 border-amber-500/20 rounded-3xl p-8 sm:p-12 overflow-hidden shadow-2xl text-left">
+                        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/[0.03] rounded-full blur-3xl pointer-events-none" />
+                        <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-amber-500/[0.02] rounded-full blur-3xl pointer-events-none" />
+                        
+                        <div className="relative z-10 max-w-2xl space-y-5">
+                          <div className="inline-flex items-center space-x-2 bg-amber-500/10 border border-amber-500/35 px-3.5 py-1.5 rounded-full">
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
+                              ⚠️ Partnership Plan Required
+                            </span>
+                          </div>
+
+                          <h2 className="text-3xl sm:text-4xl font-black font-sans text-white tracking-tight leading-tight">
+                            Namaste, <span className="bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent">{currentConsultant.display_name}!</span> <br />
+                            Activate Your Partner Channel to <span className="text-emerald-400">Start Earning</span>
+                          </h2>
+
+                          <p className="text-sm text-slate-300 leading-relaxed">
+                            Aapka consultant account create ho chuka hai! Abhi aapka public bio link <strong className="text-emerald-400 font-mono">/u/{currentConsultant.username}</strong> inactive hai. Calls receive karne, chats answer karne aur real-time earnings start karne ke liye niche se ek suitable partner plan choose karke subscribe karein.
+                          </p>
+
+                          <div className="flex flex-wrap gap-4 pt-2">
+                            <a
+                              href="#pricing-section-active"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                document.getElementById('pricing-section-active')?.scrollIntoView({ behavior: 'smooth' });
+                              }}
+                              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs px-6 py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/10 hover:scale-105"
+                            >
+                              ⚡ View Subscriptions Plans
+                            </a>
+                            <a
+                              href="#calculator-section"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                document.getElementById('calculator-section')?.scrollIntoView({ behavior: 'smooth' });
+                              }}
+                              className="bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 font-extrabold text-xs px-6 py-3 rounded-xl transition-all hover:scale-105"
+                            >
+                              📊 Calculate Potential Earnings
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3 PLANS DISPLAY */}
+                      <div id="pricing-section-active" className="space-y-8 text-center pt-4">
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">🔥 STEP 1: CHOOSE A PARTNER PLAN</span>
+                          <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Simple, Predictable Subscription Packages</h3>
+                          <p className="text-xs text-slate-400 max-w-xl mx-auto">Select a subscription duration below to instantly activate your direct chat booking link and start earning.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-5xl mx-auto items-stretch">
+                          {plans.map((plan, index) => {
+                            const isGold = plan.name.toLowerCase().includes('gold');
+                            const isPlatinum = plan.name.toLowerCase().includes('platinum');
+                            
+                            // Detailed pointers/features based on plan
+                            let featurePointers: string[] = [];
+                            if (plan.name.toLowerCase().includes('silver')) {
+                              featurePointers = [
+                                "Standard profile listing in chosen category",
+                                "Live Chat & Pay-Per-Minute Integration",
+                                "Real-Time Daily Analytics & Wallet Hub",
+                                "Custom Shareable Booking Address (/u/username)",
+                                "Standard email delivery for portal credentials",
+                                "Standard ticket-based partner support"
+                              ];
+                            } else if (plan.name.toLowerCase().includes('gold')) {
+                              featurePointers = [
+                                "All Silver features included",
+                                "🔥 High Visibility priority in browse feeds",
+                                "⚡ Featured 'Pro Partner' badge on listing",
+                                "Priority search page ranking placement",
+                                "Extended 90-day continuous subscription",
+                                "Standard support ticket assistance priority"
+                              ];
+                            } else {
+                              featurePointers = [
+                                "All Gold features included",
+                                "💎 Elite top-carousel homepage promotion placement",
+                                "⚡ Premium 'Star Verified Expert' tickmark",
+                                "🎧 Dedicated account manager & 24/7 support channel",
+                                "Instant payout processing priority options",
+                                "Ultimate 180-day subscription for peak cost savings"
+                              ];
+                            }
+
+                            return (
+                              <div
+                                key={plan.id}
+                                className={`relative rounded-3xl p-6 flex flex-col justify-between transition-all ${
+                                  isGold
+                                    ? 'bg-slate-900 border-2 border-emerald-500 shadow-2xl shadow-emerald-500/5'
+                                    : 'bg-slate-900/60 border border-slate-800 hover:border-emerald-500/20 shadow-md'
+                                }`}
+                              >
+                                {isGold && (
+                                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 text-[10px] font-mono font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">
+                                    Best Value
+                                  </span>
+                                )}
+                                {isPlatinum && (
+                                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[10px] font-mono font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">
+                                    Elite VIP Partner
+                                  </span>
+                                )}
+
+                                <div className="space-y-6">
+                                  {/* Card Header */}
+                                  <div className="space-y-2">
+                                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">
+                                      {plan.name}
+                                    </span>
+                                    <div className="flex items-baseline space-x-1">
+                                      <span className="text-3xl font-black text-slate-100 font-mono">₹{plan.price}</span>
+                                      <span className="text-xs text-slate-500">/ {plan.duration_days} Days</span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 font-sans leading-relaxed min-h-[40px]">
+                                      {plan.description}
+                                    </p>
+                                  </div>
+
+                                  <div className="h-px bg-slate-850" />
+
+                                  {/* Feature Pointers */}
+                                  <ul className="space-y-3">
+                                    {featurePointers.map((feat, i) => (
+                                      <li key={i} className="flex items-start space-x-2 text-xs">
+                                        <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                        <span className="text-slate-300 leading-tight">{feat}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                <div className="pt-6">
+                                  <button
+                                    type="button"
+                                    disabled={buyingPlanId !== null}
+                                    onClick={() => {
+                                      if (currentConsultant) {
+                                        setBuyingPlan(plan);
+                                      } else {
+                                        handleBuyPlanDirect(plan.id);
+                                      }
+                                    }}
+                                    className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-extrabold text-xs uppercase tracking-widest py-3 px-4 rounded-xl transition-all w-full flex items-center justify-center space-x-2 shadow-md"
+                                  >
+                                    {buyingPlanId === plan.id ? (
+                                      <span>Activating...</span>
+                                    ) : (
+                                      <>
+                                        <Zap className="w-4 h-4" />
+                                        <span>Buy Plan Now</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Interactive Earnings Potential Calculator */}
+                      <div id="calculator-section" className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 text-left space-y-6 relative overflow-hidden shadow-xl">
+                        <div className="absolute top-0 right-0 p-8 opacity-5">
+                          <TrendingUp className="w-48 h-48 text-emerald-400" />
+                        </div>
+                        
+                        <div className="space-y-2 relative z-10">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">💡 Profit Simulator</span>
+                          <h3 className="text-xl sm:text-2xl font-black text-slate-100">Calculate Your Potential Monthly Earnings</h3>
+                          <p className="text-xs text-slate-400">Set your customized per-minute call fee and average chat duration per day to estimate profits.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pt-4 items-center relative z-10">
+                          <div className="md:col-span-7 space-y-6">
+                            {/* Rate Slider */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center text-xs font-mono">
+                                <label className="text-slate-400 font-bold uppercase">My Custom Per-Minute Rate (₹)</label>
+                                <span className="text-emerald-400 font-bold">₹{simulatedRate} / minute</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="10"
+                                max="150"
+                                step="5"
+                                value={simulatedRate}
+                                onChange={(e) => {
+                                  setSimulatedRate(parseInt(e.target.value));
+                                }}
+                                className="w-full accent-emerald-500 h-2 bg-slate-950 rounded-lg cursor-pointer appearance-none"
+                              />
+                              <div className="flex justify-between text-[9px] text-slate-600 font-mono">
+                                <span>₹10 / min</span>
+                                <span>₹80 / min</span>
+                                <span>₹150 / min</span>
+                              </div>
+                            </div>
+
+                            {/* Duration Slider */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center text-xs font-mono">
+                                <label className="text-slate-400 font-bold uppercase">Average Active Minutes Per Day</label>
+                                <span className="text-sky-400 font-bold">{simulatedMinutes} Minutes / day</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="15"
+                                max="240"
+                                step="15"
+                                value={simulatedMinutes}
+                                onChange={(e) => setSimulatedMinutes(parseInt(e.target.value))}
+                                className="w-full accent-sky-500 h-2 bg-slate-950 rounded-lg cursor-pointer appearance-none"
+                              />
+                              <div className="flex justify-between text-[9px] text-slate-600 font-mono">
+                                <span>15 mins</span>
+                                <span>2 hours</span>
+                                <span>4 hours</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Estimate Output Panel */}
+                          <div className="md:col-span-5 bg-slate-950 p-6 rounded-2xl border border-slate-850 text-center space-y-4">
+                            <div>
+                              <span className="text-[9px] text-slate-500 font-mono uppercase tracking-widest block">Projected Monthly Profit</span>
+                              <strong className="text-3xl sm:text-4xl font-extrabold text-emerald-400 font-mono tracking-tight block mt-1">
+                                ₹{(simulatedRate * simulatedMinutes * 30).toLocaleString()}
+                              </strong>
+                              <span className="text-[10px] text-slate-500 block mt-1">Based on 30 active billing days</span>
+                            </div>
+
+                            <div className="h-px bg-slate-900" />
+
+                            <div className="grid grid-cols-2 gap-2 text-left text-[10px] font-mono">
+                              <div>
+                                <span className="text-slate-500 block">Daily Revenue:</span>
+                                <strong className="text-slate-200">₹{(simulatedRate * simulatedMinutes).toLocaleString()}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Yearly Forecast:</span>
+                                <strong className="text-slate-200">₹{(simulatedRate * simulatedMinutes * 365).toLocaleString()}</strong>
+                              </div>
+                            </div>
+
+                            <a
+                              href="#pricing-section-active"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                document.getElementById('pricing-section-active')?.scrollIntoView({ behavior: 'smooth' });
+                              }}
+                              className="block bg-slate-900 hover:bg-slate-850 text-emerald-400 border border-slate-800 hover:border-emerald-500/20 text-xs py-2.5 rounded-xl font-bold transition-all uppercase"
+                            >
+                              ⚡ Get Instant Direct Listing Now
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bento Grid: Why Join Our Partner Network */}
+                      <div className="space-y-8 text-center pt-4">
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">📦 Key Benefits</span>
+                          <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Engineered for Modern Professional Consultants</h3>
+                          <p className="text-xs text-slate-400 max-w-xl mx-auto">No complex invoicing, no client follow-ups, and no technical headaches. Focus purely on your advice.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
+                          <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition-all">
+                            <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 w-fit">
+                              <Globe className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-200">Instant Share Link</h4>
+                              <p className="text-xs text-slate-500 mt-1.5 leading-normal">Get your dedicated URL like "/u/expert_raj". Embed it directly in your Instagram Bio, YouTube descriptions, or send via WhatsApp.</p>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition-all">
+                            <div className="bg-sky-500/10 p-3 rounded-xl border border-sky-500/20 w-fit">
+                              <ShieldCheck className="w-5 h-5 text-sky-400" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-200">Zero Payment Risks</h4>
+                              <p className="text-xs text-slate-500 mt-1.5 leading-normal">Sessions are pre-authorized. We verify the client has active wallet balance before starting, automatically billing them per minute.</p>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition-all">
+                            <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 w-fit">
+                              <TrendingUp className="w-5 h-5 text-amber-400" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-200">Automated Analytics</h4>
+                              <p className="text-xs text-slate-500 mt-1.5 leading-normal">Track active chats, session statistics, client satisfaction ratings, and daily/monthly earning trends from one integrated dashboard.</p>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition-all">
+                            <div className="bg-indigo-500/10 p-3 rounded-xl border border-indigo-500/20 w-fit">
+                              <Settings2 className="w-5 h-5 text-indigo-400" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-200">Operational Autonomy</h4>
+                              <p className="text-xs text-slate-500 mt-1.5 leading-normal">Switch online presence on/off with one button. Control your exact per-minute rates based on active consulting category limits.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  ) : (
+                    /* STANDARD ENHANCED DASHBOARD WHEN THEY HAVE ACTIVE PLAN */
+                    <>
+                      {/* Dynamic Greeting Card */}
+                      <div className="relative bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-slate-900/95 border border-slate-800 rounded-3xl p-6 overflow-hidden shadow-2xl">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
                     <div className="relative flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
                       <div className="text-center sm:text-left space-y-1.5">
@@ -2638,18 +3175,30 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           </div>
                         </div>
                         
-                        <div className="border-t border-slate-800/60 pt-2 mt-1 flex flex-col items-center space-y-1.5">
+                        <div className="border-t border-slate-800/60 pt-2 mt-1 flex flex-col items-center space-y-1.5 w-full">
                           <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-bold">Quick Status Toggle</span>
-                          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-2 py-1 rounded-xl w-full justify-between">
-                            <span className="text-[10px] font-bold text-slate-300">{isOnline ? 'Go Offline' : 'Go Online'}</span>
-                            <button
-                              type="button"
-                              onClick={handleToggleOnline}
-                              className={`relative inline-flex h-4.5 w-8.5 items-center rounded-full transition-colors ${isOnline ? 'bg-emerald-500' : 'bg-slate-800'}`}
-                            >
-                              <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isOnline ? 'translate-x-4.5' : 'translate-x-1'}`} />
-                            </button>
-                          </div>
+                          {!hasActivePlan ? (
+                            <div className="space-y-1 w-full pt-1">
+                              <span className="text-[9px] font-extrabold text-amber-400 block uppercase">Plan Inactive</span>
+                              <button
+                                onClick={handleScrollToPlans}
+                                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-[9px] py-2 px-3 rounded-xl uppercase transition-all shadow-md animate-pulse"
+                              >
+                                Buy plan to start Earning
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-2 py-1 rounded-xl w-full justify-between">
+                              <span className="text-[10px] font-bold text-slate-300">{isOnline ? 'Go Offline' : 'Go Online'}</span>
+                              <button
+                                type="button"
+                                onClick={handleToggleOnline}
+                                className={`relative inline-flex h-4.5 w-8.5 items-center rounded-full transition-colors ${isOnline ? 'bg-emerald-500' : 'bg-slate-800'}`}
+                              >
+                                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isOnline ? 'translate-x-4.5' : 'translate-x-1'}`} />
+                              </button>
+                            </div>
+                          )}
                         </div>
                         
                         <span className="text-[9px] text-slate-500 block">₹{pricePerMin}/min rate configured</span>
@@ -3036,6 +3585,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
                     </div>
                   )}
+                    </>
+                  )}
                 </motion.div>
               )}
 
@@ -3264,7 +3815,23 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         min="1"
                         placeholder="25"
                         value={pricePerMin}
-                        onChange={(e) => setPricePerMin(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const activePlan = plans.find(p => p.id === wallet?.plan_id);
+                          const maxRate = activePlan?.max_consultant_rate ?? 1000.0;
+                          if (val === '') {
+                            setPricePerMin('');
+                          } else {
+                            const num = parseFloat(val);
+                            if (!isNaN(num)) {
+                              if (num <= maxRate) {
+                                setPricePerMin(val);
+                              } else {
+                                setPricePerMin(maxRate.toString());
+                              }
+                            }
+                          }
+                        }}
                         className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono font-bold"
                       />
                       {wallet?.plan_id && parseFloat(pricePerMin) > (plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25) && (
@@ -4282,7 +4849,216 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         </div>
       )}
 
+      {/* Review & Buy Subscription Plan Modal */}
+      {buyingPlan && currentConsultant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop blur */}
+          <div 
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setBuyingPlan(null)}
+          />
 
+          {/* Modal Box */}
+          <div className="relative w-full max-w-xl bg-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-850 shadow-2xl space-y-6 overflow-hidden animate-in zoom-in-95 duration-200 z-10 text-left max-h-[90vh] overflow-y-auto">
+            <div className="absolute top-4 right-4">
+              <button
+                onClick={() => setBuyingPlan(null)}
+                className="text-slate-500 hover:text-slate-300 font-mono text-xs p-1 bg-slate-950 border border-slate-850 rounded-lg hover:border-slate-750"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-3 pb-3 border-b border-slate-850">
+              <div className="bg-emerald-500/10 p-2 rounded-xl">
+                <Zap className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black font-sans text-slate-100">Review & Buy Subscription Plan</h3>
+                <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                  Plan: {buyingPlan.name} (₹{buyingPlan.price})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Please review and customize your listing details before checking out. Your username can be changed now, but your registered email and phone number are locked for security.
+            </p>
+
+            {/* Form fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  Consultant Display Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Acharya Raj Shastri"
+                  value={buyDisplayName}
+                  onChange={(e) => setBuyDisplayName(e.target.value)}
+                  className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  Custom Advisor Username
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. expert_raj"
+                  value={buyUsername}
+                  onChange={(e) => setBuyUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                  <span>Email Address (Locked)</span>
+                  <Lock className="w-3 h-3 text-slate-500" />
+                </label>
+                <input
+                  type="email"
+                  value={currentConsultant.email}
+                  readOnly
+                  disabled
+                  className="bg-slate-950/40 border border-slate-850/60 rounded-xl px-4 py-2.5 text-slate-400 text-xs w-full transition-all cursor-not-allowed"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                  <span>Phone Number (Locked)</span>
+                  <Lock className="w-3 h-3 text-slate-500" />
+                </label>
+                <input
+                  type="text"
+                  value={currentConsultant.phone}
+                  readOnly
+                  disabled
+                  className="bg-slate-950/40 border border-slate-850/60 rounded-xl px-4 py-2.5 text-slate-400 text-xs w-full transition-all cursor-not-allowed font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  My Professional Category
+                </label>
+                <select
+                  value={buyCategory}
+                  onChange={(e: any) => setBuyCategory(e.target.value)}
+                  className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all"
+                  required
+                >
+                  <option value="Astrologers">Astrologers</option>
+                  <option value="Influencers">Influencers</option>
+                  <option value="Mentors">Mentors</option>
+                  <option value="Doctors">Doctors</option>
+                  <option value="Lawyers">Lawyers</option>
+                  <option value="Singers">Singers</option>
+                  <option value="Advisors">Advisors</option>
+                  <option value="Friends">Friends</option>
+                  <option value="Coaches">Coaches</option>
+                  <option value="Consultants">Consultants</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                  <span>Audio/Chat Rate (₹ / Minute)</span>
+                  {buyingPlan.max_consultant_rate !== undefined && (
+                    <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-bold">
+                      Max Rate: ₹{buyingPlan.max_consultant_rate}
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 25"
+                  value={buyRate}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const maxRate = buyingPlan.max_consultant_rate ?? 1000.0;
+                    if (val === '') {
+                      setBuyRate('');
+                    } else {
+                      const num = parseFloat(val);
+                      if (!isNaN(num)) {
+                        if (num <= maxRate) {
+                          setBuyRate(val);
+                        } else {
+                          setBuyRate(maxRate.toString());
+                        }
+                      }
+                    }
+                  }}
+                  className="bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full transition-all font-mono font-bold"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Pricing Summary */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>Base price of {buyingPlan.name}</span>
+                <strong className="text-slate-200 font-mono">₹{parseFloat(buyingPlan.price).toFixed(2)}</strong>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>GST (Exclusive 18%)</span>
+                <strong className="text-amber-500 font-mono">+₹{(parseFloat(buyingPlan.price) * 0.18).toFixed(2)}</strong>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-900 pt-2 text-sm font-bold">
+                <span className="text-slate-300">Total Amount Payable</span>
+                <strong className="text-emerald-400 font-mono">₹{(parseFloat(buyingPlan.price) * 1.18).toFixed(2)}</strong>
+              </div>
+            </div>
+
+            {/* Pay CTA */}
+            <button
+              type="button"
+              onClick={async () => {
+                if (!buyDisplayName.trim()) {
+                  alert('Display Name is required.');
+                  return;
+                }
+                if (!buyUsername.trim()) {
+                  alert('Username is required.');
+                  return;
+                }
+                const rateVal = parseFloat(buyRate);
+                if (isNaN(rateVal) || rateVal < 1) {
+                  alert('Please specify a valid call rate.');
+                  return;
+                }
+                if (buyingPlan.max_consultant_rate !== undefined && rateVal > buyingPlan.max_consultant_rate) {
+                  alert(`Selected plan "${buyingPlan.name}" maximum call rate is ₹${buyingPlan.max_consultant_rate}/minute. Please set a lower rate.`);
+                  return;
+                }
+
+                const planId = buyingPlan.id;
+                const details = {
+                  username: buyUsername,
+                  display_name: buyDisplayName,
+                  category: buyCategory,
+                  price_per_minute: rateVal
+                };
+                setBuyingPlan(null); // Close the modal
+
+                await handleBuyPlanDirect(planId, details);
+              }}
+              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 rounded-xl font-bold text-xs uppercase tracking-widest w-full transition-all flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Proceed to Buy Plan & Register</span>
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

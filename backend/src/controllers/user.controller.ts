@@ -123,7 +123,7 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
       const priceVal = parseFloat(price_per_minute);
       if (!isNaN(priceVal) && priceVal > 0) {
         // Enforce plan-based price rate cap
-        const consultant = db.prepare('SELECT plan_id FROM consultants WHERE id = ?').get(id) as { plan_id: number | null } | undefined;
+        const consultant = db.prepare('SELECT plan_id, display_name, price_per_minute FROM consultants WHERE id = ?').get(id) as { plan_id: number | null, display_name: string, price_per_minute: number } | undefined;
         let maxRate = 1000.0; // fallback default
         if (consultant) {
           let planId = consultant.plan_id;
@@ -146,7 +146,24 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
         if (priceVal > maxRate) {
           return res.status(400).json({ error: `Aapke current plan ke mutabik aap maximum ₹${maxRate}/min set kar sakte hain. Iss limit ko badhane ke liye superior plan subscribe karein.` });
         }
+
+        const oldPrice = consultant ? consultant.price_per_minute : 0;
         db.prepare('UPDATE consultants SET price_per_minute = ? WHERE id = ?').run(priceVal, id);
+
+        // If the price changed, log it to audit_logs!
+        if (consultant && oldPrice !== priceVal) {
+          const logId = 'AUD-' + Math.floor(100000 + Math.random() * 900000);
+          const timestamp = new Date().toISOString();
+          const details = `Rate for Consultant ${consultant.display_name} (#${id}) changed from ₹${oldPrice}/min to ₹${priceVal}/min`;
+          try {
+            db.prepare(`
+              INSERT INTO audit_logs (id, timestamp, actor, role, action, details, status)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(logId, timestamp, consultant.display_name, 'Consultant', 'Rate Limit Change', details, 'Success');
+          } catch (logErr) {
+            console.error('Failed to write audit log:', logErr);
+          }
+        }
       }
     }
     if (display_name !== undefined) {

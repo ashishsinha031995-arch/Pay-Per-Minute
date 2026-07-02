@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getAdminDashboardStats,
   getSentEmailsLog,
+  getAdminAuditLogs,
   getAdminConsultantsList,
   toggleConsultantActiveStatus,
   updateConsultantBySuperAdmin,
@@ -34,6 +35,7 @@ router.get('/queues', getAdminLiveQueues);
 router.get('/stats', getAdminDashboardStats);
 router.put('/settings/hero', updateHeroSettings);
 router.get('/emails', getSentEmailsLog);
+router.get('/audit-logs', getAdminAuditLogs);
 router.get('/consultants', getAdminConsultantsList);
 router.put('/consultants/:id/toggle-active', toggleConsultantActiveStatus);
 router.put('/consultants/:id', updateConsultantBySuperAdmin);

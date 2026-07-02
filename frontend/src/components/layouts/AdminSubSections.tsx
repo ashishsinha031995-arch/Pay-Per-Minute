@@ -2144,8 +2144,29 @@ export function SupportTicketsPanel() {
 
 // Component 5: AUDIT LOGS MODULE
 export function AuditLogsPanel() {
-  const [logs, setLogs] = useState(mockAuditLogs);
+  const [logs, setLogs] = useState<any[]>(mockAuditLogs);
   const [filter, setFilter] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/admin/audit-logs');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setLogs(data);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch audit logs:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLogs();
+  }, []);
 
   const filtered = logs.filter(l => 
     l.actor.toLowerCase().includes(filter.toLowerCase()) || 
@@ -2158,7 +2179,10 @@ export function AuditLogsPanel() {
       <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-800 mb-4 gap-3">
           <div>
-            <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Chronological System Audit Ledger</h3>
+            <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span>Chronological System Audit Ledger</span>
+              {loading && <span className="text-[10px] text-emerald-400 font-normal animate-pulse">(Loading...)</span>}
+            </h3>
             <p className="text-xs text-slate-500 font-mono mt-0.5">Records all core administrative actions to maintain platform compliance</p>
           </div>
           <input

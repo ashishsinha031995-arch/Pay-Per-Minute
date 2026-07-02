@@ -570,6 +570,38 @@ export function initDb() {
   try { db.exec("ALTER TABLE sessions ADD COLUMN refunded_minutes INTEGER DEFAULT 0;"); } catch(_) {}
   try { db.exec("ALTER TABLE sessions ADD COLUMN refunded_amount REAL DEFAULT 0.0;"); } catch(_) {}
 
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        role TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT NOT NULL,
+        status TEXT NOT NULL
+      );
+    `);
+  } catch (_) {}
+
+  // Seed default audit logs if empty
+  try {
+    const hasAuditLogs = db.prepare('SELECT COUNT(*) as count FROM audit_logs').get() as { count: number };
+    if (hasAuditLogs.count === 0) {
+      const insertAuditLog = db.prepare(`
+        INSERT INTO audit_logs (id, timestamp, actor, role, action, details, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      insertAuditLog.run('AUD-001', '2026-06-25T01:10:00Z', 'Super Admin', 'Super Admin', 'Login Success', 'IP: 192.168.1.1, User Agent: Chrome', 'Success');
+      insertAuditLog.run('AUD-002', '2026-06-25T00:45:00Z', 'Finance Admin', 'Finance Admin', 'Approve Payout', 'Approved ₹2,880.00 withdrawal for Coach Rahul (#2)', 'Success');
+      insertAuditLog.run('AUD-003', '2026-06-24T22:15:00Z', 'Support Admin', 'Support Admin', 'Resolve Ticket', 'Closed ticket #TKT-492 (Refund requested)', 'Success');
+      insertAuditLog.run('AUD-004', '2026-06-24T18:30:00Z', 'System Daemon', 'System', 'Database Backup', 'Auto-backup completed, size 24.5 MB', 'Success');
+      insertAuditLog.run('AUD-005', '2026-06-24T14:10:00Z', 'Marketing Admin', 'Marketing Admin', 'Create Coupon', 'Created coupon code WELCOME50 (50% flat discount)', 'Success');
+      insertAuditLog.run('AUD-006', '2026-06-24T11:05:00Z', 'Operations Admin', 'Operations Admin', 'Edit Consultant Profile', 'Updated rate for Astro Pandit (#1) to ₹25.00/min', 'Success');
+      insertAuditLog.run('AUD-007', '2026-06-24T09:12:00Z', 'Anonymous Dev', 'Developer', 'Failed Admin Access', 'IP: 203.0.113.12, Invalid password attempt', 'Failed');
+    }
+  } catch (_) {}
+
   // Seed default Admin Settings
   const commissionSetting = db.prepare('SELECT * FROM admin_settings WHERE key = ?').get('commission_percentage');
   if (!commissionSetting) {

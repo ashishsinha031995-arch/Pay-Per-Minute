@@ -118,7 +118,7 @@ export const consultantLogin = (req: Request, res: Response) => {
 
 export const consultantRegister = (req: Request, res: Response) => {
   try {
-    const { 
+    let { 
       plan_id, 
       display_name, 
       initial_price_per_minute, 
@@ -128,7 +128,8 @@ export const consultantRegister = (req: Request, res: Response) => {
       order_id,
       payment_id,
       signature,
-      is_mock
+      is_mock,
+      username
     } = req.body;
 
     if (!display_name) {
@@ -145,6 +146,17 @@ export const consultantRegister = (req: Request, res: Response) => {
     const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
     if (existingConsultantEmail) {
       return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another.' });
+    }
+
+    let finalUsername = username ? username.trim().toLowerCase() : '';
+    if (finalUsername) {
+      const existingWithUsername = db.prepare('SELECT id FROM consultants WHERE LOWER(username) = ?').get(finalUsername);
+      if (existingWithUsername) {
+        return res.status(400).json({ error: 'This username is already taken. Please choose another username.' });
+      }
+    } else {
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      finalUsername = `expert_${display_name.toLowerCase().replace(/[^a-z0-9]/g, '')}_${randomSuffix}`;
     }
 
     let plan: any = null;
@@ -185,8 +197,6 @@ export const consultantRegister = (req: Request, res: Response) => {
       expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
     }
 
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const username = `expert_${display_name.toLowerCase().replace(/[^a-z0-9]/g, '')}_${randomSuffix}`;
     const password = Math.random().toString(36).slice(-8);
 
     const defaultPhoto = `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=300`;
@@ -198,7 +208,7 @@ export const consultantRegister = (req: Request, res: Response) => {
         is_online, is_busy, is_active, plan_expiry, category, plan_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      username,
+      finalUsername,
       cleanEmail,
       phone.trim(),
       password,
@@ -215,13 +225,13 @@ export const consultantRegister = (req: Request, res: Response) => {
     );
 
     // Dispatch credentials email asynchronously using the professional Gmail dispatch system
-    sendConsultantCredentials(cleanEmail, display_name, username, password).catch(err => {
+    sendConsultantCredentials(cleanEmail, display_name, finalUsername, password).catch(err => {
       console.error('[Auth Controller] Error during background sendConsultantCredentials:', err);
     });
 
     res.json({
       success: true,
-      username,
+      username: finalUsername,
       password,
       display_name,
       email: cleanEmail,
@@ -246,9 +256,12 @@ export const consultantRegisterCreateOrder = async (req: Request, res: Response)
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
+    const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail) as any;
     if (existingConsultantEmail) {
-      return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another or login.' });
+      const consultantIdParam = req.body.consultant_id;
+      if (!consultantIdParam || existingConsultantEmail.id !== Number(consultantIdParam)) {
+        return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another or login.' });
+      }
     }
 
     const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
@@ -331,7 +344,11 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
       order_id,
       payment_id,
       signature,
-      is_mock
+      is_mock,
+      username,
+      display_name,
+      category,
+      price_per_minute
     } = req.body;
 
     if (!consultant_id || !plan_id) {
@@ -346,6 +363,14 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
     const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(plan_id) as any;
     if (!plan) {
       return res.status(404).json({ error: 'Subscription plan not found.' });
+    }
+
+    const cleanUsername = username ? username.trim().toLowerCase() : '';
+    if (cleanUsername && cleanUsername !== consultant.username.toLowerCase()) {
+      const existingWithUsername = db.prepare('SELECT id FROM consultants WHERE LOWER(username) = ? AND id != ?').get(cleanUsername, consultant_id);
+      if (existingWithUsername) {
+        return res.status(400).json({ error: 'This username is already taken. Please choose another username.' });
+      }
     }
 
     // Razorpay checkout verification for paid plans
@@ -368,14 +393,45 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
       }
     }
 
+    const newPassword = Math.random().toString(36).slice(-8);
+    const updatedUsername = cleanUsername || consultant.username;
+    const updatedDisplayName = display_name ? display_name.trim() : consultant.display_name;
+    const updatedCategory = category || consultant.category || 'Consultants';
+    const updatedPrice = price_per_minute ? parseFloat(price_per_minute) : (consultant.price_per_minute || 15.0);
+
+    if (plan.max_consultant_rate !== undefined && updatedPrice > plan.max_consultant_rate) {
+      return res.status(400).json({ error: `Selected plan "${plan.name}" ke mutabik, maximum call rate ₹${plan.max_consultant_rate}/minute hi allow hai. Please select a lower rate.` });
+    }
+
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
 
     db.prepare(`
       UPDATE consultants 
-      SET plan_id = ?, plan_expiry = ?, is_active = 1
+      SET plan_id = ?, 
+          plan_expiry = ?, 
+          is_active = 1,
+          username = ?,
+          password = ?,
+          display_name = ?,
+          category = ?,
+          price_per_minute = ?
       WHERE id = ?
-    `).run(plan.id, expiryDate.toISOString(), consultant_id);
+    `).run(
+      plan.id, 
+      expiryDate.toISOString(), 
+      updatedUsername,
+      newPassword,
+      updatedDisplayName,
+      updatedCategory,
+      updatedPrice,
+      consultant_id
+    );
+
+    // Send the professional credentials email asynchronously
+    sendConsultantCredentials(consultant.email, updatedDisplayName, updatedUsername, newPassword).catch(err => {
+      console.error('[Auth Controller] Error during background sendConsultantCredentials on buy-plan:', err);
+    });
 
     // Fetch the updated consultant info to return
     const updatedConsultant = db.prepare('SELECT * FROM consultants WHERE id = ?').get(consultant_id);
@@ -384,6 +440,11 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
       success: true,
       message: 'Subscription plan activated successfully.',
       consultant: updatedConsultant,
+      credentials: {
+        username: updatedUsername,
+        password: newPassword,
+        displayName: updatedDisplayName
+      }
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -93,8 +93,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
           const data = await res.json();
           setHeroSettings(data);
         }
-      } catch (err) {
-        console.error('Failed to load hero configurations:', err);
+      } catch (err: any) {
+        if (err && err.message && err.message.includes('Failed to fetch')) {
+          console.warn('Network connection starting up. Retrying hero settings shortly...');
+        } else {
+          console.error('Failed to load hero configurations:', err);
+        }
       }
     };
     fetchHeroSettings();
@@ -198,8 +202,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
           setUserTickets(data.tickets);
         }
       }
-    } catch (err) {
-      console.error('Failed to fetch support tickets:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection starting up. Retrying support tickets shortly...');
+      } else {
+        console.error('Failed to fetch support tickets:', err);
+      }
     } finally {
       setLoadingTickets(false);
     }
@@ -253,8 +261,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
           setWalletTransactions(data.transactions);
         }
       }
-    } catch (err) {
-      console.error('Error fetching transactions:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection starting up. Retrying transactions shortly...');
+      } else {
+        console.error('Error fetching transactions:', err);
+      }
     } finally {
       setLoadingTransactions(false);
     }
@@ -336,8 +348,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       });
 
       setUserPastSessions(combined);
-    } catch (err) {
-      console.error('Error fetching past sessions list:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection starting up. Retrying past sessions list shortly...');
+      } else {
+        console.error('Error fetching past sessions list:', err);
+      }
     }
   };
 
@@ -416,8 +432,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, currentUser
       } else {
         setSelectedConsSchedules([]);
       }
-    } catch (err) {
-      console.error('Error loading consultant reviews and schedules:', err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection starting up. Retrying reviews and schedules shortly...');
+      } else {
+        console.error('Error loading consultant reviews and schedules:', err);
+      }
     }
   };
 
