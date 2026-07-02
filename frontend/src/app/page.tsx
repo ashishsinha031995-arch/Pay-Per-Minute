@@ -170,21 +170,56 @@ export default function AppPage() {
     }
   }, [currentUser?.id]);
 
+  // Maintain the history of clicked consultant usernames in localStorage
+  useEffect(() => {
+    if (targetUsername) {
+      try {
+        const rawHistory = localStorage.getItem('clicked_consultants_history');
+        let history = rawHistory ? JSON.parse(rawHistory) : [];
+        if (!Array.isArray(history)) history = [];
+        const normalized = targetUsername.trim().toLowerCase();
+        if (normalized && !history.some((u: string) => String(u).trim().toLowerCase() === normalized)) {
+          history.push(targetUsername.trim());
+          localStorage.setItem('clicked_consultants_history', JSON.stringify(history));
+        }
+      } catch (e) {
+        console.error('Error maintaining clicked_consultants_history:', e);
+      }
+    }
+  }, [targetUsername]);
+
   // Lock user to referred consultant if landing on deep link
   useEffect(() => {
-    if (currentUser?.id && targetUsername) {
-      fetch('/api/user/lock-referral', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, consultantUsername: targetUsername })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.user) {
-          setCurrentUser(data.user);
+    if (currentUser?.id) {
+      // Collect clicked history from localStorage
+      let usernamesToSync: string[] = [];
+      try {
+        const rawHistory = localStorage.getItem('clicked_consultants_history');
+        if (rawHistory) {
+          usernamesToSync = JSON.parse(rawHistory).map((s: string) => s.trim()).filter(Boolean);
         }
-      })
-      .catch(err => console.error('Error locking referral:', err));
+      } catch (e) {
+        console.error('Error parsing click history:', e);
+      }
+
+      if (targetUsername && !usernamesToSync.some(u => u.toLowerCase() === targetUsername.toLowerCase())) {
+        usernamesToSync.push(targetUsername);
+      }
+
+      if (usernamesToSync.length > 0) {
+        fetch('/api/user/lock-referral', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, usernames: usernamesToSync })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.user) {
+            setCurrentUser(data.user);
+          }
+        })
+        .catch(err => console.error('Error locking referral:', err));
+      }
     }
   }, [currentUser?.id, targetUsername]);
 

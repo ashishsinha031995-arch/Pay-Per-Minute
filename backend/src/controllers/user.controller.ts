@@ -727,34 +727,55 @@ export const uploadPhoto = (req: Request, res: Response) => {
   }
 };
 
-// Lock User Referral to a specific consultant
+// Lock User Referral to a specific consultant (or multiple)
 export const lockUserReferral = (req: Request, res: Response) => {
   try {
-    const { userId, consultantUsername } = req.body;
-    if (!userId || !consultantUsername) {
-      return res.status(400).json({ error: 'User ID and Consultant Username are required' });
+    const { userId, consultantUsername, usernames } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
     }
 
-    // Find consultant by username
-    const consultant = db.prepare('SELECT id FROM consultants WHERE LOWER(username) = ?').get(String(consultantUsername).toLowerCase().trim()) as any;
-    if (!consultant) {
-      return res.status(404).json({ error: 'Consultant not found' });
+    // Support either a list of usernames (bulk) or a single username
+    let targetUsernames: string[] = [];
+    if (usernames && Array.isArray(usernames)) {
+      targetUsernames = usernames.map(u => String(u).trim().toLowerCase()).filter(Boolean);
+    } else if (consultantUsername) {
+      targetUsernames = [String(consultantUsername).trim().toLowerCase()];
     }
 
-    // Instead of overwriting, append consultant.id if not already present in the user's locked_consultant_id!
+    if (targetUsernames.length === 0) {
+      return res.status(400).json({ error: 'No usernames specified' });
+    }
+
+    // Find all matching consultant IDs
+    const placeholders = targetUsernames.map(() => '?').join(',');
+    const consultants = db.prepare(`SELECT id FROM consultants WHERE LOWER(username) IN (${placeholders})`).all(...targetUsernames) as any[];
+
+    if (consultants.length === 0) {
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+      return res.json({ success: true, user });
+    }
+
+    const consultantIdsToLock = consultants.map(c => c.id);
+
+    // Get current locked IDs
     const user = db.prepare('SELECT locked_consultant_id FROM users WHERE id = ?').get(userId) as any;
-    let newLockedStr = String(consultant.id);
-    if (user && user.locked_consultant_id !== null && user.locked_consultant_id !== undefined && String(user.locked_consultant_id).trim() !== '') {
-      const existingIds = String(user.locked_consultant_id)
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s !== '');
-      if (!existingIds.includes(String(consultant.id))) {
-        existingIds.push(String(consultant.id));
-      }
-      newLockedStr = existingIds.join(',');
-    }
+    const existingIds = (user && user.locked_consultant_id !== null && user.locked_consultant_id !== undefined && String(user.locked_consultant_id).trim() !== '')
+      ? String(user.locked_consultant_id)
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s !== '')
+          .map(s => parseInt(s, 10))
+          .filter(n => !isNaN(n))
+      : [];
 
+    consultantIdsToLock.forEach(id => {
+      if (!existingIds.includes(id)) {
+        existingIds.push(id);
+      }
+    });
+
+    const newLockedStr = existingIds.join(',');
     db.prepare('UPDATE users SET locked_consultant_id = ? WHERE id = ?').run(newLockedStr, userId);
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);

@@ -402,24 +402,42 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const getFilteredConsultants = () => {
     let list = consultants;
 
-    // 1. If targetUsername is set (came from consultant link), filter to only that consultant
-    if (targetUsername) {
-      list = list.filter(c => c.username.toLowerCase() === targetUsername.toLowerCase());
+    // Retrieve clicked history from localStorage
+    let historyUsernames: string[] = [];
+    try {
+      const rawHistory = localStorage.getItem('clicked_consultants_history');
+      if (rawHistory) {
+        historyUsernames = JSON.parse(rawHistory).map((u: string) => u.toLowerCase().trim()).filter(Boolean);
+      }
+    } catch (e) {
+      console.error('Error reading clicked_consultants_history:', e);
     }
 
-    // 2. If logged-in user is locked to specific consultant(s) and admin doesn't allow others, filter on frontend too for bulletproof enforcement
-    if (currentUser?.admin_allow_others === 0) {
-      const lockedIds = currentUser?.locked_consultant_id
-        ? String(currentUser.locked_consultant_id)
-            .split(',')
-            .map(s => s.trim())
-            .filter(s => s !== '')
-            .map(s => parseInt(s, 10))
-            .filter(n => !isNaN(n))
-        : [];
-      if (lockedIds.length > 0) {
-        list = list.filter(c => lockedIds.includes(c.id));
+    if (targetUsername) {
+      const normTarget = targetUsername.toLowerCase().trim();
+      if (!historyUsernames.includes(normTarget)) {
+        historyUsernames.push(normTarget);
       }
+    }
+
+    // Parse locked IDs from the logged-in user profile (this includes those assigned by the Super Admin)
+    const lockedIds = currentUser?.locked_consultant_id
+      ? String(currentUser.locked_consultant_id)
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s !== '')
+          .map(s => parseInt(s, 10))
+          .filter(n => !isNaN(n))
+      : [];
+
+    const hasLocksOrHistory = historyUsernames.length > 0 || lockedIds.length > 0;
+
+    if (hasLocksOrHistory) {
+      list = list.filter(c => {
+        const matchesHistory = historyUsernames.includes(c.username.toLowerCase());
+        const matchesLocked = lockedIds.includes(c.id);
+        return matchesHistory || matchesLocked;
+      });
     }
 
     return list;
