@@ -348,6 +348,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Tab Navigation & Mobile Drawer States
   const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules'>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
 
   // Real-time fluctuating velocity meter metrics
   const [liveVelocityScore, setLiveVelocityScore] = useState(76);
@@ -3691,7 +3692,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
                         <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-850/85 relative flex flex-col justify-between h-full min-h-[220px]">
                           <div className="flex items-center justify-between mb-4">
-                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Weekly Velocity Flow</span>
+                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Weekly Performance</span>
                             <span className="text-[10px] font-mono text-slate-500 italic">calculated from actual sessions</span>
                           </div>
                           
@@ -3703,9 +3704,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             
                             {/* Animated Bars */}
                             {getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute).map((bar, i) => (
-                              <div key={bar.label} className="flex-1 flex flex-col items-center group relative z-10">
-                                {/* Hover tooltip */}
-                                <span className="text-[9px] font-mono text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-10 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-center font-bold z-20 shadow-xl whitespace-nowrap">
+                              <div 
+                                key={bar.label} 
+                                className="flex-1 flex flex-col items-center group relative z-10"
+                                onMouseEnter={() => setActiveBarIndex(i)}
+                                onMouseLeave={() => setActiveBarIndex(null)}
+                                onTouchStart={(e) => {
+                                  e.stopPropagation();
+                                  setActiveBarIndex(i);
+                                }}
+                              >
+                                {/* Hover/Touch tooltip */}
+                                <span className={`text-[9px] font-mono text-emerald-400 transition-opacity absolute -top-10 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
+                                  activeBarIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                }`}>
                                   {bar.earnings} {bar.actual > 0 ? '(Real)' : '(Scaled)'}
                                 </span>
                                 

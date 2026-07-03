@@ -83,6 +83,14 @@ export default function AppPage() {
   const [signUpType, setSignUpType] = useState<'choose' | 'user' | 'consultant'>('choose');
   const [consultantCategory, setConsultantCategory] = useState('Consultants');
 
+  // Force user-only registration and login if targetUsername is defined (visiting via consultant's link)
+  useEffect(() => {
+    if (authModalOpen && targetUsername) {
+      setAuthRole('user');
+      setSignUpType('user');
+    }
+  }, [authModalOpen, targetUsername]);
+
   // Auth Inputs
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -797,7 +805,7 @@ export default function AppPage() {
               <>
                 <form onSubmit={authTab === 'login' ? handleLogin : authTab === 'signup' ? handleSignUp : handleForgotPassword} className="space-y-4">
                   
-                  {authTab === 'login' && (
+                  {authTab === 'login' && !targetUsername && (
                     <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center space-x-1">
                       <button
                         type="button"
@@ -992,7 +1000,7 @@ export default function AppPage() {
                         <button onClick={() => { setAuthTab('forgot'); setAuthError(null); }} className="hover:text-emerald-400 text-[11px]">
                           Forgot Password?
                         </button>
-                        <button onClick={() => { setAuthTab('signup'); setSignUpType('choose'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold text-[11px]">
+                        <button onClick={() => { setAuthTab('signup'); setSignUpType(targetUsername ? 'user' : 'choose'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold text-[11px]">
                           Create Account
                         </button>
                       </div>
@@ -1000,10 +1008,12 @@ export default function AppPage() {
                   )}
 
                   {authTab === 'signup' && (
-                    <div className="flex justify-between items-center px-1">
-                      <button onClick={() => setSignUpType('choose')} className="text-slate-400 hover:text-white flex items-center gap-1 text-[11px]">
-                        ← Change Type
-                      </button>
+                    <div className={`flex items-center px-1 ${targetUsername ? 'justify-center' : 'justify-between'}`}>
+                      {!targetUsername && (
+                        <button onClick={() => setSignUpType('choose')} className="text-slate-400 hover:text-white flex items-center gap-1 text-[11px]">
+                          ← Change Type
+                        </button>
+                      )}
                       <div className="flex space-x-1 text-[11px]">
                         <span>Already have an account?</span>
                         <button onClick={() => { setAuthTab('login'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold">
