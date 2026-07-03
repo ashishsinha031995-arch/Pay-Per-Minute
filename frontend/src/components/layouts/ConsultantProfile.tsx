@@ -141,7 +141,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           }
         }
       } catch (err) {
-        console.error("Error fetching user notifications:", err);
+        console.warn("Failed to fetch user notifications (network or server restart):", err);
       }
     };
 

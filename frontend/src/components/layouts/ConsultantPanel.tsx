@@ -167,7 +167,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           }
         }
       } catch (err) {
-        console.error("Error fetching consultant notifications:", err);
+        console.warn("Failed to fetch consultant notifications (network or server restart):", err);
       }
     };
 
@@ -2569,13 +2569,17 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               >
                 {/* Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
-                  <div className="flex items-center space-x-2">
-                    <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
-                      <Sparkles className="w-5 h-5 text-emerald-400" />
-                    </div>
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={photoUrl || currentConsultant.photo_url}
+                      alt={currentConsultant.display_name}
+                      className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-500 shadow-md"
+                    />
                     <div>
-                      <h3 className="font-extrabold text-sm text-slate-100 font-sans tracking-wide">Advisor Profile Menu</h3>
-                      <span className="text-[10px] text-slate-400 font-mono">Account Settings & Subscription</span>
+                      <h3 className="font-extrabold text-sm text-slate-100 font-sans tracking-wide truncate max-w-[160px] sm:max-w-[180px]">
+                        {currentConsultant.display_name}
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-mono">Advisor Control Panel</span>
                     </div>
                   </div>
                   <div className="flex items-center space-x-1.5">
@@ -2603,142 +2607,184 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   </div>
                 </div>
 
-                {/* Body Content */}
-                <div className="flex-1 space-y-6">
-                  {/* Basic Consultant Fields */}
-                  <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 space-y-3.5">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">Registered Partner Details</span>
-                    
-                    <div className="space-y-2 text-xs">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-900 gap-1">
-                        <span className="text-slate-400 font-medium">Full Name:</span>
-                        <strong className="text-slate-200 truncate">{currentConsultant.display_name}</strong>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-900 gap-1">
-                        <span className="text-slate-400 font-medium">Email Address:</span>
-                        <strong className="text-slate-200 break-all">{currentConsultant.email}</strong>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-900 gap-1">
-                        <span className="text-slate-400 font-medium">Phone Number:</span>
-                        <strong className="text-slate-200 font-mono">+91 {currentConsultant.phone}</strong>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                        <span className="text-slate-400 font-medium">Professional Category:</span>
-                        <span className="bg-emerald-500/10 text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20 self-start sm:self-auto">
-                          {currentConsultant.category || 'Consultants'}
-                        </span>
-                      </div>
-                    </div>
+                {/* Profile Completion Card */}
+                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">Profile Completion</span>
+                    <span className="text-xs font-black font-mono text-emerald-400">{getProfileCompletionPercentage()}%</span>
                   </div>
-
-                  {/* Buy Plan / Active Plan Section */}
-                  <div className="space-y-3">
-                    {(() => {
-                      const activePlanId = wallet?.plan_id || currentConsultant.plan_id;
-                      const activePlan = plans.find((p: any) => p.id === activePlanId);
-                      
-                      if (activePlan) {
-                        return (
-                          <div className="bg-emerald-950/20 border border-emerald-900/50 rounded-2xl p-4 space-y-2">
-                            <div className="flex items-center space-x-1.5 text-emerald-400 font-bold text-xs uppercase font-mono">
-                              <Award className="w-4 h-4" />
-                              <span>Active Partnership Subscription</span>
-                            </div>
-                            <div className="text-xs text-slate-300">
-                              Currently Subscribed to: <strong className="text-emerald-400 font-black">{activePlan.name}</strong>
-                            </div>
-                            <div className="text-[10px] text-slate-500 italic font-mono">
-                              Max rate permitted: ₹{activePlan.max_consultant_rate}/min
-                            </div>
-                          </div>
-                        );
-                      } else {
-                        return (
-                          <div className="bg-amber-500/10 border border-dashed border-amber-500/30 rounded-2xl p-4 space-y-3 text-center">
-                            <div className="flex items-center justify-center space-x-1.5 text-amber-400 font-black text-xs uppercase font-mono animate-pulse">
-                              <Flame className="w-5 h-5" />
-                              <span>Start Earning Instantly</span>
-                            </div>
-                            <p className="text-xs text-slate-400 leading-relaxed">
-                              Aapke paas abhi koi active partnership plan nahi hai. Active clients se call requests receive karne ke liye aur earning start karne ke liye niche se ek plan buy karein.
-                            </p>
-                          </div>
-                        );
-                      }
-                    })()}
-                  </div>
-
-                  {/* Plan Purchasing Choices */}
-                  <div className="space-y-3">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">Available Partnership Plans</span>
-                    
-                    <div className="space-y-3">
-                      {plans.map((p) => {
-                        const activePlanId = wallet?.plan_id || currentConsultant.plan_id;
-                        const isCurrent = activePlanId === p.id;
-                        return (
-                          <div 
-                            key={p.id}
-                            className={`p-3.5 rounded-xl border transition-all text-xs flex items-center justify-between ${
-                              isCurrent 
-                                ? 'bg-emerald-950/10 border-emerald-500/40 text-slate-200' 
-                                : 'bg-slate-950 border-slate-850 hover:border-slate-800 text-slate-400'
-                            }`}
-                          >
-                            <div className="space-y-1">
-                              <div className="font-extrabold text-slate-200 flex items-center gap-1.5">
-                                <span>{p.name}</span>
-                                {isCurrent && <span className="bg-emerald-500 text-slate-950 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Active</span>}
-                              </div>
-                              <div className="text-[10px] text-slate-500 leading-tight">
-                                Max call rate: ₹{p.max_consultant_rate}/min • {p.commission_rate}% Comm.
-                              </div>
-                              <div className="text-[11px] font-mono font-black text-emerald-400 mt-0.5">
-                                ₹{p.price} <span className="text-[9px] text-slate-500 font-normal">/ {p.duration_days} days</span>
-                              </div>
-                            </div>
-
-                            {!isCurrent && (
-                              <button
-                                onClick={() => {
-                                  if (currentConsultant) {
-                                    setBuyingPlan(p);
-                                    setIsMobileMenuOpen(false);
-                                  } else {
-                                    handleScrollToPlans();
-                                  }
-                                }}
-                                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[10px] uppercase px-3 py-2 rounded-lg shadow transition-all active:scale-95 flex items-center space-x-1"
-                              >
-                                <span>Buy Plan</span>
-                                <ArrowRight className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
+                      style={{ width: `${getProfileCompletionPercentage()}%` }}
+                    />
                   </div>
                 </div>
 
-                {/* Notifications Announcements Link */}
-                <div className="px-1 mt-4">
+                {/* Navigation Menu List */}
+                <div className="flex-1 space-y-2.5">
                   <button
                     onClick={() => {
-                      setNotificationsModalOpen(true);
+                      setError(null);
+                      setSuccess(null);
+                      setActiveTab('dashboard');
                       setIsMobileMenuOpen(false);
                     }}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-black text-slate-300 bg-slate-950 hover:bg-slate-850/80 border border-slate-850 hover:border-slate-800 transition-all cursor-pointer"
+                    className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
-                    <div className="flex items-center space-x-2.5">
-                      <Bell className="w-4 h-4 text-amber-400" />
-                      <span>🔔 Announcements</span>
+                    <TrendingUp className="w-4 h-4 shrink-0" />
+                    <span>🏠 Dashboard Home</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      if (!hasActivePlan) {
+                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Presence Settings).");
+                        handleScrollToPlans();
+                      } else {
+                        setActiveTab('status');
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <Flame className="w-4 h-4 shrink-0" />
+                      <span>🔥 Availability & Plan</span>
                     </div>
-                    {unreadNotifCount > 0 && (
-                      <span className="bg-rose-500 text-white text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0">
-                        {unreadNotifCount} New
+                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      if (!hasActivePlan) {
+                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Profile Settings).");
+                        handleScrollToPlans();
+                      } else {
+                        setActiveTab('profile');
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <Settings2 className="w-4 h-4 shrink-0" />
+                      <span>⚙️ Profile Settings</span>
+                    </div>
+                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      if (!hasActivePlan) {
+                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Availability Schedule).");
+                        handleScrollToPlans();
+                      } else {
+                        setActiveTab('schedules');
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <Calendar className="w-4 h-4 shrink-0" />
+                      <span>📅 Availability Schedule</span>
+                    </div>
+                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      if (!hasActivePlan) {
+                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock KYC Verification).");
+                        handleScrollToPlans();
+                      } else {
+                        setActiveTab('kyc');
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <UserCheck className="w-4 h-4 shrink-0" />
+                      <span>🔒 KYC Verification</span>
+                    </div>
+                    {hasActivePlan ? (
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${kycStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : kycStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
+                        {kycStatus === 'approved' ? 'Approved' : kycStatus === 'pending' ? 'Review' : 'Update'}
                       </span>
+                    ) : (
+                      <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
                     )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      if (!hasActivePlan) {
+                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Bank Details).");
+                        handleScrollToPlans();
+                      } else {
+                        setActiveTab('bank');
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <Wallet className="w-4 h-4 shrink-0" />
+                      <span>🏦 Bank Details</span>
+                    </div>
+                    {hasActivePlan ? (
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${bankStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : bankStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
+                        {bankStatus === 'approved' ? 'Verified' : bankStatus === 'pending' ? 'Review' : 'Update'}
+                      </span>
+                    ) : (
+                      <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      if (!hasActivePlan) {
+                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Consultation History).");
+                        handleScrollToPlans();
+                      } else {
+                        setActiveTab('sessions');
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <FileText className="w-4 h-4 shrink-0" />
+                      <span>💬 Consultation History</span>
+                    </div>
+                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      setActiveTab('support');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <HelpCircle className="w-4 h-4 shrink-0" />
+                    <span>🙋 Help & Customer Support</span>
                   </button>
                 </div>
 
