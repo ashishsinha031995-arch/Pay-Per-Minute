@@ -109,7 +109,8 @@ export const replyToTicket = (req: Request, res: Response) => {
 export const closeTicket = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const result = db.prepare("UPDATE support_tickets SET status = 'closed' WHERE id = ?").run(Number(id));
+    const now = new Date().toISOString();
+    const result = db.prepare("UPDATE support_tickets SET status = 'closed', closed_at = ? WHERE id = ?").run(now, Number(id));
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Ticket not found.' });
     }
@@ -123,7 +124,8 @@ export const closeTicket = (req: Request, res: Response) => {
 export const resolveTicket = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const result = db.prepare("UPDATE support_tickets SET status = 'resolved' WHERE id = ?").run(Number(id));
+    const now = new Date().toISOString();
+    const result = db.prepare("UPDATE support_tickets SET status = 'resolved', resolved_at = ? WHERE id = ?").run(now, Number(id));
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Ticket not found.' });
     }

@@ -1,7 +1,9 @@
 {
   "name": "Pay-Per-Minute Chat",
   "description": "A SaaS Pay-Per-Minute real-time chat platform connecting users with consultants, featuring a wallet system, commission management, Razorpay payment flow, and interactive live chat sessions with countdown timers.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

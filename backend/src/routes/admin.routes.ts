@@ -9,6 +9,7 @@ import {
   updateAdminCommissionRateSetting,
   getAllSessionsFinancialLogs,
   getAdminBlockedUsersList,
+  deleteBlockedUserRecordByAdmin,
   getSuperAdminUsersList,
   blockUserBySuperAdmin,
   unblockUserBySuperAdmin,
@@ -27,6 +28,12 @@ import {
   getManualWalletAdjustments,
   getAdminLiveQueues
 } from '../controllers/admin.controller.js';
+import {
+  getAdminNotifications,
+  createAdminNotification,
+  toggleNotificationStatus,
+  deleteAdminNotification
+} from '../controllers/notifications.controller.js';
 
 const router = Router();
 
@@ -43,6 +50,7 @@ router.post('/settings', updateAdminCommissionRateSetting);
 router.get('/sessions', getAllSessionsFinancialLogs);
 router.post('/sessions/:id/refund', refundSessionBySuperAdmin);
 router.get('/blocked', getAdminBlockedUsersList);
+router.delete('/blocked/:id', deleteBlockedUserRecordByAdmin);
 router.get('/users', getSuperAdminUsersList);
 router.post('/users/block', blockUserBySuperAdmin);
 router.post('/users/unblock', unblockUserBySuperAdmin);
@@ -61,5 +69,11 @@ router.delete('/plans/:id', deletePlanBySuperAdmin);
 // Manual wallet adjustments
 router.post('/wallet/add-money', addMoneyToWallet);
 router.get('/wallet/adjustments', getManualWalletAdjustments);
+
+// Admin Notifications management
+router.get('/notifications', getAdminNotifications);
+router.post('/notifications', createAdminNotification);
+router.put('/notifications/:id/toggle-status', toggleNotificationStatus);
+router.delete('/notifications/:id', deleteAdminNotification);
 
 export default router;

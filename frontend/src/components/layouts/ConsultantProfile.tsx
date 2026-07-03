@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -86,6 +86,108 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [heroSettings, setHeroSettings] = useState<any>(null);
 
+  // --- REAL-TIME IN-APP ALERTS & BROADCASTS ---
+  const [clientNotifications, setClientNotifications] = useState<any[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
+  const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
+  const [latestToast, setLatestToast] = useState<{ id: number; title: string; message: string } | null>(null);
+  const knownNotifIdsRef = React.useRef<number[]>([]);
+
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-600.wav");
+      audio.volume = 0.55;
+      audio.play().catch(err => {
+        console.warn("Audio chime autoplay blocked by browser sandbox policy.", err);
+      });
+    } catch (err) {
+      console.error("Failed to play alert sound:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUser || !currentUser.id) return;
+
+    const fetchNotifications = async (isFirstLoad = false) => {
+      try {
+        const res = await fetch(`/api/notifications?user_type=user&user_id=${currentUser.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            const list = data.notifications || [];
+            setClientNotifications(list);
+            
+            const unreads = list.filter((n: any) => !n.is_read);
+            setUnreadNotifCount(unreads.length);
+
+            const fetchedIds = list.map((n: any) => n.id);
+
+            if (isFirstLoad) {
+              knownNotifIdsRef.current = fetchedIds;
+            } else {
+              // Identify if any active unread notification has an ID we have never seen before
+              const newUnread = unreads.find((n: any) => !knownNotifIdsRef.current.includes(n.id));
+              if (newUnread) {
+                playNotificationSound();
+                setLatestToast({
+                  id: newUnread.id,
+                  title: newUnread.title,
+                  message: newUnread.message
+                });
+                setTimeout(() => setLatestToast(null), 6000);
+              }
+              knownNotifIdsRef.current = fetchedIds;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching user notifications:", err);
+      }
+    };
+
+    fetchNotifications(true);
+
+    const interval = setInterval(() => {
+      fetchNotifications(false);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  const handleMarkAsRead = async (id: number) => {
+    if (!currentUser || !currentUser.id) return;
+    try {
+      const res = await fetch(`/api/notifications/${id}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_type: 'user', user_id: currentUser.id })
+      });
+      if (res.ok) {
+        setClientNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+        setUnreadNotifCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (e) {
+      console.error("Error marking read:", e);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!currentUser || !currentUser.id) return;
+    try {
+      const res = await fetch(`/api/notifications/read-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_type: 'user', user_id: currentUser.id })
+      });
+      if (res.ok) {
+        setClientNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+        setUnreadNotifCount(0);
+      }
+    } catch (e) {
+      console.error("Error marking all read:", e);
+    }
+  };
+
   useEffect(() => {
     const fetchHeroSettings = async () => {
       try {
@@ -163,6 +265,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [showBusyWarningModal, setShowBusyWarningModal] = useState(false);
   const [busyConsultantQueueData, setBusyConsultantQueueData] = useState<any>(null);
   const [busyWarningTickingSeconds, setBusyWarningTickingSeconds] = useState<number>(0);
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
+  const [blockedConsultantName, setBlockedConsultantName] = useState('');
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -673,8 +777,28 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           user_name: currentUser.display_name,
         }),
       });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to initialize session order');
+      
+      let orderData: any = {};
+      const contentType = orderRes.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        orderData = await orderRes.json();
+      } else {
+        if (orderRes.status === 403) {
+          setBlockedConsultantName(selectedConsultant.display_name);
+          setShowBlockedModal(true);
+          throw new Error(`You cannot connect to "${selectedConsultant.display_name}" due to a privacy restriction.`);
+        }
+        const text = await orderRes.text();
+        throw new Error(text || 'Failed to initialize session order');
+      }
+
+      if (!orderRes.ok) {
+        if (orderRes.status === 403 || (orderData.error && (orderData.error.toLowerCase().includes('blocked') || orderData.error.toLowerCase().includes('block')))) {
+          setBlockedConsultantName(selectedConsultant.display_name);
+          setShowBlockedModal(true);
+        }
+        throw new Error(orderData.error || 'Failed to initialize session order');
+      }
 
       // Verify and deduct instantly using internal wallet balance
       const verifyRes = await fetch('/api/payments/verify', {
@@ -692,8 +816,27 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         }),
       });
 
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(verifyData.error || 'Wallet transaction failed');
+      let verifyData: any = {};
+      const verifyContentType = verifyRes.headers.get('content-type');
+      if (verifyContentType && verifyContentType.includes('application/json')) {
+        verifyData = await verifyRes.json();
+      } else {
+        if (verifyRes.status === 403) {
+          setBlockedConsultantName(selectedConsultant.display_name);
+          setShowBlockedModal(true);
+          throw new Error(`You cannot connect to "${selectedConsultant.display_name}" due to a privacy restriction.`);
+        }
+        const text = await verifyRes.text();
+        throw new Error(text || 'Wallet transaction failed');
+      }
+
+      if (!verifyRes.ok) {
+        if (verifyRes.status === 403 || (verifyData.error && (verifyData.error.toLowerCase().includes('blocked') || verifyData.error.toLowerCase().includes('block')))) {
+          setBlockedConsultantName(selectedConsultant.display_name);
+          setShowBlockedModal(true);
+        }
+        throw new Error(verifyData.error || 'Wallet transaction failed');
+      }
 
       setSuccess('Wallet Payment Succeeded! Connecting you to the Expert Consultation room...');
       
@@ -768,8 +911,28 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           user_name: currentUser.display_name,
         }),
       });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to initialize session order');
+
+      let orderData: any = {};
+      const contentType = orderRes.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        orderData = await orderRes.json();
+      } else {
+        if (orderRes.status === 403) {
+          setBlockedConsultantName(selectedConsultant.display_name);
+          setShowBlockedModal(true);
+          throw new Error(`You cannot connect to "${selectedConsultant.display_name}" due to a privacy restriction.`);
+        }
+        const text = await orderRes.text();
+        throw new Error(text || 'Failed to initialize session order');
+      }
+
+      if (!orderRes.ok) {
+        if (orderRes.status === 403 || (orderData.error && (orderData.error.toLowerCase().includes('blocked') || orderData.error.toLowerCase().includes('block')))) {
+          setBlockedConsultantName(selectedConsultant.display_name);
+          setShowBlockedModal(true);
+        }
+        throw new Error(orderData.error || 'Failed to initialize session order');
+      }
 
       // 3. Initialize Razorpay Checkout
       const options: any = {
@@ -797,8 +960,27 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               }),
             });
 
-            const verifyData = await verifyRes.json();
-            if (!verifyRes.ok) throw new Error(verifyData.error || 'Payment verification failed');
+            let verifyData: any = {};
+            const verifyContentType = verifyRes.headers.get('content-type');
+            if (verifyContentType && verifyContentType.includes('application/json')) {
+              verifyData = await verifyRes.json();
+            } else {
+              if (verifyRes.status === 403) {
+                setBlockedConsultantName(selectedConsultant.display_name);
+                setShowBlockedModal(true);
+                throw new Error(`You cannot connect to "${selectedConsultant.display_name}" due to a privacy restriction.`);
+              }
+              const text = await verifyRes.text();
+              throw new Error(text || 'Payment verification failed');
+            }
+
+            if (!verifyRes.ok) {
+              if (verifyRes.status === 403 || (verifyData.error && (verifyData.error.toLowerCase().includes('blocked') || verifyData.error.toLowerCase().includes('block')))) {
+                setBlockedConsultantName(selectedConsultant.display_name);
+                setShowBlockedModal(true);
+              }
+              throw new Error(verifyData.error || 'Payment verification failed');
+            }
 
             setSuccess('Payment Succeeded! Connecting you to the Expert Consultation room...');
 
@@ -1017,14 +1199,31 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-xs bg-slate-950/98 border border-slate-800/80 rounded-3xl p-6 shadow-2xl z-50 space-y-4 backdrop-blur-xl text-left"
                 >
                   <div className="border-b border-slate-800/80 pb-3 relative">
-                    <button
-                      onClick={() => setHamburgerOpen(false)}
-                      className="absolute right-0 top-0 p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg transition-colors border border-slate-800/80"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="absolute right-0 top-0 flex items-center space-x-1.5">
+                      <button
+                        onClick={() => {
+                          setNotificationsModalOpen(true);
+                          setHamburgerOpen(false);
+                        }}
+                        className="relative p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg transition-all border border-slate-800/80 hover:bg-slate-800 active:scale-95 cursor-pointer"
+                        title="View Announcements"
+                      >
+                        <Bell className="w-4 h-4 text-amber-400" />
+                        {unreadNotifCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 bg-rose-500 rounded-full flex items-center justify-center text-[8px] text-white font-black font-mono shadow-md border border-slate-950 animate-bounce">
+                            {unreadNotifCount}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setHamburgerOpen(false)}
+                        className="p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg transition-colors border border-slate-800/80 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                     <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block font-bold">CallMint Menu</span>
-                    <strong className="text-slate-200 text-sm font-bold block mt-2 pr-8">{currentUser.display_name} (ID: {currentUser.id})</strong>
+                    <strong className="text-slate-200 text-sm font-bold block mt-2 pr-12">{currentUser.display_name} (ID: {currentUser.id})</strong>
                     <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-slate-400">
                       <span>Wallet Balance:</span>
                       <span className="text-emerald-400 font-bold font-mono">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</span>
@@ -1116,6 +1315,24 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     >
                       <HelpCircle className="w-4 h-4 shrink-0" />
                       <span>🙋 Help & Customer Support</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setNotificationsModalOpen(true);
+                        setHamburgerOpen(false);
+                      }}
+                      className="flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-slate-300 hover:bg-slate-800/60 cursor-pointer"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Bell className="w-4 h-4 shrink-0 text-amber-400" />
+                        <span>🔔 Announcements</span>
+                      </div>
+                      {unreadNotifCount > 0 && (
+                        <span className="bg-rose-500 text-white text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0">
+                          {unreadNotifCount} New
+                        </span>
+                      )}
                     </button>
 
                     {onLogout && (
@@ -2287,6 +2504,52 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         </div>
       )}
 
+      {/* Blocked Consultant Privacy / Policy Warning Modal */}
+      {showBlockedModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-left">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-100">
+            
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center space-x-2 text-rose-500">
+                <ShieldAlert className="w-5 h-5 animate-pulse" />
+                <h3 className="font-extrabold text-slate-100 text-base">Privacy Restriction</h3>
+              </div>
+              <button
+                onClick={() => setShowBlockedModal(false)}
+                className="text-slate-400 hover:text-white bg-slate-950/40 p-2 border border-slate-800 rounded-xl transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="pt-5 space-y-4 text-center">
+              <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl space-y-2">
+                <span className="text-rose-400 font-bold block text-sm">⚠️ Connection Restricted</span>
+                <p className="text-slate-300 text-xs font-semibold leading-relaxed">
+                  You cannot connect to <strong className="text-slate-100 font-bold">"{blockedConsultantName}"</strong> due to some privacy breach. Thank you.
+                </p>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+                  (Aap is consultant ke sath privacy ya policy niyam ke chalte connect nahi kar sakte hain.)
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowBlockedModal(false)}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 py-3 rounded-xl text-xs font-bold transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Wallet Recharge Page Modal */}
       {showRechargeModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-left">
@@ -2877,7 +3140,115 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         </div>
       )}
 
+      {/* Real-time Toast notification */}
+      <AnimatePresence>
+        {latestToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-[100] max-w-sm bg-slate-900 border border-emerald-500/30 p-4 rounded-2xl shadow-2xl flex items-start space-x-3 text-left backdrop-blur-md"
+          >
+            <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-400">
+              <Bell className="w-5 h-5 animate-bounce" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">New Announcement</span>
+                <button onClick={() => setLatestToast(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <h4 className="text-xs font-bold text-slate-100">{latestToast.title}</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">{latestToast.message}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
+      {/* Announcements List Modal */}
+      <AnimatePresence>
+        {notificationsModalOpen && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden shadow-2xl text-left"
+            >
+              <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/40">
+                <div className="flex items-center space-x-2">
+                  <Bell className="w-5 h-5 text-amber-400 animate-pulse" />
+                  <h3 className="font-bold text-slate-100 text-base">Official Announcements</h3>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {unreadNotifCount > 0 && (
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-2.5 py-1 rounded-lg cursor-pointer"
+                    >
+                      Clear All Unread
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setNotificationsModalOpen(false)}
+                    className="text-slate-400 hover:text-white bg-slate-950 p-2 border border-slate-850 rounded-xl cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 overflow-y-auto space-y-3.5 flex-1 bg-slate-950/30">
+                {clientNotifications.length === 0 ? (
+                  <div className="text-center py-16 text-slate-500 text-xs font-mono">
+                    📭 No official announcements posted yet.
+                  </div>
+                ) : (
+                  clientNotifications.map((n: any) => (
+                    <div
+                      key={n.id}
+                      className={`p-4 rounded-2xl border transition-all relative ${
+                        n.is_read
+                          ? 'bg-slate-900/40 border-slate-850 opacity-75'
+                          : 'bg-slate-900/90 border-emerald-500/20 shadow-lg shadow-emerald-500/[0.02]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[9px] font-mono text-slate-500">
+                          {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                        </span>
+                        {!n.is_read ? (
+                          <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-bold font-mono px-2 py-0.5 rounded-full border border-emerald-500/15 uppercase">
+                            New Alert
+                          </span>
+                        ) : (
+                          <span className="text-slate-600 text-[8px] font-bold font-mono uppercase">
+                            Read
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-200 mb-1">{n.title}</h4>
+                      <p className="text-xs text-slate-400 leading-relaxed mb-3">{n.message}</p>
+
+                      {!n.is_read && (
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleMarkAsRead(n.id)}
+                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg border border-emerald-500/15 cursor-pointer transition-colors"
+                          >
+                            Mark as Read ✓
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

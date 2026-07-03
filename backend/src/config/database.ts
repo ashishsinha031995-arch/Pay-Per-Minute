@@ -40,7 +40,7 @@ for (const table of tables) {
 }
 
 function getTableName(sql: string): string | null {
-  const match = sql.match(/(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|REPLACE\s+INTO)\s+([a-zA-Z0-9_]+)/i);
+  const match = sql.match(/(?:INSERT\s+(?:OR\s+[a-zA-Z]+\s+)?INTO|UPDATE|DELETE\s+FROM|REPLACE\s+INTO)\s+([a-zA-Z0-9_]+)/i);
   return match ? match[1].toLowerCase() : null;
 }
 
@@ -457,7 +457,9 @@ export function initDb() {
       status TEXT DEFAULT 'open', -- 'open', 'resolved', 'closed'
       admin_reply TEXT,
       replied_at TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      closed_at TEXT,
+      resolved_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS support_ticket_replies (
@@ -479,6 +481,24 @@ export function initDb() {
       amount REAL NOT NULL,
       reason TEXT NOT NULL,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      target_type TEXT NOT NULL, -- 'user', 'consultant', or 'both'
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      status TEXT DEFAULT 'active', -- 'active' or 'inactive'
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_reads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      user_type TEXT NOT NULL, -- 'user' or 'consultant'
+      notification_id INTEGER NOT NULL,
+      read_at TEXT NOT NULL,
+      FOREIGN KEY (notification_id) REFERENCES admin_notifications (id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS consultant_schedules (
@@ -504,6 +524,30 @@ export function initDb() {
         amount REAL NOT NULL,
         reason TEXT NOT NULL,
         created_at TEXT NOT NULL
+      );
+    `);
+  } catch (_) {}
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS admin_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        target_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        status TEXT DEFAULT 'active',
+        created_at TEXT NOT NULL
+      );
+    `);
+  } catch (_) {}
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS notification_reads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        user_type TEXT NOT NULL,
+        notification_id INTEGER NOT NULL,
+        read_at TEXT NOT NULL,
+        FOREIGN KEY (notification_id) REFERENCES admin_notifications (id) ON DELETE CASCADE
       );
     `);
   } catch (_) {}
@@ -577,6 +621,9 @@ export function initDb() {
 
   try { db.exec("ALTER TABLE sessions ADD COLUMN refunded_minutes INTEGER DEFAULT 0;"); } catch(_) {}
   try { db.exec("ALTER TABLE sessions ADD COLUMN refunded_amount REAL DEFAULT 0.0;"); } catch(_) {}
+
+  try { db.exec("ALTER TABLE support_tickets ADD COLUMN closed_at TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE support_tickets ADD COLUMN resolved_at TEXT;"); } catch(_) {}
 
   try {
     db.exec(`

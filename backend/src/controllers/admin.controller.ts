@@ -287,12 +287,23 @@ export const getAllSessionsFinancialLogs = (req: Request, res: Response) => {
 export const getAdminBlockedUsersList = (req: Request, res: Response) => {
   try {
     const blocked = db.prepare(`
-      SELECT b.id, b.user_name, b.created_at, b.consultant_id, c.display_name as consultant_name
+      SELECT b.id, b.user_name, b.created_at, b.consultant_id, c.display_name as consultant_name,
+             (SELECT u.id FROM users u WHERE LOWER(u.display_name) = LOWER(b.user_name) LIMIT 1) as user_id
       FROM blocked_users b
       JOIN consultants c ON b.consultant_id = c.id
       ORDER BY b.id DESC
     `).all();
     res.json(blocked);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteBlockedUserRecordByAdmin = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    db.prepare('DELETE FROM blocked_users WHERE id = ?').run(Number(id));
+    res.json({ success: true, message: 'Block list entry removed successfully.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

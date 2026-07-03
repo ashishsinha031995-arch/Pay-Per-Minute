@@ -323,6 +323,8 @@ export function AdminPanel() {
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [sentEmails, setSentEmails] = useState<any[]>([]);
+  const [adminNotifications, setAdminNotifications] = useState<any[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   
   // Common UI State
   const [loading, setLoading] = useState(true);
@@ -381,6 +383,9 @@ export function AdminPanel() {
   const [filterQueueStatus, setFilterQueueStatus] = useState('all');
   const [sortQueueBy, setSortQueueBy] = useState('queue-desc');
 
+  // Search & Filter state for Blocked list
+  const [searchBlocked, setSearchBlocked] = useState('');
+
   // State to track manual refresh spinner animation
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -405,7 +410,7 @@ export function AdminPanel() {
       if (!silent) setLoading(true);
       setError(null);
 
-      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes, queuesRes] = await Promise.all([
+      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes, queuesRes, notifRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/consultants'),
         fetch('/api/admin/sessions'),
@@ -415,10 +420,11 @@ export function AdminPanel() {
         fetch('/api/admin/emails'),
         fetch('/api/admin/reviews'),
         fetch('/api/admin/wallet/adjustments'),
-        fetch('/api/admin/queues')
+        fetch('/api/admin/queues'),
+        fetch('/api/admin/notifications')
       ]);
 
-      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok || !adjRes.ok || !queuesRes.ok) {
+      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok || !adjRes.ok || !queuesRes.ok || !notifRes.ok) {
         throw new Error('Failed to load admin dataset');
       }
 
@@ -432,6 +438,7 @@ export function AdminPanel() {
       const reviewsData = await reviewsRes.json();
       const adjData = await adjRes.json();
       const queuesData = await queuesRes.json();
+      const notifData = await notifRes.json();
 
       setStats(statsData);
       setCommissionRateInput(statsData.commissionRate.toString());
@@ -444,6 +451,9 @@ export function AdminPanel() {
       setAdminUsers(usersData);
       setSentEmails(emailsData);
       setReviews(reviewsData);
+      if (notifData.success) {
+        setAdminNotifications(notifData.notifications || []);
+      }
       if (queuesData.success) {
         setLiveQueues(queuesData.liveQueues || []);
       }
@@ -934,6 +944,21 @@ export function AdminPanel() {
     }
   };
 
+  const handleRemoveConsultantBlock = async (blockId: number) => {
+    try {
+      const res = await fetch(`/api/admin/blocked/${blockId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Failed to remove consultant-client block entry');
+      setSuccessMsg('Consultant-client block entry removed successfully.');
+      loadAdminData();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const handleOpenEditUser = (user: any) => {
     setEditingUser(user);
     setUsrDisplayName(user.display_name || '');
@@ -1070,14 +1095,73 @@ export function AdminPanel() {
     }
   };
 
-  // Broadcaster tool simulation
-  const handleBroadcast = (e: React.FormEvent) => {
+  // Broadcaster tool with SQLite integration
+  const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle || !broadcastMessage) return;
-    setSuccessMsg(`Broadcast message trigger fired to ${broadcastTarget} via ${broadcastChannel.toUpperCase()} channel!`);
-    setBroadcastTitle('');
-    setBroadcastMessage('');
-    setTimeout(() => setSuccessMsg(null), 4000);
+    try {
+      const mappedTarget = broadcastTarget === 'all' ? 'both' : broadcastTarget === 'users' ? 'user' : 'consultant';
+      const res = await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: broadcastTitle,
+          message: broadcastMessage,
+          target_type: mappedTarget
+        })
+      });
+      if (res.ok) {
+        setSuccessMsg(`Broadcast notification sent successfully to ${broadcastTarget}!`);
+        setBroadcastTitle('');
+        setBroadcastMessage('');
+        loadAdminData(true);
+        setTimeout(() => setSuccessMsg(null), 3000);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to send notification');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error sending notification');
+    }
+  };
+
+  const handleToggleNotificationStatus = async (id: number) => {
+    try {
+      const res = await fetch(`/api/admin/notifications/${id}/toggle-status`, {
+        method: 'PUT'
+      });
+      if (res.ok) {
+        setSuccessMsg('Notification status toggled successfully!');
+        loadAdminData(true);
+        setTimeout(() => setSuccessMsg(null), 2000);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to toggle status');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleDeleteNotification = async (id: number) => {
+    if (!window.confirm('Kripya confirm karein, kya aap is notification ko delete karna chahte hain?')) return;
+    try {
+      const res = await fetch(`/api/admin/notifications/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setSuccessMsg('Notification has been deleted!');
+        loadAdminData(true);
+        setTimeout(() => setSuccessMsg(null), 2000);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to delete notification');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
   // --- Consultants Filtering & Search ---
@@ -1281,6 +1365,7 @@ export function AdminPanel() {
     { id: 'subscriptions', label: 'Subscription Plans', icon: Award, badge: plans.length },
     { id: 'users', label: 'User Accounts', icon: UserCheck, badge: adminUsers.length },
     { id: 'sessions', label: 'Chat Sessions', icon: MessageSquare, badge: sessions.length },
+    { id: 'blocked_list', label: 'Advisor Block List', icon: ShieldAlert, badge: blockedLogs.length },
     { id: 'payments', label: 'Payment Logs', icon: CreditCard },
     { id: 'wallets', label: 'Wallet Management', icon: Wallet },
     { id: 'commissions', label: 'Commission Settings', icon: Percent },
@@ -3370,6 +3455,113 @@ export function AdminPanel() {
           )}
 
           {/* ========================================================= */}
+          {/* TAB: ADVISOR BLOCK LIST */}
+          {activeTab === 'blocked_list' && (() => {
+            const query = searchBlocked.toLowerCase().trim();
+            const filteredBlocked = blockedLogs.filter(b => {
+              if (!query) return true;
+              return (
+                b.user_name?.toLowerCase().includes(query) ||
+                b.consultant_name?.toLowerCase().includes(query) ||
+                b.consultant_id?.toString().includes(query) ||
+                (b.user_id && b.user_id.toString().includes(query))
+              );
+            });
+
+            return (
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Advisor-Client Block List Registry</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    Track advisor-initiated user blocks and administratively unblock them.
+                  </p>
+                </div>
+
+                {/* Search Bar */}
+                <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex flex-col md:flex-row items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search by Advisor Name/ID or User Name/ID..."
+                      value={searchBlocked}
+                      onChange={(e) => setSearchBlocked(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 focus:border-slate-700 text-slate-100 rounded-xl text-xs font-medium focus:outline-none placeholder-slate-500"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setSearchBlocked('')}
+                    className="text-xs font-mono font-bold text-slate-400 hover:text-slate-200 px-3 py-2 border border-slate-800 rounded-xl bg-slate-900 hover:bg-slate-850"
+                  >
+                    Clear Filter
+                  </button>
+                </div>
+
+                {/* Block List Table */}
+                <div className="bg-slate-950 border border-slate-850 rounded-2xl overflow-hidden">
+                  {filteredBlocked.length === 0 ? (
+                    <div className="text-center py-16 text-slate-500 text-xs font-mono">
+                      🛡️ No active advisor-client block entries found.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-850 text-slate-400 font-mono uppercase text-[10px] tracking-wider bg-slate-900/40">
+                            <th className="px-4 py-3">Block ID</th>
+                            <th className="px-4 py-3">Advisor Details</th>
+                            <th className="px-4 py-3">Blocked Client Details</th>
+                            <th className="px-4 py-3">Blocked On Date</th>
+                            <th className="px-4 py-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-850">
+                          {filteredBlocked.map((b) => (
+                            <tr key={b.id} className="hover:bg-slate-900/30 transition-colors">
+                              <td className="px-4 py-4 font-mono font-bold text-slate-500 text-[11px]">
+                                #{b.id}
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-slate-200 text-xs block">{b.consultant_name}</span>
+                                  <span className="text-[10px] text-slate-500 font-mono block">Advisor ID: {b.consultant_id}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-slate-200 text-xs block">{b.user_name}</span>
+                                  <span className="text-[10px] text-slate-500 font-mono block">
+                                    Client ID: {b.user_id ? b.user_id : <span className="text-slate-600">N/A (unmatched)</span>}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 font-mono text-slate-400 text-[11px]">
+                                {new Date(b.created_at).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Kya aap sure hain ki Advisor "${b.consultant_name}" dwara "${b.user_name}" par lagaye block ko remove karna chahte hain? Isse user fir se contact kar payega.`)) {
+                                      handleRemoveConsultantBlock(b.id);
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 hover:border-rose-500/30 transition-all cursor-pointer"
+                                >
+                                  Remove Block ✓
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ========================================================= */}
           {/* 2.5 TAB: CHAT SESSION MANAGEMENT */}
           {activeTab === 'sessions' && (
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-left">
@@ -4466,71 +4658,155 @@ export function AdminPanel() {
           {/* 2.13 TAB: NOTIFICATIONS MODULE */}
           {activeTab === 'notifications' && (
             <div className="space-y-6 text-left animate-in fade-in duration-200">
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-xl">
-                <h3 className="text-base font-bold text-slate-100 mb-1">Broadcaster Multi-Channel Alert Tool</h3>
-                <p className="text-xs text-slate-400 font-mono mb-4">Send instant emails, push alerts, or in-app messages to all registered devices</p>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                <form onSubmit={handleBroadcast} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
+                {/* Send Notification Form */}
+                <div className="lg:col-span-1 bg-slate-900 border border-slate-800 p-6 rounded-3xl h-fit">
+                  <h3 className="text-base font-bold text-slate-100 mb-1 flex items-center gap-2">
+                    <Megaphone className="w-4 h-4 text-emerald-400" />
+                    <span>Broadcaster Alert Tool</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono mb-4">Send instant broadcasts and in-app bell updates in real-time</p>
+                  
+                  <form onSubmit={handleBroadcast} className="space-y-4">
                     <div>
                       <label className="block text-[11px] text-slate-400 font-mono mb-1">Target Audience</label>
                       <select
                         value={broadcastTarget}
                         onChange={e => setBroadcastTarget(e.target.value as any)}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none"
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:border-emerald-500/50"
                       >
-                        <option value="all">All Registrations</option>
-                        <option value="users">Clients Only</option>
-                        <option value="consultants">Experts Only</option>
+                        <option value="all">All (Users & Consultants)</option>
+                        <option value="users">Clients / Users Only</option>
+                        <option value="consultants">Consultants / Experts Only</option>
                       </select>
                     </div>
+
                     <div>
-                      <label className="block text-[11px] text-slate-400 font-mono mb-1">Alert Channel</label>
-                      <select
-                        value={broadcastChannel}
-                        onChange={e => setBroadcastChannel(e.target.value as any)}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none"
-                      >
-                        <option value="in_app">In-App Notification</option>
-                        <option value="push">Mobile Push Alert</option>
-                        <option value="email">Email Campaign</option>
-                        <option value="sms">SMS Text Alert</option>
-                      </select>
+                      <label className="block text-[11px] text-slate-400 font-mono mb-1">Alert Title / Subject *</label>
+                      <input
+                        type="text"
+                        value={broadcastTitle}
+                        onChange={e => setBroadcastTitle(e.target.value)}
+                        placeholder="e.g. Server Maintenance or Promo Code!"
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:border-emerald-500/50"
+                        required
+                      />
                     </div>
+
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-mono mb-1">Notification Message Copy *</label>
+                      <textarea
+                        value={broadcastMessage}
+                        onChange={e => setBroadcastMessage(e.target.value)}
+                        placeholder="Type real-time message description here..."
+                        rows={4}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:border-emerald-500/50 resize-none"
+                        required
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-slate-950 font-bold py-2.5 rounded-xl text-xs w-full transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Transmit Broadcast Alert</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Sent Broadcasts DB Controller list */}
+                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-6 rounded-3xl flex flex-col">
+                  <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-emerald-400" />
+                        <span>Controllable System Broadcasts</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 font-mono">Actively control visibility, target segments, and existence of alerts</p>
+                    </div>
+                    <span className="bg-slate-950 text-slate-400 px-3 py-1 text-[10px] rounded-lg border border-slate-800 font-mono font-bold">
+                      Count: {adminNotifications.length}
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] text-slate-400 font-mono mb-1">Alert Title / Subject *</label>
-                    <input
-                      type="text"
-                      value={broadcastTitle}
-                      onChange={e => setBroadcastTitle(e.target.value)}
-                      placeholder="e.g. Festival 50% Cashback Balance Activated!"
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none"
-                      required
-                    />
-                  </div>
+                  {adminNotifications.length === 0 ? (
+                    <div className="text-xs text-slate-500 py-16 font-mono text-center bg-slate-950 rounded-2xl border border-slate-850 flex flex-col items-center justify-center space-y-2">
+                      <span>📭 No alerts recorded in database yet.</span>
+                      <span className="text-[10px] text-slate-600">Draft your first alert to transmit immediately!</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-1">
+                      {adminNotifications.map((notif: any) => {
+                        const dateStr = notif.created_at ? new Date(notif.created_at).toLocaleString() : 'N/A';
+                        const isActive = notif.is_active === 1 || notif.is_active === true;
+                        
+                        return (
+                          <div 
+                            key={notif.id} 
+                            className={`p-4 rounded-2xl border transition-all ${
+                              isActive 
+                                ? 'bg-slate-950/90 border-slate-800' 
+                                : 'bg-slate-950/40 border-slate-900/60 opacity-65'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-900 pb-2.5 mb-2.5">
+                              <div className="flex items-center space-x-2">
+                                <span className={`text-[9px] font-mono font-black uppercase px-2 py-0.5 rounded-md ${
+                                  notif.target_type === 'both' 
+                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/15' 
+                                    : notif.target_type === 'user'
+                                      ? 'bg-purple-500/10 text-purple-400 border border-purple-500/15'
+                                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
+                                }`}>
+                                  Target: {notif.target_type === 'both' ? 'All (User + Cons)' : notif.target_type === 'user' ? 'Users Only' : 'Consultants Only'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono">ID: #{notif.id}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-mono">{dateStr}</span>
+                            </div>
 
-                  <div>
-                    <label className="block text-[11px] text-slate-400 font-mono mb-1">Notification Message Copy *</label>
-                    <textarea
-                      value={broadcastMessage}
-                      onChange={e => setBroadcastMessage(e.target.value)}
-                      placeholder="Type broadcast copy here..."
-                      rows={4}
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none resize-none"
-                      required
-                    />
-                  </div>
+                            <h4 className="text-xs font-bold text-slate-200 mb-1">{notif.title}</h4>
+                            <p className="text-xs text-slate-400 leading-relaxed font-sans mb-3">{notif.message}</p>
 
-                  <button
-                    type="submit"
-                    className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2.5 rounded-xl text-xs w-full transition-all flex items-center justify-center space-x-2"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Transmit Broadcast Alert Campaign</span>
-                  </button>
-                </form>
+                            <div className="flex items-center justify-between pt-2.5 border-t border-slate-900/40">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-[11px] text-slate-500">Status:</span>
+                                <span className={`text-[10px] font-mono font-bold ${isActive ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                  {isActive ? '● Active (Visible)' : '○ Inactive (Hidden)'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleToggleNotificationStatus(notif.id)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border transition-colors flex items-center space-x-1 cursor-pointer ${
+                                    isActive
+                                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
+                                      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                  }`}
+                                  title="Toggle active visibility for users"
+                                >
+                                  {isActive ? '⏸ Disable' : '▶ Enable'}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteNotification(notif.id)}
+                                  className="bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/35 text-rose-400 px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                                  title="Permanently Delete notification"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
               </div>
 
               {/* Simulated SMTP Outbox Log */}

@@ -30,11 +30,50 @@ export const ChatMemoryService = {
       is_read: 0
     };
     messages.push(msg);
+
+    // Save directly to the database immediately to prevent loss on server restart!
+    try {
+      const result = db.prepare(`
+        INSERT INTO messages (session_id, sender_type, sender_name, text, created_at, is_read)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(sessionId, senderType, senderName, text, msg.created_at, msg.is_read);
+      
+      if (result && result.lastInsertRowid) {
+        msg.id = Number(result.lastInsertRowid);
+      }
+    } catch (err) {
+      console.error('[ChatMemoryService] Error inserting message to DB:', err);
+    }
+
     return msg;
   },
 
   getMessages(sessionId: string): MemoryMessage[] {
-    return activeSessionMessages.get(sessionId) || [];
+    let messages = activeSessionMessages.get(sessionId);
+    if (!messages || messages.length === 0) {
+      // Fetch individual messages from the database
+      try {
+        const dbMsgs = db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY id ASC').all(sessionId) as any[];
+        messages = dbMsgs.map(m => ({
+          id: m.id,
+          session_id: m.session_id,
+          sender_type: m.sender_type,
+          sender_name: m.sender_name,
+          text: m.text,
+          created_at: m.created_at,
+          is_read: m.is_read
+        }));
+        // Cache back to active memory if there is an active session
+        const sess = db.prepare("SELECT status FROM sessions WHERE id = ?").get(sessionId) as { status: string } | undefined;
+        if (sess && sess.status === 'active') {
+          activeSessionMessages.set(sessionId, messages);
+        }
+      } catch (err) {
+        console.error('[ChatMemoryService] Error loading messages from DB:', err);
+        messages = [];
+      }
+    }
+    return messages;
   },
 
   markAsRead(sessionId: string, readerType: 'user' | 'consultant') {
@@ -47,11 +86,39 @@ export const ChatMemoryService = {
         }
       }
     }
+    // Also mark as read in the database
+    try {
+      const partnerType = readerType === 'user' ? 'consultant' : 'user';
+      db.prepare(`
+        UPDATE messages 
+        SET is_read = 1 
+        WHERE session_id = ? AND sender_type = ?
+      `).run(sessionId, partnerType);
+    } catch (err) {
+      console.error('[ChatMemoryService] Error marking messages as read in DB:', err);
+    }
   },
 
   // This function is called when a session ends to consolidate and persist the messages.
   consolidateAndSave(sessionId: string): { transcript: string; consultantMsgCount: number } {
-    const messages = activeSessionMessages.get(sessionId) || [];
+    let messages = activeSessionMessages.get(sessionId) || [];
+    if (messages.length === 0) {
+      // Fallback to fetching individual messages from the database
+      try {
+        const dbMsgs = db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY id ASC').all(sessionId) as any[];
+        messages = dbMsgs.map(m => ({
+          id: m.id,
+          session_id: m.session_id,
+          sender_type: m.sender_type,
+          sender_name: m.sender_name,
+          text: m.text,
+          created_at: m.created_at,
+          is_read: m.is_read
+        }));
+      } catch (err) {
+        console.error('[ChatMemoryService] Error loading messages from DB during consolidation:', err);
+      }
+    }
     
     // 1. Generate the transcript using individual messages
     const transcript = messages.map(m => {
@@ -61,30 +128,9 @@ export const ChatMemoryService = {
     }).join('\n');
 
     const consultantMsgs = messages.filter(m => m.sender_type === 'consultant');
-    const userMsgs = messages.filter(m => m.sender_type === 'user');
 
-    // 2. Save at most 2 consolidated rows to SQLite/MongoDB database: One for the entire User, one for the entire Consultant.
-    if (userMsgs.length > 0) {
-      // consolidate user messages
-      const userText = userMsgs.map(m => m.text).join('\n');
-      const firstUserMsg = userMsgs[0];
-      
-      db.prepare(`
-        INSERT INTO messages (session_id, sender_type, sender_name, text, created_at, is_read)
-        VALUES (?, ?, ?, ?, ?, 1)
-      `).run(sessionId, 'user', firstUserMsg.sender_name, userText, firstUserMsg.created_at);
-    }
-
-    if (consultantMsgs.length > 0) {
-      // consolidate consultant messages
-      const consultantText = consultantMsgs.map(m => m.text).join('\n');
-      const firstConsultantMsg = consultantMsgs[0];
-      
-      db.prepare(`
-        INSERT INTO messages (session_id, sender_type, sender_name, text, created_at, is_read)
-        VALUES (?, ?, ?, ?, ?, 1)
-      `).run(sessionId, 'consultant', firstConsultantMsg.sender_name, consultantText, firstConsultantMsg.created_at);
-    }
+    // 2. We DO NOT insert consolidated rows anymore because we already have all individual messages stored immediately in the DB!
+    // Storing consolidated rows in addition to individual rows would result in duplicate messages being displayed in the chat.
 
     // 3. Clear memory for this session
     activeSessionMessages.delete(sessionId);

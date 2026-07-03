@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../config/database.js';
 import { sendEmail, sendConsultantCredentials } from '../helpers/email.helper.js';
-import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId } from '../services/payment.service.js';
+import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
 
 export const userSignUp = (req: Request, res: Response) => {
   try {
@@ -160,7 +160,14 @@ export const consultantRegister = (req: Request, res: Response) => {
     }
 
     let plan: any = null;
-    let price = initial_price_per_minute ? parseFloat(initial_price_per_minute) : 15.0;
+    let price = 15.0;
+    const rawRegisterPrice = initial_price_per_minute !== undefined ? initial_price_per_minute : req.body.price_per_minute;
+    if (rawRegisterPrice !== undefined && rawRegisterPrice !== null && rawRegisterPrice !== '') {
+      const parsed = parseFloat(rawRegisterPrice.toString());
+      if (!isNaN(parsed) && parsed > 0) {
+        price = parsed;
+      }
+    }
     let expiryDate: Date | null = null;
 
     if (plan_id) {
@@ -183,7 +190,7 @@ export const consultantRegister = (req: Request, res: Response) => {
           }
           const text = order_id + "|" + payment_id;
           const generated_signature = crypto
-            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+            .createHmac('sha256', getCleanRazorpayKeySecret()!)
             .update(text)
             .digest('hex');
 
@@ -285,52 +292,40 @@ export const consultantRegisterCreateOrder = async (req: Request, res: Response)
 
     const razorpayClient = getRazorpayClient();
 
-    if (razorpayClient) {
-      try {
-        const order = await razorpayClient.orders.create({
-          amount: amount_in_paise,
-          currency: 'INR',
-          receipt: `receipt_sub_${Date.now()}`,
-          notes: {
-            plan_id: plan_id.toString(),
-            plan_name: plan.name,
-            total_paid: totalPaid.toString(),
-          },
-        });
-
-        return res.json({
-          success: true,
-          is_free: false,
-          is_mock: false,
-          key_id: getCleanRazorpayKeyId(),
-          order_id: order.id,
-          amount: order.amount,
-          currency: order.currency,
-          total_paid: totalPaid,
-          base_price: basePrice,
-          gst_amount: gstAmount,
-          gst_rate: gstRate,
-        });
-      } catch (err: any) {
-        console.log('[Registration] Initializing sandbox fallback checkout.');
-      }
+    if (!razorpayClient) {
+      return res.status(400).json({ error: 'Razorpay keys are missing or invalid in backend configuration. Please ensure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are configured correctly in your environment.' });
     }
 
-    // Fallback Mock Order
-    const mock_order_id = `order_sub_mock_${Math.random().toString(36).slice(2, 11)}`;
-    res.json({
-      success: true,
-      is_free: false,
-      is_mock: true,
-      key_id: getCleanRazorpayKeyId() || 'rzp_test_U5XqYtZ1w2v3u4',
-      order_id: mock_order_id,
-      amount: amount_in_paise,
-      currency: 'INR',
-      total_paid: totalPaid,
-      base_price: basePrice,
-      gst_amount: gstAmount,
-      gst_rate: gstRate,
-    });
+    try {
+      const order = await razorpayClient.orders.create({
+        amount: amount_in_paise,
+        currency: 'INR',
+        receipt: `receipt_sub_${Date.now()}`,
+        notes: {
+          plan_id: plan_id.toString(),
+          plan_name: plan.name,
+          total_paid: totalPaid.toString(),
+        },
+      });
+
+      return res.json({
+        success: true,
+        is_free: false,
+        is_mock: false,
+        key_id: getResponseRazorpayKeyId(false),
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        total_paid: totalPaid,
+        base_price: basePrice,
+        gst_amount: gstAmount,
+        gst_rate: gstRate,
+      });
+    } catch (err: any) {
+      console.error('[Registration] Razorpay registration order creation failed:', err);
+      const errMsg = getRazorpayErrorMessage(err);
+      return res.status(400).json({ error: `Razorpay registration order creation failed: ${errMsg}` });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -383,7 +378,7 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
         }
         const text = order_id + "|" + payment_id;
         const generated_signature = crypto
-          .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+          .createHmac('sha256', getCleanRazorpayKeySecret()!)
           .update(text)
           .digest('hex');
 
@@ -393,11 +388,18 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
       }
     }
 
-    const newPassword = Math.random().toString(36).slice(-8);
+    const newPassword = consultant.password || Math.random().toString(36).slice(-8);
     const updatedUsername = cleanUsername || consultant.username;
     const updatedDisplayName = display_name ? display_name.trim() : consultant.display_name;
     const updatedCategory = category || consultant.category || 'Consultants';
-    const updatedPrice = price_per_minute ? parseFloat(price_per_minute) : (consultant.price_per_minute || 15.0);
+    let updatedPrice = consultant.price_per_minute || 15.0;
+    const rawPrice = price_per_minute !== undefined ? price_per_minute : (req.body.initial_price_per_minute !== undefined ? req.body.initial_price_per_minute : undefined);
+    if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+      const parsed = parseFloat(rawPrice.toString());
+      if (!isNaN(parsed) && parsed > 0) {
+        updatedPrice = parsed;
+      }
+    }
 
     if (plan.max_consultant_rate !== undefined && updatedPrice > plan.max_consultant_rate) {
       return res.status(400).json({ error: `Selected plan "${plan.name}" ke mutabik, maximum call rate ₹${plan.max_consultant_rate}/minute hi allow hai. Please select a lower rate.` });

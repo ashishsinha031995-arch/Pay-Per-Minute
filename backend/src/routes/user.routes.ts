@@ -27,6 +27,11 @@ import {
   updateConsultantSchedule,
   deleteConsultantSchedule
 } from '../controllers/user.controller.js';
+import {
+  getClientNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead
+} from '../controllers/notifications.controller.js';
 
 const router = Router();
 
@@ -67,5 +72,10 @@ router.get('/consultants/:id/schedules', getConsultantSchedules);
 router.post('/consultants/:id/schedules', createConsultantSchedule);
 router.put('/consultants/:id/schedules/:scheduleId', updateConsultantSchedule);
 router.delete('/consultants/:id/schedules/:scheduleId', deleteConsultantSchedule);
+
+// Client Notifications (Universal)
+router.get('/notifications', getClientNotifications);
+router.post('/notifications/:id/read', markNotificationAsRead);
+router.post('/notifications/read-all', markAllNotificationsAsRead);
 
 export default router;

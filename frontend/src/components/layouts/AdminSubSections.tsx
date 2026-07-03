@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Edit, Check, X, Shield, Lock, Trash, HelpCircle, 
   Send, Bell, Mail, Phone, MessageSquare, AlertCircle, RefreshCw, Sparkles, AlertTriangle,
   Filter, Calendar, TrendingUp, CreditCard, ChevronRight, ShoppingCart, Percent, Layers, Landmark, Info,
-  Award, Search, Users, Wallet, Coins
+  Award, Search, Users, Wallet, Coins, Eye, Clock, CheckCircle
 } from 'lucide-react';
 import { 
   revenueTrendData, growthTrendData, packageSalesData, 
@@ -1807,6 +1807,7 @@ export function SupportTicketsPanel() {
       });
       if (res.ok) {
         setSuccess('Ticket closed successfully!');
+        setSelectedTicket(null);
         fetchTickets();
       } else {
         const data = await res.json();
@@ -1829,6 +1830,7 @@ export function SupportTicketsPanel() {
       });
       if (res.ok) {
         setSuccess('Ticket marked as resolved successfully!');
+        setSelectedTicket(null);
         fetchTickets();
       } else {
         const data = await res.json();
@@ -1931,210 +1933,387 @@ export function SupportTicketsPanel() {
             No support tickets match the selected criteria.
           </div>
         ) : (
-          <div className="space-y-4">
-            {filteredTickets.map(t => (
-              <div key={t.id} className="bg-slate-950 p-5 rounded-xl border border-slate-850 flex flex-col md:flex-row md:items-start justify-between gap-4 hover:border-slate-800 transition-colors">
-                <div className="space-y-2 max-w-2xl w-full">
-                  <div className="flex items-center space-x-2 flex-wrap gap-1.5">
-                    <span className="bg-slate-900 text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded border border-slate-800">
-                      ID: #{t.id}
-                    </span>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                      t.sender_type === 'user' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/15' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
-                    }`}>
-                      {t.sender_type === 'user' ? '👤 User' : '🙋 Consultant'}
-                    </span>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                      t.status === 'closed' 
-                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/15'
-                        : t.status === 'resolved' 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' 
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse'
-                    }`}>
-                      {(t.status || 'open').toUpperCase()}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {new Date(t.created_at).toLocaleString()}
-                    </span>
-                  </div>
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-inner">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-900/60 text-slate-400 font-mono font-bold">
+                  <th className="p-3 text-center w-16">ID</th>
+                  <th className="p-3 w-40">SENDER</th>
+                  <th className="p-3">SUBJECT</th>
+                  <th className="p-3 w-28">STATUS</th>
+                  <th className="p-3 w-40">ACTION TAKEN</th>
+                  <th className="p-3 w-32">RAISE DATE</th>
+                  <th className="p-3 w-32">CLOSED DATE</th>
+                  <th className="p-3 text-center w-24">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850 text-slate-300">
+                {filteredTickets.map(t => {
+                  let actionTakenLabel = "Awaiting Response";
+                  let actionTakenColor = "bg-amber-500/10 text-amber-400 border border-amber-500/25";
+                  
+                  if (t.status === 'closed') {
+                    actionTakenLabel = "Ticket Closed";
+                    actionTakenColor = "bg-rose-500/10 text-rose-400 border border-rose-500/25";
+                  } else if (t.status === 'resolved') {
+                    actionTakenLabel = "Resolved";
+                    actionTakenColor = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/25";
+                  } else if (t.replies && t.replies.length > 0) {
+                    const lastReply = t.replies[t.replies.length - 1];
+                    if (lastReply.sender_type === 'admin') {
+                      actionTakenLabel = `Admin Replied (${t.replies.filter((r: any) => r.sender_type === 'admin').length})`;
+                      actionTakenColor = "bg-sky-500/10 text-sky-400 border border-sky-500/25";
+                    } else {
+                      actionTakenLabel = "Awaiting Admin Action";
+                      actionTakenColor = "bg-amber-500/10 text-amber-400 border border-amber-500/25";
+                    }
+                  }
 
-                  <h4 className="text-xs font-bold text-slate-100">{t.subject}</h4>
-                  <p className="text-xs text-slate-300 bg-slate-900/55 p-3 rounded-lg border border-slate-850/60 leading-relaxed font-sans">
-                    {t.message}
-                  </p>
+                  const raisedDate = new Date(t.created_at).toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
 
-                  <div className="text-[10px] text-slate-400 space-y-1 bg-slate-900/20 p-2 rounded border border-slate-850/30">
-                    <div>Sender: <strong className="text-slate-200">{t.sender_name}</strong> (ID: {t.sender_id})</div>
-                    {t.session_id && (
-                      <div className="text-emerald-400 font-mono">
-                        Reference Chat Session ID: <strong className="text-slate-200">#{t.session_id}</strong>
-                      </div>
-                    )}
-                  </div>
+                  const closedDate = t.closed_at 
+                    ? new Date(t.closed_at).toLocaleDateString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : t.status === 'closed' && t.replied_at
+                      ? new Date(t.replied_at).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : '—';
 
-                  {/* Conversation Thread */}
-                  {t.replies && t.replies.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-slate-850/65 space-y-2.5">
-                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block mb-1">Conversation History:</span>
-                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                        {t.replies.map((reply: any) => (
-                          <div 
-                            key={reply.id} 
-                            className={`p-3 rounded-xl text-xs space-y-1 ${
-                              reply.sender_type === 'admin' 
-                                ? 'bg-emerald-950/20 border border-emerald-800/20 ml-8 text-right' 
-                                : 'bg-slate-900 border border-slate-850 text-left mr-8'
-                            }`}
-                          >
-                            <div className={`flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold font-mono ${reply.sender_type === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                              <span className={reply.sender_type === 'admin' ? 'text-emerald-400' : reply.sender_type === 'user' ? 'text-blue-400' : 'text-purple-400'}>
-                                {reply.sender_type === 'admin' ? '🛡 Admin Support' : reply.sender_type === 'user' ? `👤 Client (${reply.sender_name})` : `🙋 Expert (${reply.sender_name})`}
-                              </span>
-                              <span className="text-slate-500">•</span>
-                              <span className="text-slate-500 font-normal">{new Date(reply.created_at).toLocaleString()}</span>
-                            </div>
-                            <p className={`text-xs ${reply.sender_type === 'admin' ? 'text-emerald-100' : 'text-slate-200'} leading-relaxed whitespace-pre-wrap`}>
-                              {reply.message}
-                            </p>
+                  return (
+                    <tr key={t.id} className="hover:bg-slate-900/40 transition-colors">
+                      <td className="p-3 text-center font-mono text-slate-400 font-bold">#{t.id}</td>
+                      <td className="p-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center space-x-1">
+                            <span>{t.sender_type === 'user' ? '👤' : '🙋'}</span>
+                            <span className="text-slate-200 font-bold max-w-[120px] truncate block" title={t.sender_name}>
+                              {t.sender_name}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {t.status !== 'closed' && (
-                  <div className="flex flex-col sm:flex-row md:flex-col items-stretch gap-2 shrink-0 md:self-start w-full md:w-auto">
-                    <button
-                      onClick={() => {
-                        setSelectedTicket(t);
-                        setAdminReplyText('');
-                        setConfirmingCloseId(null);
-                        setConfirmingResolveId(null);
-                      }}
-                      className="bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 font-extrabold px-4 py-2 rounded-xl text-xs transition-all uppercase tracking-wider shadow-md hover:shadow-emerald-500/5 text-center"
-                    >
-                      Reply
-                    </button>
-                    {t.status !== 'resolved' && (
-                      <button
-                        onClick={() => {
-                          if (confirmingResolveId === t.id) {
-                            handleResolveTicket(t.id);
-                            setConfirmingResolveId(null);
-                          } else {
-                            setConfirmingResolveId(t.id);
+                          <span className="text-[10px] text-slate-500 font-mono block">ID: {t.sender_id}</span>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="space-y-0.5">
+                          <span className="text-slate-200 font-bold block max-w-xs truncate" title={t.subject}>
+                            {t.subject}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block max-w-xs truncate font-normal">
+                            {t.message}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full inline-block ${
+                          t.status === 'closed' 
+                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/15'
+                            : t.status === 'resolved' 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' 
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse'
+                        }`}>
+                          {(t.status || 'open').toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full inline-block font-mono font-bold ${actionTakenColor}`}>
+                          {actionTakenLabel}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-400 font-mono text-[11px]">{raisedDate}</td>
+                      <td className="p-3 text-slate-400 font-mono text-[11px]">
+                        <span className={t.status === 'closed' ? 'text-rose-400/90 font-bold font-mono' : ''}>
+                          {closedDate}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => {
+                            setSelectedTicket(t);
+                            setAdminReplyText('');
                             setConfirmingCloseId(null);
-                          }
-                        }}
-                        className={`font-extrabold px-4 py-2 rounded-xl text-xs transition-all uppercase tracking-wider text-center border cursor-pointer ${
-                          confirmingResolveId === t.id
-                            ? 'bg-amber-500 text-slate-950 border-amber-600 animate-pulse font-black'
-                            : 'bg-teal-500/15 hover:bg-teal-500/30 border-teal-500/20 text-teal-400 hover:text-teal-300'
-                        }`}
-                      >
-                        {confirmingResolveId === t.id ? '⚠️ Click to Confirm' : 'Mark Resolved'}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (confirmingCloseId === t.id) {
-                          handleCloseTicket(t.id);
-                          setConfirmingCloseId(null);
-                        } else {
-                          setConfirmingCloseId(t.id);
-                          setConfirmingResolveId(null);
-                        }
-                      }}
-                      className={`font-extrabold px-4 py-2 rounded-xl text-xs transition-all uppercase tracking-wider text-center border cursor-pointer ${
-                        confirmingCloseId === t.id
-                          ? 'bg-rose-600 text-white border-rose-700 animate-pulse font-black'
-                          : 'bg-rose-500/10 hover:bg-rose-500/25 border-rose-500/20 text-rose-400 hover:text-rose-300'
-                      }`}
-                    >
-                      {confirmingCloseId === t.id ? '⚠️ Click to Confirm' : 'Close Ticket'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                            setConfirmingResolveId(null);
+                          }}
+                          className="bg-slate-800 hover:bg-slate-700 hover:text-emerald-400 text-slate-200 font-bold px-3 py-1.5 rounded-xl transition-all inline-flex items-center space-x-1.5 border border-slate-750 cursor-pointer"
+                          title="View Ticket details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
-      {/* Reply Modal overlay */}
+      {/* Comprehensive View and Action Detail Modal */}
       {selectedTicket && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <h3 className="font-bold text-slate-100 text-sm">Respond to Ticket #{selectedTicket.id}</h3>
-                <p className="text-[10px] text-slate-400 font-mono">Raised by {selectedTicket.sender_name} ({selectedTicket.sender_type})</p>
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60 shrink-0">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="bg-slate-950 text-slate-400 text-[10px] font-mono px-2 py-0.5 rounded border border-slate-800 font-bold">
+                    TICKET ID: #{selectedTicket.id}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    selectedTicket.status === 'closed' 
+                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/15'
+                      : selectedTicket.status === 'resolved' 
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' 
+                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse'
+                  }`}>
+                    {(selectedTicket.status || 'open').toUpperCase()}
+                  </span>
+                </div>
+                <h3 className="font-extrabold text-slate-100 text-base leading-tight mt-1">{selectedTicket.subject}</h3>
               </div>
               <button
                 onClick={() => setSelectedTicket(null)}
-                className="text-slate-400 hover:text-white font-mono text-sm"
+                className="text-slate-400 hover:text-white bg-slate-950 p-2 border border-slate-800 rounded-xl transition-all cursor-pointer"
               >
-                ✕ Close
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleReplySubmit} className="p-5 space-y-4">
-              <div className="bg-slate-950 border border-slate-850 p-4 rounded-xl space-y-1 text-xs max-h-56 overflow-y-auto">
-                <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider">Ticket Subject:</span>
-                <strong className="text-slate-200 text-xs block mb-1">{selectedTicket.subject}</strong>
-                <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider">Original Message:</span>
-                <p className="text-slate-400 leading-relaxed whitespace-pre-wrap italic mt-1 bg-slate-900/60 p-2.5 rounded-lg border border-slate-850/40">
-                  "{selectedTicket.message}"
-                </p>
+            {/* Modal Scrollable Content Container */}
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-850">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Raised By Sender</span>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-sm">{selectedTicket.sender_type === 'user' ? '👤' : '🙋'}</span>
+                    <strong className="text-slate-200 text-xs font-bold">{selectedTicket.sender_name}</strong>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500 block">Type: {selectedTicket.sender_type.toUpperCase()} (ID: {selectedTicket.sender_id})</span>
+                </div>
 
-                {/* Show replies inside modal */}
-                {selectedTicket.replies && selectedTicket.replies.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-850 space-y-2">
-                    <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider">Thread History:</span>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Raise Date (Raised on)</span>
+                  <div className="flex items-center space-x-1.5 text-slate-300 font-mono text-xs">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{new Date(selectedTicket.created_at).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Closed Date (Status closed)</span>
+                  <div className="flex items-center space-x-1.5 text-slate-300 font-mono text-xs">
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                    <span className={selectedTicket.status === 'closed' ? 'text-rose-400 font-bold' : ''}>
+                      {selectedTicket.closed_at 
+                        ? new Date(selectedTicket.closed_at).toLocaleString('en-IN')
+                        : selectedTicket.status === 'closed' && selectedTicket.replied_at
+                          ? new Date(selectedTicket.replied_at).toLocaleString('en-IN')
+                          : 'Not Closed Yet'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Action Taken Status</span>
+                  <div>
+                    {(() => {
+                      let tagLabel = "Awaiting Action";
+                      let tagStyle = "bg-amber-500/10 text-amber-400 border border-amber-500/25";
+                      if (selectedTicket.status === 'closed') {
+                        tagLabel = "Closed By Admin";
+                        tagStyle = "bg-rose-500/10 text-rose-400 border border-rose-500/25";
+                      } else if (selectedTicket.status === 'resolved') {
+                        tagLabel = "Marked Resolved";
+                        tagStyle = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/25";
+                      } else if (selectedTicket.replies && selectedTicket.replies.length > 0) {
+                        const last = selectedTicket.replies[selectedTicket.replies.length - 1];
+                        if (last.sender_type === 'admin') {
+                          tagLabel = "Admin Replied";
+                          tagStyle = "bg-sky-500/10 text-sky-400 border border-sky-500/25";
+                        }
+                      }
+                      return (
+                        <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full inline-block ${tagStyle}`}>
+                          {tagLabel.toUpperCase()}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  {selectedTicket.session_id && (
+                    <span className="text-[9px] text-emerald-400 font-mono block mt-1">
+                      Session Reference: #{selectedTicket.session_id}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Original User Issue Message */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Original Query / Message</span>
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 relative">
+                  <span className="absolute right-4 top-2 text-slate-800 text-3xl font-serif select-none">“</span>
+                  <p className="text-slate-200 text-xs leading-relaxed whitespace-pre-wrap font-sans pr-6">
+                    {selectedTicket.message}
+                  </p>
+                </div>
+              </div>
+
+              {/* Conversation History / Replies Thread */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">
+                  Replies Thread ({selectedTicket.replies ? selectedTicket.replies.length : 0})
+                </span>
+                
+                {!selectedTicket.replies || selectedTicket.replies.length === 0 ? (
+                  <div className="text-center py-6 text-slate-500 text-xs font-mono bg-slate-950 rounded-xl border border-slate-850/50">
+                    No replies in this thread yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                     {selectedTicket.replies.map((reply: any) => (
-                      <div key={reply.id} className="p-2.5 rounded-lg bg-slate-900 border border-slate-850/60 text-left space-y-0.5">
-                        <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-semibold font-mono">
-                          <span>{reply.sender_type === 'admin' ? '🛡 Admin Support' : reply.sender_name}</span>
-                          <span className="text-slate-600">•</span>
-                          <span className="text-slate-500">{new Date(reply.created_at).toLocaleString()}</span>
+                      <div 
+                        key={reply.id} 
+                        className={`p-3.5 rounded-xl text-xs space-y-1.5 border ${
+                          reply.sender_type === 'admin' 
+                            ? 'bg-emerald-950/15 border-emerald-850/40 ml-12' 
+                            : 'bg-slate-950 border-slate-850 mr-12'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                          <span className={`font-bold flex items-center gap-1 ${
+                            reply.sender_type === 'admin' ? 'text-emerald-400' : reply.sender_type === 'user' ? 'text-blue-400' : 'text-purple-400'
+                          }`}>
+                            {reply.sender_type === 'admin' ? '🛡️ Admin Support' : reply.sender_type === 'user' ? `👤 Client (${reply.sender_name})` : `🙋 Expert (${reply.sender_name})`}
+                          </span>
+                          <span className="text-[9px] text-slate-500">
+                            {new Date(reply.created_at).toLocaleString('en-IN')}
+                          </span>
                         </div>
-                        <p className="text-slate-300 text-xs leading-relaxed">{reply.message}</p>
+                        <p className="text-slate-200 text-xs leading-relaxed whitespace-pre-wrap font-sans">
+                          {reply.message}
+                        </p>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Administrative Reply Message *</label>
-                <textarea
-                  required
-                  rows={4}
-                  value={adminReplyText}
-                  onChange={(e) => setAdminReplyText(e.target.value)}
-                  placeholder="Type your official administrative reply or resolution steps here. Submitting will send this reply to the ticket thread."
-                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-750 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full resize-none"
-                />
+              {/* Error/Success Banners inside Modal */}
+              {error && (
+                <div className="bg-rose-500/15 border border-rose-500/25 text-rose-400 text-xs px-4 py-3 rounded-xl font-mono">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              {/* Action and Reply Form Section */}
+              <div className="pt-4 border-t border-slate-800 space-y-4 bg-slate-900">
+                {selectedTicket.status === 'closed' ? (
+                  <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl text-center space-y-1">
+                    <span className="text-rose-400 font-extrabold text-xs block">🔒 TICKET COMPLETED & CLOSED</span>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      This helpdesk ticket is officially closed. No additional administrative replies can be added.
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleReplySubmit} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Administrative Reply *</label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={adminReplyText}
+                        onChange={(e) => setAdminReplyText(e.target.value)}
+                        placeholder="Type official support reply, troubleshooting instructions, or resolution details here..."
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full resize-none font-sans"
+                      />
+                    </div>
+
+                    {/* Action Buttons Grid */}
+                    <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                      
+                      {/* Left: Quick Admin Actions */}
+                      <div className="flex items-center gap-2">
+                        {selectedTicket.status !== 'resolved' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirmingResolveId === selectedTicket.id) {
+                                handleResolveTicket(selectedTicket.id);
+                                setConfirmingResolveId(null);
+                              } else {
+                                setConfirmingResolveId(selectedTicket.id);
+                                setConfirmingCloseId(null);
+                              }
+                            }}
+                            className={`font-bold px-4 py-2.5 rounded-xl text-[11px] transition-all uppercase tracking-wider border cursor-pointer ${
+                              confirmingResolveId === selectedTicket.id
+                                ? 'bg-amber-500 text-slate-950 border-amber-600 animate-pulse font-extrabold'
+                                : 'bg-teal-500/10 hover:bg-teal-500/20 border-teal-500/20 text-teal-400'
+                            }`}
+                          >
+                            {confirmingResolveId === selectedTicket.id ? '⚠️ Click to Confirm Resolve' : 'Mark Resolved'}
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirmingCloseId === selectedTicket.id) {
+                              handleCloseTicket(selectedTicket.id);
+                              setConfirmingCloseId(null);
+                            } else {
+                              setConfirmingCloseId(selectedTicket.id);
+                              setConfirmingResolveId(null);
+                            }
+                          }}
+                          className={`font-bold px-4 py-2.5 rounded-xl text-[11px] transition-all uppercase tracking-wider border cursor-pointer ${
+                            confirmingCloseId === selectedTicket.id
+                              ? 'bg-rose-600 text-white border-rose-700 animate-pulse font-extrabold'
+                              : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20 text-rose-400'
+                          }`}
+                        >
+                          {confirmingCloseId === selectedTicket.id ? '⚠️ Click to Confirm Close' : 'Close Ticket'}
+                        </button>
+                      </div>
+
+                      {/* Right: Submit Reply Button */}
+                      <div className="flex-1 flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={replying}
+                          className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 text-slate-950 text-xs font-extrabold py-2.5 px-6 rounded-xl transition-all shadow-md uppercase tracking-wider cursor-pointer"
+                        >
+                          {replying ? 'Submitting Reply...' : 'Submit Support Reply'}
+                        </button>
+                      </div>
+
+                    </div>
+                  </form>
+                )}
               </div>
 
-              <div className="flex space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedTicket(null)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2.5 px-4 rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={replying}
-                  className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 text-slate-950 text-xs font-black py-2.5 px-5 rounded-xl transition-all shadow-md flex-1 uppercase tracking-wider"
-                >
-                  {replying ? 'Submitting Reply...' : 'Submit Reply'}
-                </button>
-              </div>
-            </form>
+            </div>
+
           </div>
         </div>
       )}

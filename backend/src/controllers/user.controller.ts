@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db, logWalletTransaction } from '../config/database.js';
 import { getSalaryCycleInfo, checkAndResetMonthlyWallets } from '../utils/salary.js';
 import { processNextInQueue } from './payment.controller.js';
-import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId } from '../services/payment.service.js';
+import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -484,50 +484,39 @@ export const createRechargeOrder = async (req: Request, res: Response) => {
 
     const razorpayClient = getRazorpayClient();
 
-    if (razorpayClient) {
-      try {
-        const order = await razorpayClient.orders.create({
-          amount: amount_in_paise,
-          currency: 'INR',
-          receipt: `receipt_recharge_${Date.now()}`,
-          notes: {
-            user_id: id.toString(),
-            recharge_amount: rechargeVal.toString(),
-            total_paid: totalPaid.toString(),
-          },
-        });
-
-        return res.json({
-          success: true,
-          is_mock: false,
-          key_id: getCleanRazorpayKeyId(),
-          order_id: order.id,
-          amount: order.amount,
-          currency: order.currency,
-          total_paid: totalPaid,
-          recharge_amount: rechargeVal,
-          gst_amount: gstAmount,
-          gst_rate: gstRate,
-        });
-      } catch (err: any) {
-        console.log('[Recharge] Initializing sandbox fallback checkout.');
-      }
+    if (!razorpayClient) {
+      return res.status(400).json({ error: 'Razorpay keys are missing or invalid in backend configuration. Please ensure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are configured correctly in your environment.' });
     }
 
-    // Fallback Mock Recharge Order
-    const mock_order_id = `order_recharge_mock_${Math.random().toString(36).slice(2, 11)}`;
-    res.json({
-      success: true,
-      is_mock: true,
-      key_id: getCleanRazorpayKeyId() || 'rzp_test_U5XqYtZ1w2v3u4',
-      order_id: mock_order_id,
-      amount: amount_in_paise,
-      currency: 'INR',
-      total_paid: totalPaid,
-      recharge_amount: rechargeVal,
-      gst_amount: gstAmount,
-      gst_rate: gstRate,
-    });
+    try {
+      const order = await razorpayClient.orders.create({
+        amount: amount_in_paise,
+        currency: 'INR',
+        receipt: `receipt_recharge_${Date.now()}`,
+        notes: {
+          user_id: id.toString(),
+          recharge_amount: rechargeVal.toString(),
+          total_paid: totalPaid.toString(),
+        },
+      });
+
+      return res.json({
+        success: true,
+        is_mock: false,
+        key_id: getResponseRazorpayKeyId(false),
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        total_paid: totalPaid,
+        recharge_amount: rechargeVal,
+        gst_amount: gstAmount,
+        gst_rate: gstRate,
+      });
+    } catch (err: any) {
+      console.error('[Recharge] Razorpay recharge order creation failed:', err);
+      const errMsg = getRazorpayErrorMessage(err);
+      return res.status(400).json({ error: `Razorpay recharge order creation failed: ${errMsg}` });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -569,7 +558,7 @@ export const verifyRechargePayment = async (req: Request, res: Response) => {
       // Verify the Razorpay signature
       const text = order_id + "|" + payment_id;
       const generated_signature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+        .createHmac('sha256', getCleanRazorpayKeySecret()!)
         .update(text)
         .digest('hex');
 

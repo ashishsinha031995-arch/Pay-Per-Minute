@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db, logWalletTransaction } from '../config/database.js';
-import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId } from '../services/payment.service.js';
+import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
 import { ChatMemoryService } from '../services/chatMemory.js';
 
 export function getMicrosecondISO(): string {
@@ -34,42 +34,35 @@ export const createRazorpayOrMockOrder = async (req: Request, res: Response) => 
 
     const razorpayClient = getRazorpayClient();
 
-    if (razorpayClient) {
-      try {
-        const order = await razorpayClient.orders.create({
-          amount: amount_in_paise,
-          currency: 'INR',
-          receipt: `receipt_session_${Date.now()}`,
-          notes: {
-            consultant_id: consultant_id.toString(),
-            duration_minutes: duration_minutes.toString(),
-            user_name,
-          },
-        });
-        return res.json({
-          success: true,
-          is_mock: false,
-          key_id: getCleanRazorpayKeyId(),
-          order_id: order.id,
-          amount: order.amount,
-          currency: order.currency,
-          total_paid: total_amount_inr,
-        });
-      } catch (err: any) {
-        console.log('[Payment] Initializing sandbox fallback checkout.');
-      }
+    if (!razorpayClient) {
+      return res.status(400).json({ error: 'Razorpay keys are missing or invalid in backend configuration. Please ensure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are configured correctly in your environment.' });
     }
 
-    const mock_order_id = `order_mock_${Math.random().toString(36).slice(2, 11)}`;
-    res.json({
-      success: true,
-      is_mock: true,
-      key_id: getCleanRazorpayKeyId() || 'rzp_test_U5XqYtZ1w2v3u4',
-      order_id: mock_order_id,
-      amount: amount_in_paise,
-      currency: 'INR',
-      total_paid: total_amount_inr,
-    });
+    try {
+      const order = await razorpayClient.orders.create({
+        amount: amount_in_paise,
+        currency: 'INR',
+        receipt: `receipt_session_${Date.now()}`,
+        notes: {
+          consultant_id: consultant_id.toString(),
+          duration_minutes: duration_minutes.toString(),
+          user_name,
+        },
+      });
+      return res.json({
+        success: true,
+        is_mock: false,
+        key_id: getResponseRazorpayKeyId(false),
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        total_paid: total_amount_inr,
+      });
+    } catch (err: any) {
+      console.error('[Payment] Razorpay order creation failed:', err);
+      const errMsg = getRazorpayErrorMessage(err);
+      return res.status(400).json({ error: `Razorpay order creation failed: ${errMsg}` });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -131,7 +124,7 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
       if (!is_mock && razorpayClient && signature && payment_id && order_id) {
         const body = order_id + '|' + payment_id;
         const expectedSignature = crypto
-          .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+          .createHmac('sha256', getCleanRazorpayKeySecret()!)
           .update(body.toString())
           .digest('hex');
 
