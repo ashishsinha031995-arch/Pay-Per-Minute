@@ -264,16 +264,30 @@ export function ChatRoom({
   };
 
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [isIframe, setIsIframe] = useState(false);
+  const [notificationError, setNotificationError] = useState<string>('');
 
-  // Request notification permission and initialize state on chat mount
+  // Request notification permission and initialize state on chat mount safely
   useEffect(() => {
+    try {
+      setIsIframe(window.self !== window.top);
+    } catch (e) {
+      setIsIframe(true);
+    }
+
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().then(permission => {
-          console.log('[Notification API] Permission requested:', permission);
-          setNotificationPermission(permission);
-        });
+      if (Notification.permission === 'default' && typeof Notification.requestPermission === 'function') {
+        try {
+          Notification.requestPermission().then(permission => {
+            console.log('[Notification API] Permission requested:', permission);
+            setNotificationPermission(permission);
+          }).catch(err => {
+            console.warn('[Notification API] Auto request rejected:', err);
+          });
+        } catch (e) {
+          console.warn('[Notification API] Auto request failed:', e);
+        }
       }
     }
   }, []);
@@ -1081,39 +1095,71 @@ export function ChatRoom({
         <div className="bg-emerald-500/10 border-b border-emerald-500/15 text-slate-200 text-xs px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 animate-in slide-in-from-top duration-300 relative z-20">
           <div className="flex flex-col space-y-1 text-center sm:text-left flex-1">
             <span className="flex items-center justify-center sm:justify-start space-x-1.5 font-sans">
-              <span className="text-emerald-400">🔔</span>
+              <span className="text-emerald-400 animate-bounce">🔔</span>
               <span className="font-semibold text-emerald-400">Enable background notifications to receive chat messages!</span>
             </span>
             <span className="text-[10px] text-slate-400">
-              {typeof window !== 'undefined' && window.self !== window.top ? (
-                <span>You are currently viewing this inside AI Studio preview. To grant permission, please click <strong>Open in New Tab</strong> first.</span>
+              {isIframe ? (
+                <span>You are currently viewing this inside an iframe (like AI Studio preview). Browser security policies block notification popups here. Please click <strong>Open in New Tab</strong> to enable them.</span>
               ) : (
                 <span>Get real-time message popups even when you are using other apps or the browser is minimized.</span>
               )}
             </span>
+            {notificationError && (
+              <span className="text-rose-400 text-[10px] font-medium block mt-1">
+                ⚠️ {notificationError}
+              </span>
+            )}
           </div>
-          {typeof window !== 'undefined' && window.self !== window.top ? (
+          {isIframe ? (
             <a
               href={window.location.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0 text-center inline-block"
+              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0 text-center inline-block cursor-pointer"
             >
               Open in New Tab ↗
             </a>
           ) : (
             <button
               onClick={() => {
-                Notification.requestPermission().then(permission => {
-                  setNotificationPermission(permission);
-                  if (permission === 'granted') {
-                    if ('serviceWorker' in navigator) {
-                      navigator.serviceWorker.register('/sw.js');
-                    }
+                setNotificationError('');
+                try {
+                  if (typeof Notification === 'undefined') {
+                    setNotificationError('Notifications are not supported by your browser or in this environment.');
+                    return;
                   }
-                });
+                  
+                  if (typeof Notification.requestPermission !== 'function') {
+                    setNotificationError('Browser blocks requesting notifications inside this frame. Please use the Open in New Tab option.');
+                    return;
+                  }
+
+                  Notification.requestPermission()
+                    .then(permission => {
+                      setNotificationPermission(permission);
+                      if (permission === 'denied') {
+                        setNotificationError('Notification permission was denied. Please reset the site settings to allow notifications.');
+                      } else if (permission === 'granted') {
+                        if ('serviceWorker' in navigator) {
+                          navigator.serviceWorker.register('/sw.js').then(() => {
+                            console.log('[Notification API] Registered Service Worker successfully.');
+                          }).catch(err => {
+                            console.error('[Notification API] Service worker registration failed:', err);
+                          });
+                        }
+                      }
+                    })
+                    .catch(err => {
+                      console.error('[Notification API] Error during requestPermission:', err);
+                      setNotificationError(err?.message || 'Permission request rejected by browser.');
+                    });
+                } catch (err: any) {
+                  console.error('[Notification API] Synchronous exception:', err);
+                  setNotificationError(err?.message || 'Notification request failed.');
+                }
               }}
-              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0"
+              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0 cursor-pointer"
             >
               Enable Notifications
             </button>
