@@ -263,6 +263,42 @@ export function ChatRoom({
     }
   };
 
+  // Request notification permission on chat mount
+  useEffect(() => {
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+          console.log('[Notification API] Permission requested:', permission);
+        });
+      }
+    }
+  }, []);
+
+  // Native HTML5 Web Notification API implementation
+  const triggerPushNotification = (msg: Message) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const isVoice = msg.text && msg.text.startsWith('[VOICE_NOTE]:');
+      const senderName = msg.sender_name || (msg.sender_type === 'user' ? 'Client' : 'Advisor');
+      const bodyText = isVoice ? '🎙️ Voice Note' : msg.text || '';
+      
+      try {
+        const notification = new (window as any).Notification(`New Message from ${senderName}`, {
+          body: bodyText,
+          icon: '/logo.png',
+          tag: `chat-session-${sessionId}`,
+          renotify: true,
+        } as any);
+
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      } catch (e) {
+        console.error('Failed to trigger notification:', e);
+      }
+    }
+  };
+
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionInfo) return;
@@ -429,6 +465,11 @@ export function ChatRoom({
       if (msg.sender_type !== role) {
         socket.emit('read:messages', { session_id: sessionId, sender_type: role });
         setPartnerOnline(true);
+
+        // Native notification when tab is in background
+        if (document.visibilityState !== 'visible') {
+          triggerPushNotification(msg);
+        }
       }
     });
 
