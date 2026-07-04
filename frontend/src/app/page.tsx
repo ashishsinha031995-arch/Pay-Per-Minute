@@ -183,8 +183,14 @@ export default function AppPage() {
     if (targetUsername) {
       try {
         const rawHistory = localStorage.getItem('clicked_consultants_history');
-        let history = rawHistory ? JSON.parse(rawHistory) : [];
-        if (!Array.isArray(history)) history = [];
+        let history: any[] = [];
+        try {
+          history = rawHistory ? JSON.parse(rawHistory) : [];
+          if (!Array.isArray(history)) history = [];
+        } catch (pe) {
+          history = [];
+          localStorage.removeItem('clicked_consultants_history');
+        }
         const normalized = targetUsername.trim().toLowerCase();
         if (normalized && !history.some((u: string) => String(u).trim().toLowerCase() === normalized)) {
           history.push(targetUsername.trim());
@@ -199,15 +205,21 @@ export default function AppPage() {
   // Lock user to referred consultant if landing on deep link
   useEffect(() => {
     if (currentUser?.id) {
-      // Collect clicked history from localStorage
+      // Collect clicked history from localStorage safely
       let usernamesToSync: string[] = [];
       try {
         const rawHistory = localStorage.getItem('clicked_consultants_history');
         if (rawHistory) {
-          usernamesToSync = JSON.parse(rawHistory).map((s: string) => s.trim()).filter(Boolean);
+          const parsed = JSON.parse(rawHistory);
+          if (Array.isArray(parsed)) {
+            usernamesToSync = parsed.map((s: string) => s.trim()).filter(Boolean);
+          } else {
+            throw new Error('Clicked history is not an array');
+          }
         }
       } catch (e) {
-        console.error('Error parsing click history:', e);
+        console.error('Error parsing click history, resetting key:', e);
+        localStorage.removeItem('clicked_consultants_history');
       }
 
       if (targetUsername && !usernamesToSync.some(u => u.toLowerCase() === targetUsername.toLowerCase())) {

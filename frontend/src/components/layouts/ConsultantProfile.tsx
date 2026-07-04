@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -421,37 +421,77 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     try {
       const sessionMap = new Map();
 
+      // Clear any corrupted my_consultation_sessions from localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('my_consultation_sessions');
+          if (raw) {
+            if (raw.trim().startsWith('<') || raw.trim().startsWith('<!doctype')) {
+              console.warn('[Validation] Found corrupted HTML inside my_consultation_sessions. Clearing key.');
+              localStorage.removeItem('my_consultation_sessions');
+            } else {
+              JSON.parse(raw);
+            }
+          }
+        } catch (e) {
+          console.warn('[Validation] Failed parsing my_consultation_sessions, clearing key.', e);
+          localStorage.removeItem('my_consultation_sessions');
+        }
+      }
+
       // 1. Fetch by logged in user's username if available
       if (currentUser?.username) {
         const res = await fetch(`/api/user/sessions?user_name=${encodeURIComponent(currentUser.username)}`);
         if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            data.forEach(s => sessionMap.set(s.id, s));
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              data.forEach(s => sessionMap.set(s.id, s));
+            }
+          } else {
+            console.warn('[Notification API] Received non-JSON response for user past sessions on load.');
           }
         }
       }
 
-      // 2. Fetch by saved session IDs from localStorage
+      // 2. Fetch by saved session IDs from localStorage safely
       const savedIdsStr = localStorage.getItem('my_consultation_sessions');
       if (savedIdsStr) {
+        let ids: any[] = [];
         try {
-          const ids = JSON.parse(savedIdsStr);
-          if (ids && ids.length > 0) {
+          ids = JSON.parse(savedIdsStr);
+          if (!Array.isArray(ids)) {
+            throw new Error('Stored session IDs is not an array');
+          }
+        } catch (parseErr) {
+          console.warn('[Notification API] Stored session IDs are corrupted in localStorage. Resetting key.');
+          localStorage.removeItem('my_consultation_sessions');
+          ids = [];
+        }
+
+        if (ids && ids.length > 0) {
+          try {
             const res = await fetch(`/api/user/sessions?ids=${ids.join(',')}`);
             if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data)) {
-                data.forEach(s => {
-                  if (!sessionMap.has(s.id)) {
-                    sessionMap.set(s.id, s);
-                  }
-                });
+              const contentType = res.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                  data.forEach(s => {
+                    if (!sessionMap.has(s.id)) {
+                      sessionMap.set(s.id, s);
+                    }
+                  });
+                }
+              } else {
+                const textOutput = await res.text();
+                console.warn('[Notification API] Received non-JSON response from /api/user/sessions:', textOutput.substring(0, 100));
               }
             }
+          } catch (fetchErr) {
+            console.error('Error fetching/parsing user sessions from API:', fetchErr);
           }
-        } catch (e) {
-          console.error('Error parsing localStorage session IDs:', e);
         }
       }
 
@@ -522,15 +562,21 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const getFilteredConsultants = () => {
     let list = consultants;
 
-    // Retrieve clicked history from localStorage
+    // Retrieve clicked history from localStorage safely
     let historyUsernames: string[] = [];
     try {
       const rawHistory = localStorage.getItem('clicked_consultants_history');
       if (rawHistory) {
-        historyUsernames = JSON.parse(rawHistory).map((u: string) => u.toLowerCase().trim()).filter(Boolean);
+        const parsed = JSON.parse(rawHistory);
+        if (Array.isArray(parsed)) {
+          historyUsernames = parsed.map((u: string) => String(u).toLowerCase().trim()).filter(Boolean);
+        } else {
+          throw new Error('History is not an array');
+        }
       }
     } catch (e) {
-      console.error('Error reading clicked_consultants_history:', e);
+      console.error('Error reading clicked_consultants_history, resetting key:', e);
+      localStorage.removeItem('clicked_consultants_history');
     }
 
     if (targetUsername) {
@@ -856,10 +902,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       setSuccess('Wallet Payment Succeeded! Connecting you to the Expert Consultation room...');
       
-      // Save local history reference
+      // Save local history reference safely
       try {
         const existing = localStorage.getItem('my_consultation_sessions');
-        const idList = existing ? JSON.parse(existing) : [];
+        let idList: any[] = [];
+        try {
+          idList = existing ? JSON.parse(existing) : [];
+          if (!Array.isArray(idList)) idList = [];
+        } catch (pe) {
+          idList = [];
+        }
         if (!idList.includes(verifyData.session_id)) {
           idList.push(verifyData.session_id);
           localStorage.setItem('my_consultation_sessions', JSON.stringify(idList));
@@ -1000,10 +1052,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
             setSuccess('Payment Succeeded! Connecting you to the Expert Consultation room...');
 
-            // Save local history reference
+            // Save local history reference safely
             try {
               const existing = localStorage.getItem('my_consultation_sessions');
-              const idList = existing ? JSON.parse(existing) : [];
+              let idList: any[] = [];
+              try {
+                idList = existing ? JSON.parse(existing) : [];
+                if (!Array.isArray(idList)) idList = [];
+              } catch (pe) {
+                idList = [];
+              }
               if (!idList.includes(verifyData.session_id)) {
                 idList.push(verifyData.session_id);
                 localStorage.setItem('my_consultation_sessions', JSON.stringify(idList));
@@ -1069,19 +1127,34 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       
       {/* Upper bar with User Profile and History Button */}
       {!targetUsername && (
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800/80">
-          <div>
-            <h1 className="text-xl font-black text-slate-100 flex items-center space-x-2">
-              <Sparkles className="w-5 h-5 text-emerald-400 animate-pulse" />
-              <span>Expert Consultation Hub</span>
+        <div 
+          style={{ 
+            backgroundImage: `url(${heroSettings?.banner_bg_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop'})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+          }}
+          className="relative overflow-hidden p-6 sm:p-8 rounded-2xl border border-slate-800 shadow-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-6 text-left"
+        >
+          {/* Black Glassmorphism Overlay */}
+          <div className="absolute inset-0 bg-slate-950/85 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/70 to-emerald-950/20 pointer-events-none" />
+          <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
+          <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="relative z-10 space-y-2 max-w-2xl">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-100 flex items-center gap-2 flex-wrap drop-shadow-md">
+              <Sparkles className="w-5 h-5 text-emerald-400 shrink-0 animate-pulse" />
+              <span>{heroSettings?.banner_headline || "🔥 Skip the Search. Talk to Who You Want."}</span>
             </h1>
-            <p className="text-xs text-slate-400 mt-0.5">Premium minute-billed live consultations with top-tier specialists</p>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed drop-shadow-sm">
+              {heroSettings?.banner_description !== undefined ? heroSettings.banner_description : "Premium minute-billed live consultations with top-tier specialists"}
+            </p>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="relative z-10 flex flex-wrap items-center gap-3 shrink-0">
             {currentUser && (
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono bg-slate-950 px-3 py-2.5 rounded-xl text-emerald-400 border border-slate-800 font-bold">
+                <span className="text-xs font-mono bg-slate-950/95 backdrop-blur px-3 py-2.5 rounded-xl text-emerald-400 border border-slate-800/80 font-bold">
                   Wallet Balance: ₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}
                 </span>
                 <button
@@ -1093,9 +1166,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       fetchWalletTransactions();
                     }
                   }}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black py-2.5 px-4 rounded-xl transition-all flex items-center space-x-1 border border-emerald-400/20 shadow-sm"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black py-2.5 px-4 rounded-xl transition-all flex items-center space-x-1 border border-emerald-400/20 shadow-sm hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <DollarSign className="w-3.5 h-3.5" />
+                  <Wallet className="w-3.5 h-3.5" />
                   <span>Recharge Page</span>
                 </button>
               </div>
@@ -1110,7 +1183,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   loadPastHistoryFromLocalStorage();
                 }
               }}
-              className="bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center space-x-2 border border-slate-700/60 shadow-sm"
+              className="bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-xs font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center space-x-2 border border-slate-800 shadow-sm hover:scale-[1.02] active:scale-[0.98]"
             >
               <span>📜 View My Chat History</span>
             </button>
@@ -1141,7 +1214,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   onClick={() => setShowRechargeModal(true)}
                   className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black py-2.5 px-4 rounded-xl transition-all flex items-center space-x-1 border border-emerald-400/20"
                 >
-                  <DollarSign className="w-3.5 h-3.5" />
+                  <Wallet className="w-3.5 h-3.5" />
                   <span>Recharge Page</span>
                 </button>
               </div>
@@ -1325,7 +1398,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <DollarSign className="w-4 h-4 shrink-0" />
+                      <Wallet className="w-4 h-4 shrink-0" />
                       <span>💳 Wallet Recharge & Ledger</span>
                     </button>
 
@@ -1343,7 +1416,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <Clock className="w-4 h-4 shrink-0" />
+                      <History className="w-4 h-4 shrink-0 text-emerald-400" />
                       <span>📜 Past Consultation Chats</span>
                     </button>
 
@@ -1663,7 +1736,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         <div className="space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-850">
             <div className="flex items-center space-x-2">
-              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <Wallet className="w-4 h-4 text-emerald-400" />
               <h3 className="font-bold text-sm text-slate-200">Wallet Recharge</h3>
             </div>
             <button
@@ -1680,7 +1753,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           <div className="lg:col-span-5 bg-slate-950/60 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4">
             <div className="space-y-1 text-left">
               <div className="flex items-center space-x-2">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
+                <Wallet className="w-4 h-4 text-emerald-400" />
                 <h4 className="font-bold text-sm text-slate-200">Recharge Page</h4>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
@@ -1848,9 +1921,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       )}
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'history' && (
-        <div className="bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80 space-y-6">
+        <div className="bg-slate-900/40 p-4 sm:p-6 rounded-3xl border border-slate-800/80 space-y-6">
           <div className="flex items-center space-x-2 pb-2 border-b border-slate-850">
-            <Clock className="w-4 h-4 text-emerald-400" />
+            <History className="w-5 h-5 text-emerald-400" />
             <h3 className="font-bold text-sm text-slate-200">Past Consultation History & Chat Logs</h3>
           </div>
 
@@ -1874,8 +1947,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       try {
                         const res = await fetch(`/api/user/sessions?user_name=${encodeURIComponent(historySearchName.trim())}`);
                         if (res.ok) {
-                          const data = await res.json();
-                          setUserPastSessions(data);
+                          const contentType = res.headers.get('content-type');
+                          if (contentType && contentType.includes('application/json')) {
+                            const data = await res.json();
+                            setUserPastSessions(data);
+                          } else {
+                            console.warn('Received non-JSON response when searching user sessions.');
+                          }
                         }
                       } catch (err) {
                         console.error(err);
@@ -1899,51 +1977,75 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     No past consultations logged on this device yet.<br />Use search above with your screen name to fetch history.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     {userPastSessions.map((sess) => (
                       <div
                         key={sess.id}
-                        className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-750 transition-colors text-left"
+                        className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-slate-200">{sess.consultant_name}</span>
-                            <span className="text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded font-mono">ID: {sess.id}</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 font-sans">
-                            Date: {new Date(sess.created_at).toLocaleString()}
-                          </p>
-                          <p className="text-[10px] text-slate-500 font-sans">
-                            Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
-                          </p>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <span className="text-[10px] bg-rose-500/10 text-rose-400 font-bold px-2 py-0.5 rounded-md font-mono">
-                              Deducted: ₹{parseFloat(sess.total_paid || 0).toFixed(2)}
+                        {/* Details */}
+                        <div className="space-y-2 flex-1 min-w-0 w-full">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-black text-slate-100 truncate max-w-[150px] sm:max-w-[200px]" title={sess.consultant_name}>
+                              {sess.consultant_name}
                             </span>
-                            <span className="text-[10px] bg-slate-900 text-slate-400 font-bold px-2 py-0.5 rounded-md font-mono">
-                              Duration: {sess.duration_minutes} mins
+                            <span className="text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-lg border border-slate-800/50">
+                              ID: #{sess.id}
                             </span>
                           </div>
+
+                          <div className="flex items-center space-x-1.5 text-xs text-slate-400">
+                            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">Status:</span>
+                            {sess.status === 'active' ? (
+                              <span className="inline-flex items-center text-[9px] font-mono font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 animate-pulse">
+                                ● Live Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-full border border-slate-800">
+                                ✓ Completed
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
+                            <span className="flex items-center space-x-1">
+                              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                              <span>{new Date(sess.created_at).toLocaleString()}</span>
+                            </span>
+                            <span className="text-slate-700 hidden sm:inline">•</span>
+                            <span className="flex items-center space-x-1 font-mono text-[10px] bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800/20">
+                              <span>Duration:</span>
+                              <strong className="text-slate-200">{sess.duration_minutes}m</strong>
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                            <span className="inline-flex items-center space-x-1 text-[10.5px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-lg border border-emerald-500/15 font-mono">
+                              <span>₹{parseFloat(sess.total_paid || 0).toFixed(2)} deducted</span>
+                            </span>
+                          </div>
+
                           {sess.rating && (
-                            <div className="flex items-center space-x-2 mt-1.5 bg-slate-900/50 p-1.5 rounded-lg border border-slate-800/40 w-fit">
-                              <div className="flex items-center text-amber-400">
+                            <div className="flex items-center space-x-2 mt-2 bg-slate-900/40 p-2 rounded-xl border border-slate-800/40 w-fit max-w-full">
+                              <div className="flex items-center text-amber-400 shrink-0">
                                 {[...Array(5)].map((_, i) => (
                                   <Star
                                     key={i}
-                                    className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                    className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-800'}`}
                                   />
                                 ))}
                               </div>
                               {sess.review_text && (
-                                <span className="text-[10px] text-slate-300 italic font-sans line-clamp-1 max-w-[150px] sm:max-w-[220px]" title={sess.review_text}>
+                                <span className="text-[10px] text-slate-300 italic font-sans truncate max-w-[140px] sm:max-w-[200px]" title={sess.review_text}>
                                   "{sess.review_text}"
                                 </span>
                               )}
                             </div>
                           )}
                         </div>
-                        
-                        <div className="flex flex-col gap-2 shrink-0">
+
+                        {/* Right Side: Action Buttons */}
+                        <div className="flex sm:flex-row md:flex-col gap-2 shrink-0 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-800/50">
                           <button
                             onClick={async () => {
                               try {
@@ -1957,9 +2059,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                 console.error(err);
                               }
                             }}
-                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-colors border border-emerald-500/15 text-center shrink-0"
+                            className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
                           >
-                            View Chat
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>View Chat</span>
                           </button>
                           <button
                             onClick={async () => {
@@ -1980,9 +2083,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                 console.error("Error redirecting to consultant profile:", err);
                               }
                             }}
-                            className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-extrabold px-3 py-1.5 rounded-xl transition-all text-center whitespace-nowrap shadow-sm shrink-0"
+                            className="flex-1 md:flex-none bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-extrabold px-4 py-2.5 rounded-xl transition-all text-center flex items-center justify-center space-x-1.5 shadow-md active:scale-95 cursor-pointer"
                           >
-                            Chat Again
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>Chat Again</span>
                           </button>
                         </div>
                       </div>
@@ -2338,8 +2442,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           try {
                             const res = await fetch(`/api/user/sessions?user_name=${encodeURIComponent(historySearchName.trim())}`);
                             if (res.ok) {
-                              const data = await res.json();
-                              setUserPastSessions(data);
+                              const contentType = res.headers.get('content-type');
+                              if (contentType && contentType.includes('application/json')) {
+                                const data = await res.json();
+                                setUserPastSessions(data);
+                              } else {
+                                console.warn('Received non-JSON response when searching user sessions.');
+                              }
                             }
                           } catch (err) {
                             console.error(err);
@@ -2357,57 +2466,81 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                   {/* List of sessions */}
                   <div className="space-y-3">
-                    <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Consultation log sessions ({userPastSessions.length})</span>
+                    <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider text-left">Consultation log sessions ({userPastSessions.length})</span>
                     {userPastSessions.length === 0 ? (
                       <p className="text-xs text-slate-500 py-12 text-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/60 font-sans leading-relaxed">
                         No past consultations logged on this device yet.<br />Use search above with your screen name to fetch history.
                       </p>
                     ) : (
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                      <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
                         {userPastSessions.map((sess) => (
                           <div
                             key={sess.id}
-                            className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-750 transition-colors text-left"
+                            className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
                           >
-                            <div className="space-y-1 text-left">
-                              <div className="flex items-center space-x-2">
-                                <span className="text-xs font-bold text-slate-200">{sess.consultant_name}</span>
-                                <span className="text-[10px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded font-mono">ID: {sess.id}</span>
-                              </div>
-                              <p className="text-[10px] text-slate-500 font-sans">
-                                Date: {new Date(sess.created_at).toLocaleString()}
-                              </p>
-                              <p className="text-[10px] text-slate-500 font-sans">
-                                Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
-                              </p>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <span className="text-[10px] bg-rose-500/10 text-rose-400 font-bold px-2 py-0.5 rounded-md font-mono">
-                                  Deducted: ₹{parseFloat(sess.total_paid || 0).toFixed(2)}
+                            {/* Details */}
+                            <div className="space-y-2 flex-1 min-w-0 w-full">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-black text-slate-100 truncate max-w-[140px] sm:max-w-[180px]" title={sess.consultant_name}>
+                                  {sess.consultant_name}
                                 </span>
-                                <span className="text-[10px] bg-slate-900 text-slate-400 font-bold px-2 py-0.5 rounded-md font-mono">
-                                  Duration: {sess.duration_minutes} mins
+                                <span className="text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-lg border border-slate-800/50">
+                                  ID: #{sess.id}
                                 </span>
                               </div>
+
+                              <div className="flex items-center space-x-1.5 text-xs text-slate-400">
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">Status:</span>
+                                {sess.status === 'active' ? (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 animate-pulse">
+                                    ● Live Active
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-full border border-slate-800">
+                                    ✓ Completed
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
+                                <span className="flex items-center space-x-1">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>{new Date(sess.created_at).toLocaleString()}</span>
+                                </span>
+                                <span className="text-slate-700 hidden sm:inline">•</span>
+                                <span className="flex items-center space-x-1 font-mono text-[10px] bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800/20">
+                                  <span>Duration:</span>
+                                  <strong className="text-slate-200">{sess.duration_minutes}m</strong>
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                                <span className="inline-flex items-center space-x-1 text-[10.5px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-lg border border-emerald-500/15 font-mono">
+                                  <span>₹{parseFloat(sess.total_paid || 0).toFixed(2)} deducted</span>
+                                </span>
+                              </div>
+
                               {sess.rating && (
-                                <div className="flex items-center space-x-2 mt-1.5 bg-slate-900/50 p-1.5 rounded-lg border border-slate-800/40 w-fit">
-                                  <div className="flex items-center text-amber-400">
+                                <div className="flex items-center space-x-2 mt-2 bg-slate-900/40 p-2 rounded-xl border border-slate-800/40 w-fit max-w-full">
+                                  <div className="flex items-center text-amber-400 shrink-0">
                                     {[...Array(5)].map((_, i) => (
                                       <Star
                                         key={i}
-                                        className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                        className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-800'}`}
                                       />
                                     ))}
                                   </div>
                                   {sess.review_text && (
-                                    <span className="text-[10px] text-slate-300 italic font-sans line-clamp-1 max-w-[150px] sm:max-w-[220px]" title={sess.review_text}>
+                                    <span className="text-[10px] text-slate-300 italic font-sans truncate max-w-[140px] sm:max-w-[180px]" title={sess.review_text}>
                                       "{sess.review_text}"
                                     </span>
                                   )}
                                 </div>
                               )}
                             </div>
-                            
-                            <div className="flex flex-col gap-2 shrink-0">
+
+                            {/* Right Side: Action Buttons */}
+                            <div className="flex sm:flex-row md:flex-col gap-2 shrink-0 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-800/50">
                               <button
                                 onClick={async () => {
                                   try {
@@ -2421,9 +2554,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                     console.error(err);
                                   }
                                 }}
-                                className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-colors border border-emerald-500/15 text-center shrink-0"
+                                className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
                               >
-                                View Chat
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                <span>View Chat</span>
                               </button>
                               <button
                                 onClick={async () => {
@@ -2445,9 +2579,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                     console.error("Error redirecting to consultant profile:", err);
                                   }
                                 }}
-                                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-extrabold px-3 py-1.5 rounded-xl transition-all text-center whitespace-nowrap shadow-sm shrink-0"
+                                className="flex-1 md:flex-none bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-extrabold px-4 py-2.5 rounded-xl transition-all text-center flex items-center justify-center space-x-1.5 shadow-md active:scale-95 cursor-pointer"
                               >
-                                Chat Again
+                                <Zap className="w-3.5 h-3.5" />
+                                <span>Chat Again</span>
                               </button>
                             </div>
                           </div>
@@ -2669,7 +2804,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
             
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center space-x-2">
-                <DollarSign className="w-5 h-5 text-emerald-400" />
+                <Wallet className="w-5 h-5 text-emerald-400" />
                 <h3 className="font-bold text-slate-100 text-base">Recharge Page</h3>
               </div>
               <button
@@ -3097,7 +3232,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/25">
                     <Sparkles className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">Expertise & Biography</h3>
+                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">About</h3>
                 </div>
                 <p className="text-sm text-slate-300 leading-relaxed font-sans font-light">
                   {selectedConsultant.bio || "No biography provided yet. Stay tuned for expert insights and updates!"}

@@ -2833,6 +2833,106 @@ export function SettingsPanel() {
           )}
         </div>
       </div>
+
+      {/* Dedicated Dashboard Header Banner Settings Card */}
+      <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+        <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
+          <Sparkles className="w-4 h-4 text-emerald-400" />
+          <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Dashboard Upper Header Banner Settings</h3>
+        </div>
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Manage the mobile-responsive and desktop-friendly high-quality promotional banner displayed on the user's consultation hub. Change the headline copy, sub-description, and background cover image dynamically.
+        </p>
+
+        {loadingHero ? (
+          <div className="text-xs text-slate-500 font-mono py-6 text-center animate-pulse">Loading banner settings...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] text-slate-400 font-mono mb-1">Banner Title / Headline *</label>
+                <input
+                  type="text"
+                  value={heroSettings?.banner_headline !== undefined ? heroSettings.banner_headline : '🔥 Skip the Search. Talk to Who You Want.'}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setHeroSettings((prev: any) => ({ ...prev, banner_headline: val }));
+                  }}
+                  placeholder="e.g. 🔥 Skip the Search. Talk to Who You Want."
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-400 font-mono mb-1">Banner Sub-Description</label>
+                <textarea
+                  value={heroSettings?.banner_description !== undefined ? heroSettings.banner_description : 'Premium minute-billed live consultations with top-tier specialists'}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setHeroSettings((prev: any) => ({ ...prev, banner_description: val }));
+                  }}
+                  rows={2}
+                  placeholder="Premium minute-billed live consultations with top-tier specialists"
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500 leading-relaxed font-sans"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] text-slate-400 font-mono mb-1">Banner Background Image Cover URL</label>
+                <input
+                  type="text"
+                  value={heroSettings?.banner_bg_url !== undefined ? heroSettings.banner_bg_url : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop'}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setHeroSettings((prev: any) => ({ ...prev, banner_bg_url: val }));
+                  }}
+                  placeholder="e.g. https://images.unsplash.com/photo-..."
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                />
+              </div>
+
+              {/* Live Preview block inside Super Admin Panel to see the Banner design */}
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-2">
+                <span className="text-[9px] font-mono uppercase text-slate-500 tracking-widest font-black">Admin Live Preview</span>
+                <div 
+                  style={{ 
+                    backgroundImage: `url(${heroSettings?.banner_bg_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop'})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  }}
+                  className="relative p-4 rounded-xl overflow-hidden border border-slate-800/60 text-left min-h-[80px] flex flex-col justify-center animate-in fade-in duration-300"
+                >
+                  <div className="absolute inset-0 bg-slate-950/85 pointer-events-none" />
+                  <div className="relative z-10">
+                    <h4 className="text-xs font-black text-slate-100 truncate">
+                      {heroSettings?.banner_headline || "🔥 Skip the Search. Talk to Who You Want."}
+                    </h4>
+                    <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                      {heroSettings?.banner_description !== undefined ? heroSettings.banner_description : "Premium minute-billed live consultations with top-tier specialists"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                {saved && (
+                  <span className="text-emerald-400 text-xs font-mono">✓ Banner settings updated successfully!</span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSaveHero}
+                  disabled={savingHero}
+                  className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 text-slate-950 px-6 py-2 rounded-xl text-xs font-black transition-all ml-auto flex items-center gap-1.5 shadow-md shadow-emerald-500/10 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {savingHero ? 'Saving Banner...' : 'Apply & Save Banner'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
