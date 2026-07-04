@@ -263,65 +263,6 @@ export function ChatRoom({
     }
   };
 
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
-
-  // Request notification permission and initialize state on chat mount
-  useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationPermission(Notification.permission);
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().then(permission => {
-          console.log('[Notification API] Permission requested:', permission);
-          setNotificationPermission(permission);
-        });
-      }
-    }
-  }, []);
-
-  const fallbackWindowNotification = (senderName: string, bodyText: string) => {
-    try {
-      const notification = new (window as any).Notification(`New Message from ${senderName}`, {
-        body: bodyText,
-        icon: '/logo.png',
-        tag: `chat-session-${sessionId}`,
-        renotify: true,
-      } as any);
-
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-    } catch (e) {
-      console.error('Failed to trigger fallback window notification:', e);
-    }
-  };
-
-  // Native HTML5 Web Notification API implementation (with SW fallback for mobile devices)
-  const triggerPushNotification = (msg: Message) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      const isVoice = msg.text && msg.text.startsWith('[VOICE_NOTE]:');
-      const senderName = msg.sender_name || (msg.sender_type === 'user' ? 'Client' : 'Advisor');
-      const bodyText = isVoice ? '🎙️ Voice Note' : msg.text || '';
-      
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then((reg) => {
-          reg.showNotification(`New Message from ${senderName}`, {
-            body: bodyText,
-            icon: '/logo.png',
-            tag: `chat-session-${sessionId}`,
-            badge: '/logo.png',
-            vibrate: [200, 100, 200],
-          } as any);
-        }).catch((err) => {
-          console.warn('[Notification API] SW ready failed, falling back:', err);
-          fallbackWindowNotification(senderName, bodyText);
-        });
-      } else {
-        fallbackWindowNotification(senderName, bodyText);
-      }
-    }
-  };
-
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionInfo) return;
@@ -488,11 +429,6 @@ export function ChatRoom({
       if (msg.sender_type !== role) {
         socket.emit('read:messages', { session_id: sessionId, sender_type: role });
         setPartnerOnline(true);
-
-        // Native notification when tab is in background
-        if (document.visibilityState !== 'visible') {
-          triggerPushNotification(msg);
-        }
       }
     });
 
@@ -1075,36 +1011,6 @@ export function ChatRoom({
           </div>
         </div>
       </div>
-
-      {/* Sleek Notification Enable Banner */}
-      {'Notification' in window && notificationPermission !== 'granted' && (
-        <div className="bg-emerald-500/10 border-b border-emerald-500/15 text-slate-200 text-xs px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 animate-in slide-in-from-top duration-300 relative z-20">
-          <div className="flex flex-col space-y-1 text-center sm:text-left">
-            <span className="flex items-center justify-center sm:justify-start space-x-1.5 font-sans">
-              <span className="text-emerald-400">🔔</span>
-              <span className="font-semibold">Enable background notifications to receive chat messages!</span>
-            </span>
-            <span className="text-[10px] text-slate-400">
-              Note: If testing inside the AI Studio frame, please open the app in a <strong>New Tab</strong> first so the browser can ask for permission.
-            </span>
-          </div>
-          <button
-            onClick={() => {
-              Notification.requestPermission().then(permission => {
-                setNotificationPermission(permission);
-                if (permission === 'granted') {
-                  if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('/sw.js');
-                  }
-                }
-              });
-            }}
-            className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0"
-          >
-            Enable Notifications
-          </button>
-        </div>
-      )}
 
       {/* Live messaging feed */}
       <div className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto space-y-4 min-h-0 md:min-h-[300px]">
