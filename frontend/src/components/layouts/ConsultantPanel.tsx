@@ -307,26 +307,21 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       actualEarningsByDay[mappedIndex] += Number(s.consultant_earnings || 0);
     });
 
-    const baselineDays = [
-      { label: 'Mon', basePercent: 45, baseVal: 540 },
-      { label: 'Tue', basePercent: 60, baseVal: 720 },
-      { label: 'Wed', basePercent: 85, baseVal: 1020 },
-      { label: 'Thu', basePercent: 40, baseVal: 480 },
-      { label: 'Fri', basePercent: 95, baseVal: 1450 },
-      { label: 'Sat', basePercent: 70, baseVal: 980 },
-      { label: 'Sun', basePercent: 90, baseVal: 1280 },
+    const days = [
+      { label: 'Mon' },
+      { label: 'Tue' },
+      { label: 'Wed' },
+      { label: 'Thu' },
+      { label: 'Fri' },
+      { label: 'Sat' },
+      { label: 'Sun' },
     ];
 
-    // Scale baseline based on current price relative to a standard rate of 10
-    const scaleFactor = (pricePerMinute || 10) / 10;
-
-    const data = baselineDays.map((day, idx) => {
+    const data = days.map((day, idx) => {
       const actual = actualEarningsByDay[idx];
-      // Total earnings: actual if any exists, otherwise a realistic baseline scaled to current price
-      const totalEarningsForDay = actual > 0 ? actual : Math.round(day.baseVal * scaleFactor);
       return {
         label: day.label,
-        totalEarningsForDay,
+        totalEarningsForDay: actual,
         actual
       };
     });
@@ -335,12 +330,43 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     const maxEarnings = Math.max(...data.map(d => d.totalEarningsForDay), 1);
 
     return data.map(d => {
-      const percentage = Math.round((d.totalEarningsForDay / maxEarnings) * 100);
+      const percentage = d.totalEarningsForDay > 0 ? Math.round((d.totalEarningsForDay / maxEarnings) * 100) : 0;
       return {
         label: d.label,
-        value: `${Math.max(15, percentage)}%`, // min 15% for gorgeous display rhythm
+        value: `${percentage}%`,
         earnings: `₹${Math.round(d.totalEarningsForDay).toLocaleString()}`,
         actual: d.actual
+      };
+    });
+  };
+
+  const getMonthlyEarningsData = (consId: number, consSessions: any[]) => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth(); // 0-indexed
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const dailyEarnings = Array(daysInMonth).fill(0);
+
+    consSessions.forEach(s => {
+      if (Number(s.consultant_id) !== Number(consId)) return;
+      if (s.status !== 'completed') return;
+      const date = new Date(s.created_at || s.started_at || new Date());
+      if (date.getFullYear() === year && date.getMonth() === month) {
+        const day = date.getDate(); // 1-indexed
+        dailyEarnings[day - 1] += Number(s.consultant_earnings || 0);
+      }
+    });
+
+    const maxEarnings = Math.max(...dailyEarnings, 1);
+
+    return dailyEarnings.map((earnings, idx) => {
+      const dayNum = idx + 1;
+      const percentage = earnings > 0 ? (earnings / maxEarnings) * 100 : 0;
+      return {
+        day: dayNum,
+        earnings,
+        percentage
       };
     });
   };
@@ -349,9 +375,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules'>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
+  const [performanceTab, setPerformanceTab] = useState<'weekly' | 'monthly'>('weekly');
+  const [hoveredMonthlyPoint, setHoveredMonthlyPoint] = useState<any>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // Real-time fluctuating velocity meter metrics
+  // Real-time fluctuating performance score meter metrics
   const [liveVelocityScore, setLiveVelocityScore] = useState(76);
   const [liveCallFrequency, setLiveCallFrequency] = useState(5.4);
 
@@ -745,7 +773,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return () => clearInterval(interval);
   }, [currentConsultant]);
 
-  // Fluctuating real-time earning velocity & performance values
+  // Fluctuating real-time earning index & performance values
   useEffect(() => {
     const timer = setInterval(() => {
       setLiveVelocityScore(prev => {
@@ -3606,9 +3634,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
                         
                         <div className="py-1">
-                          <span className="text-[10px] text-slate-500 block">Withdrawable earnings currently cleared</span>
                           <div className="flex items-baseline space-x-1.5 mt-1">
-                            <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-sans tracking-tight">₹{wallet.wallet_withdrawable.toFixed(2)}</span>
+                            <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-sans tracking-tight">₹{wallet.wallet_monthly.toFixed(2)}</span>
                             <span className="text-[10px] text-slate-400 font-mono uppercase">INR</span>
                           </div>
                         </div>
@@ -3617,13 +3644,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-850/80 flex flex-col items-start gap-1.5 text-[10px] text-slate-400 mt-4 backdrop-blur">
                         <span className="flex items-center space-x-1.5">
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span>Pre-paid secure backing</span>
+                          <span>This month ({new Date().toLocaleString('default', { month: 'long' })})</span>
                         </span>
+                        <span className="text-[9px] text-slate-500 block">Monthly earnings till salary cutoff date</span>
                       </div>
                     </div>
 
                     {/* Simple Statistics Grid */}
-                    <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                    <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                       
                       <motion.div 
                         whileHover={{ y: -3 }}
@@ -3634,17 +3662,6 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <span className="text-base sm:text-lg xl:text-xl font-black text-slate-200 mt-1 block font-sans whitespace-nowrap">₹{wallet.wallet_today.toFixed(2)}</span>
                         </div>
                         <span className="text-[9px] text-emerald-400/80 font-mono block mt-2.5 shrink-0">● Active</span>
-                      </motion.div>
-
-                      <motion.div 
-                        whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Monthly Earnings</span>
-                          <span className="text-base sm:text-lg xl:text-xl font-black text-slate-200 mt-1 block font-sans whitespace-nowrap">₹{wallet.wallet_monthly.toFixed(2)}</span>
-                        </div>
-                        <span className="text-[9px] text-slate-500 font-mono block mt-2.5 shrink-0 truncate">Calendar cycle</span>
                       </motion.div>
 
                       <motion.div 
@@ -3693,7 +3710,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
                         <div>
                           <h3 className="font-bold text-base flex items-center gap-2">
-                            Earning Performance Velocity
+                            Earning Performance
                             <span className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -3709,70 +3726,219 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                     {/* Staggered grow-up simulation bars representing consulting peak periods */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch pt-2">
-                      {/* Left: Dynamic Weekly Earnings Performance Chart */}
+                      {/* Left: Dynamic Weekly/Monthly Earnings Performance Chart */}
                       <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
                         <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-850/85 relative flex flex-col justify-between h-full min-h-[220px]">
                           <div className="flex items-center justify-between mb-4">
-                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Weekly Performance</span>
-                            <span className="text-[10px] font-mono text-slate-500 italic">calculated from actual sessions</span>
+                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                              {performanceTab === 'weekly' ? 'Weekly Performance' : 'Monthly Performance'}
+                            </span>
+                            <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setPerformanceTab('weekly')}
+                                className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
+                                  performanceTab === 'weekly'
+                                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                Weekly
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPerformanceTab('monthly')}
+                                className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
+                                  performanceTab === 'monthly'
+                                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                Monthly
+                              </button>
+                            </div>
                           </div>
                           
-                          <div className="h-44 flex items-end justify-between gap-3 relative px-1 pb-1">
-                            {/* Y axis lines */}
-                            <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
-                            <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
-                            <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
-                            
-                            {/* Animated Bars */}
-                            {getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute).map((bar, i) => (
-                              <div 
-                                key={bar.label} 
-                                className="flex-1 flex flex-col items-center group relative z-10"
-                                onMouseEnter={() => setActiveBarIndex(i)}
-                                onMouseLeave={() => setActiveBarIndex(null)}
-                                onTouchStart={(e) => {
-                                  e.stopPropagation();
-                                  setActiveBarIndex(i);
-                                }}
-                              >
-                                {/* Hover/Touch tooltip */}
-                                <span className={`text-[9px] font-mono text-emerald-400 transition-opacity absolute -top-10 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
-                                  activeBarIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                                }`}>
-                                  {bar.earnings} {bar.actual > 0 ? '(Real)' : '(Scaled)'}
-                                </span>
-                                
-                                <div className="w-full bg-slate-900/40 h-32 rounded-lg flex items-end justify-center overflow-hidden">
-                                  <motion.div
-                                    initial={{ height: 0 }}
-                                    animate={{ height: bar.value }}
-                                    transition={{ duration: 0.8, delay: i * 0.08, ease: 'easeOut' }}
-                                    className={`w-full max-w-[16px] rounded-t-md cursor-pointer transition-all ${
-                                      bar.actual > 0 
-                                        ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.4)]' 
-                                        : 'bg-emerald-500/20 hover:bg-emerald-500/45'
-                                    }`}
-                                  />
+                          {performanceTab === 'weekly' ? (
+                            <div className="h-44 flex items-end justify-between gap-3 relative px-1 pb-1">
+                              {/* Y axis lines */}
+                              <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
+                              <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
+                              <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
+                              
+                              {/* Animated Bars */}
+                              {getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute).map((bar, i) => (
+                                <div 
+                                  key={bar.label} 
+                                  className="flex-1 flex flex-col items-center group relative z-10"
+                                  onMouseEnter={() => setActiveBarIndex(i)}
+                                  onMouseLeave={() => setActiveBarIndex(null)}
+                                  onTouchStart={(e) => {
+                                    e.stopPropagation();
+                                    setActiveBarIndex(i);
+                                  }}
+                                >
+                                  {/* Hover/Touch tooltip */}
+                                  <span className={`text-[9px] font-mono text-emerald-400 transition-opacity absolute -top-10 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
+                                    activeBarIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                  }`}>
+                                    {bar.earnings}
+                                  </span>
+                                  
+                                  <div className="w-full bg-slate-900/40 h-32 rounded-lg flex items-end justify-center overflow-hidden">
+                                    <motion.div
+                                      initial={{ height: 0 }}
+                                      animate={{ height: bar.value }}
+                                      transition={{ duration: 0.8, delay: i * 0.08, ease: 'easeOut' }}
+                                      className="w-full max-w-[16px] rounded-t-md cursor-pointer transition-all bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-mono font-bold text-slate-400 mt-2">{bar.label}</span>
                                 </div>
-                                <span className="text-[10px] font-mono font-bold text-slate-400 mt-2">{bar.label}</span>
-                              </div>
-                            ))}
-                          </div>
+                              ))}
+                            </div>
+                          ) : (
+                            // Beautiful Monthly Line Chart
+                            (() => {
+                              const monthlyData = getMonthlyEarningsData(currentConsultant.id, sessions);
+                              const width = 500;
+                              const height = 150;
+                              const paddingLeft = 25;
+                              const paddingRight = 25;
+                              const paddingTop = 15;
+                              const paddingBottom = 25;
+                              
+                              const chartWidth = width - paddingLeft - paddingRight;
+                              const chartHeight = height - paddingTop - paddingBottom;
+                              
+                              const points = monthlyData.map((d, i) => {
+                                const x = paddingLeft + (i / (monthlyData.length - 1)) * chartWidth;
+                                const y = (paddingTop + chartHeight) - (d.percentage / 100) * chartHeight;
+                                return { x, y, ...d };
+                              });
+                              
+                              const linePathStr = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                              const areaPathStr = points.length > 0 
+                                ? `${linePathStr} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`
+                                : '';
+                              
+                              return (
+                                <div className="relative h-44 w-full flex flex-col justify-end">
+                                  {/* Y axis lines */}
+                                  <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
+                                  <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
+                                  <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
+                                  
+                                  {/* Line Graph Tooltip */}
+                                  {hoveredMonthlyPoint && (
+                                    <div 
+                                      className="absolute bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-xl z-20 pointer-events-none text-left flex flex-col"
+                                      style={{
+                                        left: `${Math.min(85, Math.max(2, (hoveredMonthlyPoint.x / width) * 100))}%`,
+                                        top: '0px'
+                                      }}
+                                    >
+                                      <span className="text-[8px] font-mono text-slate-500 uppercase tracking-wider font-bold">
+                                        Day {hoveredMonthlyPoint.day}
+                                      </span>
+                                      <span className="text-[11px] font-mono text-emerald-400 font-extrabold">
+                                        ₹{Math.round(hoveredMonthlyPoint.earnings).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  <svg 
+                                    viewBox={`0 0 ${width} ${height}`} 
+                                    className="w-full h-full overflow-visible"
+                                    onMouseMove={(e) => {
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const mouseX = e.clientX - rect.left;
+                                      const ratio = mouseX / rect.width;
+                                      const index = Math.round(ratio * (monthlyData.length - 1));
+                                      if (index >= 0 && index < monthlyData.length) {
+                                        setHoveredMonthlyPoint({ ...points[index], index });
+                                      }
+                                    }}
+                                    onMouseLeave={() => setHoveredMonthlyPoint(null)}
+                                  >
+                                    <defs>
+                                      <linearGradient id="monthlyAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+                                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                                      </linearGradient>
+                                    </defs>
+                                    
+                                    {/* Area under the line */}
+                                    {areaPathStr && (
+                                      <path 
+                                        d={areaPathStr} 
+                                        fill="url(#monthlyAreaGrad)"
+                                        className="transition-all duration-300"
+                                      />
+                                    )}
+                                    
+                                    {/* Line Stroke with vibrant glowing drop shadow style */}
+                                    {linePathStr && (
+                                      <motion.path 
+                                        d={linePathStr} 
+                                        fill="none" 
+                                        stroke="#10b981" 
+                                        strokeWidth="3" 
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        initial={{ pathLength: 0 }}
+                                        animate={{ pathLength: 1 }}
+                                        transition={{ duration: 1.2, ease: "easeInOut" }}
+                                        className="drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                                      />
+                                    )}
+                                    
+                                    {/* Interactive dots */}
+                                    {points.map((p, i) => {
+                                      const isHovered = hoveredMonthlyPoint && hoveredMonthlyPoint.index === i;
+                                      if (p.earnings === 0 && !isHovered) return null;
+                                      return (
+                                        <circle 
+                                          key={i}
+                                          cx={p.x}
+                                          cy={p.y}
+                                          r={isHovered ? 6 : 3.5}
+                                          fill={isHovered ? '#10b981' : '#020617'}
+                                          stroke="#10b981"
+                                          strokeWidth={isHovered ? 2.5 : 1.5}
+                                          className="cursor-pointer transition-all duration-150"
+                                        />
+                                      );
+                                    })}
+                                    
+                                    {/* Custom labels for x-axis days */}
+                                    {points.filter((_, idx) => idx % 5 === 0 || idx === points.length - 1).map((p, i) => (
+                                      <text 
+                                        key={i} 
+                                        x={p.x} 
+                                        y={height - 5} 
+                                        textAnchor="middle" 
+                                        className="fill-slate-400 font-mono text-[9px] font-bold"
+                                      >
+                                        D{p.day}
+                                      </text>
+                                    ))}
+                                  </svg>
+                                </div>
+                              );
+                            })()
+                          )}
                           
                           <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 border-t border-slate-900/60 pt-3 mt-2">
                             <span className="flex items-center gap-1.5">
                               <span className="w-2.5 h-2.5 rounded bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></span>
                               Real Bookings
                             </span>
-                            <span className="flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded bg-emerald-500/20"></span>
-                              Baseline Estimation
-                            </span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Right: High-Tech Speedometer / Velocity Meter */}
+                      {/* Right: High-Tech Speedometer / Performance Meter */}
                       <div className="lg:col-span-5 flex flex-col justify-between">
                         {(() => {
                           const metrics = getPerformanceMetrics(currentConsultant.id, sessions);
@@ -3782,7 +3948,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 flex flex-col justify-between h-full shadow-lg text-center space-y-4">
                               <div className="flex items-center justify-between border-b border-slate-900 pb-2">
                                 <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                                  ⚡ Performance Velocity Meter
+                                  ⚡ Live Performance Meter
                                 </h4>
                                 <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 px-2 py-0.5 rounded-md uppercase font-mono font-bold flex items-center gap-1">
                                   <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -3794,7 +3960,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               <div className="relative py-2 flex flex-col items-center">
                                 <svg viewBox="0 0 200 115" className="w-full max-w-[210px] overflow-visible">
                                   <defs>
-                                    <linearGradient id="velocityGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <linearGradient id="performanceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                                       <stop offset="0%" stopColor="#10b981" /> {/* Emerald */}
                                       <stop offset="50%" stopColor="#06b6d4" /> {/* Cyan */}
                                       <stop offset="100%" stopColor="#f59e0b" /> {/* Amber */}
@@ -3818,7 +3984,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   <path
                                     d="M 25 100 A 75 75 0 0 1 175 100"
                                     fill="none"
-                                    stroke="url(#velocityGradient)"
+                                    stroke="url(#performanceGradient)"
                                     strokeWidth="11"
                                     strokeLinecap="round"
                                     strokeDasharray="236"
@@ -3897,7 +4063,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               </div>
 
                               <p className="text-[9px] text-slate-500 italic leading-relaxed pt-1">
-                                *Dial fluctuates relative to live rating factors, caller throughput, and slot attendance velocity.
+                                *Dial fluctuates relative to live rating factors, caller throughput, and slot attendance.
                               </p>
                             </div>
                           );
@@ -4773,6 +4939,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       <Calendar className="w-5 h-5 text-emerald-400" />
                       <h3 className="font-bold text-slate-100 font-sans">Availability Schedule</h3>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('dashboard')}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back to Dashboard</span>
+                    </button>
                   </div>
 
                   {/* Add / Edit Schedule Form */}
