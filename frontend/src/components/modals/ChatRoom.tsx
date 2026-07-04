@@ -1079,30 +1079,45 @@ export function ChatRoom({
       {/* Sleek Notification Enable Banner */}
       {'Notification' in window && notificationPermission !== 'granted' && (
         <div className="bg-emerald-500/10 border-b border-emerald-500/15 text-slate-200 text-xs px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 animate-in slide-in-from-top duration-300 relative z-20">
-          <div className="flex flex-col space-y-1 text-center sm:text-left">
+          <div className="flex flex-col space-y-1 text-center sm:text-left flex-1">
             <span className="flex items-center justify-center sm:justify-start space-x-1.5 font-sans">
               <span className="text-emerald-400">🔔</span>
-              <span className="font-semibold">Enable background notifications to receive chat messages!</span>
+              <span className="font-semibold text-emerald-400">Enable background notifications to receive chat messages!</span>
             </span>
             <span className="text-[10px] text-slate-400">
-              Note: If testing inside the AI Studio frame, please open the app in a <strong>New Tab</strong> first so the browser can ask for permission.
+              {typeof window !== 'undefined' && window.self !== window.top ? (
+                <span>You are currently viewing this inside AI Studio preview. To grant permission, please click <strong>Open in New Tab</strong> first.</span>
+              ) : (
+                <span>Get real-time message popups even when you are using other apps or the browser is minimized.</span>
+              )}
             </span>
           </div>
-          <button
-            onClick={() => {
-              Notification.requestPermission().then(permission => {
-                setNotificationPermission(permission);
-                if (permission === 'granted') {
-                  if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('/sw.js');
+          {typeof window !== 'undefined' && window.self !== window.top ? (
+            <a
+              href={window.location.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0 text-center inline-block"
+            >
+              Open in New Tab ↗
+            </a>
+          ) : (
+            <button
+              onClick={() => {
+                Notification.requestPermission().then(permission => {
+                  setNotificationPermission(permission);
+                  if (permission === 'granted') {
+                    if ('serviceWorker' in navigator) {
+                      navigator.serviceWorker.register('/sw.js');
+                    }
                   }
-                }
-              });
-            }}
-            className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0"
-          >
-            Enable Notifications
-          </button>
+                });
+              }}
+              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 shrink-0"
+            >
+              Enable Notifications
+            </button>
+          )}
         </div>
       )}
 
