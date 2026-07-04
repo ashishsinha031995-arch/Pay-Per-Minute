@@ -797,7 +797,7 @@ export function ChatRoom({
   }
 
   return (
-    <div className="fixed inset-0 z-[150] md:relative md:inset-auto md:z-0 bg-slate-950 md:bg-transparent w-full max-w-4xl mx-auto px-0 md:px-4 sm:px-6 lg:px-8 py-0 md:py-4 h-full md:h-[calc(100vh-100px)] flex flex-col justify-between overflow-hidden">
+    <div className="fixed inset-0 z-[150] md:relative md:inset-auto md:z-0 bg-slate-950 md:bg-transparent w-full max-w-4xl mx-auto px-0 md:px-4 sm:px-6 lg:px-8 py-0 md:py-4 h-[100dvh] md:h-[calc(100vh-100px)] flex flex-col justify-between overflow-hidden">
       
       {/* Consultant Queue Banner */}
       {role === 'consultant' && queueCount > 0 && (
@@ -1013,7 +1013,7 @@ export function ChatRoom({
       </div>
 
       {/* Live messaging feed */}
-      <div className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto space-y-4 min-h-[300px]">
+      <div className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto space-y-4 min-h-0 md:min-h-[300px]">
         
         {/* Sleek Low Internet Banner */}
         {lowInternet && (
@@ -1417,7 +1417,7 @@ export function ChatRoom({
               value={textInput}
               onChange={handleTextInputChange}
               disabled={sessionCompleted}
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-55"
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 text-base md:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-55"
             />
             
             {/* Consultant-only Voice Recording button */}
