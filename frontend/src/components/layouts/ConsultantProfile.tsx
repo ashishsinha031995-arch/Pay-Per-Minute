@@ -53,6 +53,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   // Directory or profile selection
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedConsSchedules, setSelectedConsSchedules] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -400,11 +401,18 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     const handleToggleHamburger = () => {
       setHamburgerOpen(prev => !prev);
     };
+    const handleViewUserPhoto = (e: any) => {
+      if (e.detail) {
+        setLightboxImage(e.detail);
+      }
+    };
     window.addEventListener('navigate-to-wallet-tab', handleNavigateWallet);
     window.addEventListener('toggle-hamburger-menu', handleToggleHamburger);
+    window.addEventListener('view-user-photo', handleViewUserPhoto);
     return () => {
       window.removeEventListener('navigate-to-wallet-tab', handleNavigateWallet);
       window.removeEventListener('toggle-hamburger-menu', handleToggleHamburger);
+      window.removeEventListener('view-user-photo', handleViewUserPhoto);
     };
   }, []);
 
@@ -1494,7 +1502,15 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 </div>
                 {editPhotoUrl && (
                   <div className="mt-2 flex items-center space-x-3 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/60 max-w-sm font-sans">
-                    <img src={editPhotoUrl} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-slate-800" onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} referrerPolicy="no-referrer" />
+                    <img
+                      src={editPhotoUrl}
+                      alt="Preview"
+                      className="w-10 h-10 rounded-xl object-cover border border-slate-800 cursor-pointer hover:opacity-85 transition-opacity"
+                      onClick={() => setLightboxImage(editPhotoUrl)}
+                      title="Click to view photo"
+                      onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                      referrerPolicy="no-referrer"
+                    />
                     <div>
                       <span className="text-[10px] text-slate-400 block font-semibold">Live Preview</span>
                       <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[200px]">{editPhotoUrl}</span>
@@ -1848,7 +1864,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     {userPastSessions.map((sess) => (
                       <div
                         key={sess.id}
-                        className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between hover:border-slate-750 transition-colors text-left"
+                        className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-750 transition-colors text-left"
                       >
                         <div className="space-y-1">
                           <div className="flex items-center space-x-2">
@@ -1856,7 +1872,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                             <span className="text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded font-mono">ID: {sess.id}</span>
                           </div>
                           <p className="text-[10px] text-slate-500 font-sans">
-                            Date: {new Date(sess.created_at).toLocaleString()} • Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
+                            Date: {new Date(sess.created_at).toLocaleString()}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-sans">
+                            Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
                           </p>
                           <div className="flex items-center space-x-2 mt-1">
                             <span className="text-[10px] bg-rose-500/10 text-rose-400 font-bold px-2 py-0.5 rounded-md font-mono">
@@ -1885,23 +1904,48 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           )}
                         </div>
                         
-                        <button
-                          onClick={async () => {
-                            try {
-                              const res = await fetch(`/api/sessions/${sess.id}`);
-                              if (res.ok) {
-                                const data = await res.json();
-                                setViewingPastSessionMessages(data.messages);
-                                setViewingPastSessionInfo(data.session);
+                        <div className="flex flex-col gap-2 shrink-0">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/sessions/${sess.id}`);
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setViewingPastSessionMessages(data.messages);
+                                  setViewingPastSessionInfo(data.session);
+                                }
+                              } catch (err) {
+                                console.error(err);
                               }
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }}
-                          className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-colors border border-emerald-500/15 shrink-0"
-                        >
-                          View Chat
-                        </button>
+                            }}
+                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-colors border border-emerald-500/15 text-center shrink-0"
+                          >
+                            View Chat
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                let cons = consultants.find(c => c.id === sess.consultant_id);
+                                if (!cons) {
+                                  const res = await fetch(`/api/consultants/${sess.consultant_id}/profile`);
+                                  if (res.ok) {
+                                    cons = await res.json();
+                                  }
+                                }
+                                if (cons) {
+                                  fetchFullProfile(cons);
+                                } else {
+                                  alert("This consultant is no longer active or available.");
+                                }
+                              } catch (err) {
+                                console.error("Error redirecting to consultant profile:", err);
+                              }
+                            }}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-extrabold px-3 py-1.5 rounded-xl transition-all text-center whitespace-nowrap shadow-sm shrink-0"
+                          >
+                            Chat Again
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2284,7 +2328,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         {userPastSessions.map((sess) => (
                           <div
                             key={sess.id}
-                            className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between hover:border-slate-750 transition-colors"
+                            className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-750 transition-colors text-left"
                           >
                             <div className="space-y-1 text-left">
                               <div className="flex items-center space-x-2">
@@ -2292,7 +2336,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                 <span className="text-[10px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded font-mono">ID: {sess.id}</span>
                               </div>
                               <p className="text-[10px] text-slate-500 font-sans">
-                                Date: {new Date(sess.created_at).toLocaleString()} • Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
+                                Date: {new Date(sess.created_at).toLocaleString()}
+                              </p>
+                              <p className="text-[10px] text-slate-500 font-sans">
+                                Status: <span className="capitalize text-slate-300 font-semibold">{sess.status}</span>
                               </p>
                               <div className="flex items-center space-x-2 mt-1">
                                 <span className="text-[10px] bg-rose-500/10 text-rose-400 font-bold px-2 py-0.5 rounded-md font-mono">
@@ -2321,23 +2368,49 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                               )}
                             </div>
                             
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const res = await fetch(`/api/sessions/${sess.id}`);
-                                  if (res.ok) {
-                                    const data = await res.json();
-                                    setViewingPastSessionMessages(data.messages);
-                                    setViewingPastSessionInfo(data.session);
+                            <div className="flex flex-col gap-2 shrink-0">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`/api/sessions/${sess.id}`);
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      setViewingPastSessionMessages(data.messages);
+                                      setViewingPastSessionInfo(data.session);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
                                   }
-                                } catch (err) {
-                                  console.error(err);
-                                }
-                              }}
-                              className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-colors border border-emerald-500/15"
-                            >
-                              View Chat
-                            </button>
+                                }}
+                                className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-colors border border-emerald-500/15 text-center shrink-0"
+                              >
+                                View Chat
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    setShowHistoryModal(false);
+                                    let cons = consultants.find(c => c.id === sess.consultant_id);
+                                    if (!cons) {
+                                      const res = await fetch(`/api/consultants/${sess.consultant_id}/profile`);
+                                      if (res.ok) {
+                                        cons = await res.json();
+                                      }
+                                    }
+                                    if (cons) {
+                                      fetchFullProfile(cons);
+                                    } else {
+                                      alert("This consultant is no longer active or available.");
+                                    }
+                                  } catch (err) {
+                                    console.error("Error redirecting to consultant profile:", err);
+                                  }
+                                }}
+                                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-extrabold px-3 py-1.5 rounded-xl transition-all text-center whitespace-nowrap shadow-sm shrink-0"
+                              >
+                                Chat Again
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -2774,7 +2847,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         <img
                           src={cons.photo_url}
                           alt={cons.display_name}
-                          className="w-16 h-16 rounded-xl object-cover border border-slate-800 flex-shrink-0"
+                          className="w-16 h-16 rounded-xl object-cover border border-slate-800 flex-shrink-0 cursor-pointer hover:opacity-85 hover:scale-105 transition-all"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightboxImage(cons.photo_url);
+                          }}
+                          title="Click to view photo"
                           referrerPolicy="no-referrer"
                         />
                       ) : (
@@ -2852,149 +2930,262 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 setSelectedConsultant(null);
                 setReviews([]);
               }}
-              className="text-slate-400 hover:text-white flex items-center space-x-1 text-sm font-mono transition-colors"
+              className="group text-slate-400 hover:text-emerald-400 flex items-center space-x-2 text-sm font-mono transition-colors duration-200 cursor-pointer bg-slate-900/40 px-3.5 py-1.5 rounded-full border border-slate-850 w-fit"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to Consultant directory</span>
+              <ArrowLeft className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform duration-200" />
+              <span>Back to Advisor Directory</span>
             </button>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
-            
-            {/* Consultant Profile Metadata */}
-            <div className="lg:col-span-7 space-y-6">
-              <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-sm space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center space-x-4">
-                    {selectedConsultant.photo_url ? (
-                      <img
-                        src={selectedConsultant.photo_url}
-                        alt={selectedConsultant.display_name}
-                        className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-800"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 rounded-2xl bg-slate-800 border-2 border-slate-700 text-slate-400 font-bold flex items-center justify-center">
-                        {selectedConsultant.display_name.slice(0, 1)}
-                      </div>
-                    )}
-                    <div>
-                      <h2 className="text-2xl font-extrabold tracking-tight text-slate-100">{selectedConsultant.display_name}</h2>
-                      <div className="text-xs text-slate-500 font-mono mt-1">Username: @{selectedConsultant.username}</div>
-                    </div>
+          {/* Premium Hero Header Area */}
+          <div className="relative bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-slate-800/80 p-6 sm:p-8 rounded-3xl overflow-hidden backdrop-blur-md shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            {/* Ambient Glow Effects */}
+            <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Left: Avatar & Metadata */}
+            <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6 z-10 w-full md:w-auto">
+              {/* Photo with Emerald Dynamic Pulse Glow */}
+              <div className="relative shrink-0">
+                {selectedConsultant.photo_url ? (
+                  <img
+                    src={selectedConsultant.photo_url}
+                    alt={selectedConsultant.display_name}
+                    className={`w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 shadow-2xl transition-all duration-300 cursor-pointer hover:opacity-85 hover:scale-105 ${
+                      selectedConsultant.is_online === 1 
+                        ? selectedConsultant.is_busy === 1 
+                          ? 'border-amber-500 shadow-amber-500/20' 
+                          : 'border-emerald-500 shadow-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+                        : 'border-slate-850'
+                    }`}
+                    onClick={() => setLightboxImage(selectedConsultant.photo_url)}
+                    title="Click to view photo"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-slate-900 border-2 font-black text-2xl flex items-center justify-center shadow-2xl ${
+                    selectedConsultant.is_online === 1
+                      ? selectedConsultant.is_busy === 1 ? 'border-amber-500 text-amber-400' : 'border-emerald-500 text-emerald-400'
+                      : 'border-slate-850 text-slate-500'
+                  }`}>
+                    {selectedConsultant.display_name.slice(0, 1)}
                   </div>
+                )}
+                {/* Live Badge over avatar */}
+                <span className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider font-mono shadow-md z-20 border whitespace-nowrap ${
+                  selectedConsultant.is_online === 1
+                    ? selectedConsultant.is_busy === 1
+                      ? 'bg-amber-950/90 text-amber-400 border-amber-500/30'
+                      : 'bg-emerald-950/90 text-emerald-400 border-emerald-500/30 animate-pulse'
+                    : 'bg-slate-950/90 text-slate-500 border-slate-800'
+                }`}>
+                  {selectedConsultant.is_online === 1
+                    ? selectedConsultant.is_busy === 1 ? 'Busy' : 'Online'
+                    : 'Offline'}
+                </span>
+              </div>
 
-                  <div>
-                    <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Consultation Fee</span>
-                    <strong className="text-xl font-black text-emerald-400 font-mono">₹{selectedConsultant.price_per_minute}/min</strong>
-                  </div>
+              {/* Name Details */}
+              <div className="text-center sm:text-left space-y-2">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-100">{selectedConsultant.display_name}</h2>
+                  <span className="bg-sky-500/15 text-sky-400 p-0.5 rounded-full border border-sky-500/25 flex items-center justify-center" title="Verified Creator">
+                    <CheckCircle className="w-4 h-4 fill-sky-500 text-slate-950" />
+                  </span>
                 </div>
-
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-850/60">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1.5">Expertise & Biography</span>
-                  <p className="text-xs text-slate-300 leading-relaxed font-sans">{selectedConsultant.bio}</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-center sm:justify-start gap-2">
+                  <p className="text-xs font-semibold text-slate-400 font-mono tracking-wide bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-850 inline-block">
+                    @{selectedConsultant.username}
+                  </p>
+                  <span className="bg-emerald-500/10 text-emerald-400 font-mono text-[10px] px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-wide self-center sm:self-auto">
+                    {selectedConsultant.category || 'Consultants'}
+                  </span>
                 </div>
-
-                <div className="flex items-center justify-between p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-xs">
-                  <span className="text-slate-400">Status Indicator</span>
+                {/* Ready to join button under username handle */}
+                <div className="pt-1 flex justify-center sm:justify-start">
                   {selectedConsultant.is_online === 1 ? (
                     selectedConsultant.is_busy === 1 ? (
-                      <span className="text-amber-400 font-bold animate-pulse">🟠 Busy (In active consultation)</span>
+                      <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold px-3 py-1 rounded-full text-xs font-mono inline-flex items-center gap-1.5 shadow-md">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                        <span>Busy in session</span>
+                      </span>
                     ) : (
-                      <span className="text-emerald-400 font-bold">🟢 Online (Ready to join)</span>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold px-3 py-1 rounded-full text-xs font-mono inline-flex items-center gap-1.5 shadow-md animate-pulse">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span>Ready to Join</span>
+                      </span>
                     )
                   ) : (
-                    <span className="text-slate-500 font-bold">🔴 Offline</span>
-                  )}
-                </div>
-
-                {/* 📅 Availability Schedule Section */}
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-850/60 space-y-3">
-                  <div className="flex items-center space-x-2 text-emerald-400">
-                    <Calendar className="w-4 h-4" />
-                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Availability Schedule</span>
-                  </div>
-                  {selectedConsSchedules.length === 0 ? (
-                    <div className="text-slate-500 text-xs font-mono pl-6">No specific schedule listed. Consultant connects live based on real-time online status.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6">
-                      {selectedConsSchedules.map((sch) => (
-                        <div key={sch.id} className="text-xs flex items-center space-x-2 bg-slate-900 p-2 rounded-lg border border-slate-850">
-                          <span className="font-semibold text-emerald-300 font-mono text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/10">
-                            {sch.date ? sch.date : sch.day}
-                          </span>
-                          <span className="text-slate-300 font-bold">{sch.from_time} - {sch.to_time}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <span className="bg-slate-800/50 text-slate-400 border border-slate-700/40 font-bold px-3 py-1 rounded-full text-xs font-mono inline-flex items-center gap-1.5 shadow-md">
+                      <span className="relative flex h-2 w-2">
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
+                      </span>
+                      <span>Offline</span>
+                    </span>
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* Reviews section */}
-              <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-sm space-y-6">
-                <div>
-                  <h3 className="text-lg font-bold">Recent Clients Reviews</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-1">Feedbacks and rating logs</p>
+            {/* Right: Fee Badge */}
+            <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-850 rounded-2xl p-4.5 text-center shadow-lg backdrop-blur-sm self-stretch md:self-auto flex flex-col justify-center items-center gap-2.5 w-full md:w-44 shrink-0 z-10">
+              <div>
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block font-bold">Consultation Rate</span>
+                <strong className="text-2xl font-black text-emerald-400 font-mono tracking-tight block mt-1">₹{selectedConsultant.price_per_minute}<span className="text-xs font-normal text-slate-400 font-sans ml-1">/min</span></strong>
+              </div>
+              <div className="bg-emerald-500/10 text-emerald-400 text-[10px] px-3 py-1 rounded-xl border border-emerald-500/20 font-bold font-mono w-full text-center">
+                Offer Price
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
+            
+            {/* Left side: Biography, Availability, Reviews */}
+            <div className="lg:col-span-7 space-y-6">
+              
+              {/* Glassmorphic Biography Card */}
+              <div className="bg-gradient-to-b from-slate-900/80 to-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-3.5 hover:border-slate-800 transition-all duration-300">
+                <div className="flex items-center space-x-2.5 pb-2.5 border-b border-slate-850">
+                  <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/25">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">Expertise & Biography</h3>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed font-sans font-light">
+                  {selectedConsultant.bio || "No biography provided yet. Stay tuned for expert insights and updates!"}
+                </p>
+              </div>
+
+              {/* Glassmorphic Availability Schedule Card */}
+              <div className="bg-gradient-to-b from-slate-900/80 to-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4 hover:border-slate-800 transition-all duration-300">
+                <div className="flex items-center space-x-2.5 pb-2.5 border-b border-slate-850">
+                  <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/25">
+                    <Calendar className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">Weekly Shift Schedule</h3>
+                </div>
+                {selectedConsSchedules.length === 0 ? (
+                  <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-900/60 text-slate-500 text-xs font-mono flex items-center space-x-2">
+                    <AlertTriangle className="w-4 h-4 text-slate-600 shrink-0" />
+                    <span>No specific schedule listed. Creator connects live based on real-time online status.</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {selectedConsSchedules.map((sch) => (
+                      <div key={sch.id} className="text-xs flex items-center justify-between bg-slate-950/50 p-3 rounded-2xl border border-slate-850/60 hover:border-slate-800 transition-all duration-200">
+                        <span className="font-semibold text-emerald-400 font-mono text-[10px] bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/15">
+                          {sch.date ? sch.date : sch.day}
+                        </span>
+                        <span className="text-slate-200 font-bold font-mono bg-slate-900 px-2 py-1 rounded-lg border border-slate-850">{sch.from_time} - {sch.to_time}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Glassmorphic Reviews Section */}
+              <div className="bg-gradient-to-b from-slate-900/80 to-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-5 hover:border-slate-800 transition-all duration-300">
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-850">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="bg-amber-500/10 p-1.5 rounded-lg border border-amber-500/25">
+                      <Star className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">Recent Client Reviews</h3>
+                      <span className="text-[10px] text-slate-500 font-mono">Feedbacks & rating logs</span>
+                    </div>
+                  </div>
+                  <div className="bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl text-xs font-bold text-amber-400 flex items-center space-x-1 font-mono">
+                    <span>★</span>
+                    <span>{reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : "5.0"}</span>
+                    <span className="text-[10px] text-slate-500 font-normal">({reviews.length})</span>
+                  </div>
                 </div>
 
-                <div className="divide-y divide-slate-800/80 space-y-4 max-h-[250px] overflow-y-auto pr-1">
+                <div className="space-y-3.5 max-h-[350px] overflow-y-auto pr-1">
                   {reviews.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500 text-xs font-sans">No reviews found yet. Be the first to consult!</div>
+                    <div className="text-center py-12 text-slate-500 text-xs font-mono bg-slate-950/20 rounded-2xl border border-slate-900/50">
+                      🌟 No reviews found yet. Be the first to consult!
+                    </div>
                   ) : (
                     reviews.map((rev) => (
-                      <div key={rev.id} className="pt-4 first:pt-0 space-y-1">
+                      <div key={rev.id} className="bg-slate-950/40 p-4 rounded-2xl border border-slate-900/60 space-y-2.5 hover:border-slate-850/60 transition-all duration-300 relative group">
                         <div className="flex items-center justify-between">
-                          <strong className="text-sm text-slate-200">{rev.user_name}</strong>
-                          <div className="flex items-center text-amber-400">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center border border-slate-800 font-extrabold text-xs text-emerald-400 shadow-inner">
+                              {rev.user_name.slice(0, 1).toUpperCase()}
+                            </div>
+                            <div>
+                              <strong className="text-xs font-extrabold text-slate-200 block">{rev.user_name}</strong>
+                              <span className="text-[9px] text-slate-500 block font-mono">{new Date(rev.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-0.5 bg-amber-500/5 px-2 py-1 rounded-lg border border-amber-500/10">
                             {[...Array(5)].map((_, i) => (
                               <Star
                                 key={i}
-                                className={`w-3.5 h-3.5 ${i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                className={`w-3 h-3 ${i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-800'}`}
                               />
                             ))}
                           </div>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">{rev.text}</p>
-                        <span className="text-[10px] text-slate-600 block font-mono">{new Date(rev.created_at).toLocaleDateString()}</span>
+                        <p className="text-xs text-slate-300 leading-relaxed font-sans italic pl-1">"{rev.text}"</p>
                       </div>
                     ))
                   )}
                 </div>
-
               </div>
 
             </div>
 
-            {/* Chat Booking Packages Flow */}
-            <div className="lg:col-span-5 bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-sm space-y-6">
-              <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
-                <Clock className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold">Book Chat Duration Package</h3>
+            {/* Right side: Chat Booking & Packages Flow */}
+            <div className="lg:col-span-5 bg-gradient-to-b from-slate-900/80 to-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6 self-start">
+              <div className="flex items-center space-x-2.5 pb-3.5 border-b border-slate-850">
+                <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/25">
+                  <Clock className="w-4 h-4 text-emerald-400" />
+                </div>
+                <h3 className="font-extrabold text-sm text-slate-200">Chat Duration Packages</h3>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-5">
                 
                 {/* Package minute selector block */}
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-mono text-slate-400">Select consultation duration</label>
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2.5">
+                  <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Select Consultation Duration</label>
+                  <div className="grid grid-cols-2 gap-3.5">
                     {[5, 10, 15, 30].map((mins) => {
                       const totalInr = mins * selectedConsultant.price_per_minute;
+                      const isSelected = selectedMinutes === mins;
                       return (
                         <button
                           key={mins}
                           type="button"
                           onClick={() => setSelectedMinutes(mins)}
-                          className={`p-3 border text-left transition-all rounded-xl ${
-                            selectedMinutes === mins
-                              ? 'border-emerald-500 bg-emerald-500/5'
-                              : 'border-slate-800 bg-slate-950/40 hover:border-slate-750'
+                          className={`relative p-4 text-left transition-all duration-300 rounded-2xl cursor-pointer select-none border-2 overflow-hidden flex flex-col justify-between ${
+                            isSelected
+                              ? 'border-emerald-500 bg-emerald-500/[0.04] shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+                              : 'border-slate-850 bg-slate-950/60 hover:border-slate-800 hover:bg-slate-950/80'
                           }`}
                         >
-                          <span className="text-[9px] font-mono text-slate-500 block uppercase">Package</span>
-                          <span className="text-sm font-extrabold text-slate-200 mt-1 block font-sans">{mins} Minutes</span>
-                          <span className="text-xs font-bold text-emerald-400 block mt-1">₹{totalInr} INR</span>
+                          {isSelected && (
+                            <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                          )}
+                          
+                          <div>
+                            <span className="text-[9px] font-mono text-slate-500 block uppercase tracking-widest">Duration</span>
+                            <span className="text-base font-black text-slate-100 mt-1 block font-sans">{mins} Mins</span>
+                          </div>
+                          <div className="mt-4 pt-2.5 border-t border-slate-900/60 flex items-center justify-between">
+                            <span className="text-sm sm:text-base font-black text-emerald-400 font-mono">₹{totalInr}</span>
+                            <span className={`text-[8px] font-bold font-mono ${isSelected ? 'text-emerald-400' : 'text-slate-500'}`}>INR</span>
+                          </div>
                         </button>
                       );
                     })}
@@ -3002,19 +3193,24 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 </div>
 
                 {/* Billing Summary calculation panel */}
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs space-y-2">
-                  <span className="text-[9px] font-mono text-slate-500 uppercase block border-b border-slate-900 pb-1.5">Billing Calculation</span>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Expertise Tariff:</span>
-                    <span className="text-slate-200">₹{selectedConsultant.price_per_minute}/min</span>
+                <div className="bg-slate-950/80 p-4.5 rounded-2xl border border-slate-850/60 text-xs space-y-3 shadow-inner">
+                  <div className="flex items-center justify-between border-b border-slate-900/60 pb-2">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Billing Breakdown</span>
+                    <span className="text-[10px] font-mono text-slate-500">Summary</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Selected Minutes:</span>
-                    <span className="text-slate-200 font-mono">{selectedMinutes} mins</span>
+                  <div className="space-y-1.5 font-mono text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Advisor Rate:</span>
+                      <span className="text-slate-300">₹{selectedConsultant.price_per_minute}/min</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Duration Count:</span>
+                      <span className="text-slate-300">{selectedMinutes} Mins</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between pt-2 border-t border-slate-900 font-bold">
-                    <span className="text-slate-300">Total Payable Amount:</span>
-                    <span className="text-emerald-400">₹{selectedMinutes * selectedConsultant.price_per_minute} INR</span>
+                  <div className="flex justify-between pt-2.5 border-t border-slate-900/60 font-sans font-bold text-sm">
+                    <span className="text-slate-300">Total Due Amount:</span>
+                    <span className="text-emerald-400 text-base font-mono font-black">₹{selectedMinutes * selectedConsultant.price_per_minute} INR</span>
                   </div>
                 </div>
 
@@ -3023,45 +3219,45 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   <button
                     type="button"
                     onClick={onOpenAuth}
-                    className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
+                    className="bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 py-3.5 rounded-2xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-[0_4px_20px_rgba(16,185,129,0.2)] cursor-pointer"
                   >
-                    <span>🔒 Start Chat (Please Sign Up / Login first)</span>
+                    <span>🔒 Connect & Chat (Sign Up / Login)</span>
                   </button>
                 ) : (
-                  <>
+                  <div className="space-y-4">
                     {/* Logged in User Wallet status */}
-                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-slate-400 block">Your Current Balance:</span>
-                        <strong className="text-emerald-400 text-sm font-mono">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</strong>
+                    <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-850/80 flex items-center justify-between text-xs shadow-md">
+                      <div className="space-y-0.5">
+                        <span className="text-slate-500 block text-[10px] uppercase font-mono tracking-wider">Your Balance</span>
+                        <strong className="text-emerald-400 text-base font-mono font-black">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</strong>
                       </div>
                       
                       {currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute) && (
-                        <div className="text-rose-400 text-[10px] font-bold text-right flex flex-col">
-                          <span>Insufficient Balance!</span>
-                          <span className="text-slate-500">Need ₹{(selectedMinutes * selectedConsultant.price_per_minute) - currentUser.wallet_balance} more</span>
+                        <div className="text-rose-400 text-[10px] font-bold text-right flex flex-col justify-center bg-rose-500/5 px-3 py-1.5 rounded-xl border border-rose-500/10 shrink-0">
+                          <span className="font-sans">Insufficient Balance</span>
+                          <span className="text-[9px] font-mono font-normal mt-0.5 text-rose-300/80">Need ₹{((selectedMinutes * selectedConsultant.price_per_minute) - currentUser.wallet_balance).toFixed(2)} more</span>
                         </div>
                       )}
                     </div>
 
-                    {/* Pay with Wallet action button */}
+                    {/* Pay with Wallet / Razorpay action buttons */}
                     {currentUser.wallet_balance >= (selectedMinutes * selectedConsultant.price_per_minute) ? (
                       <div className="space-y-3">
                         <button
                           type="button"
                           onClick={handleInitiateWalletPayment}
                           disabled={isProcessingPayment}
-                          className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
+                          className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 active:scale-98 text-slate-950 py-3.5 rounded-2xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-[0_4px_20px_rgba(16,185,129,0.2)] cursor-pointer"
                         >
                           {isProcessingPayment && pendingPaymentMethod === 'wallet' ? (
                             <>
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950" />
-                              <span>Initiating session...</span>
+                              <span>Initiating secure session...</span>
                             </>
                           ) : (
                             <>
                               <MessageCircle className="w-4 h-4" />
-                              <span>Pay with Wallet (₹{selectedMinutes * selectedConsultant.price_per_minute})</span>
+                              <span>Book Chat with Wallet (₹{selectedMinutes * selectedConsultant.price_per_minute})</span>
                             </>
                           )}
                         </button>
@@ -3070,7 +3266,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           type="button"
                           onClick={() => handleInitiateDirectRazorpayPayment()}
                           disabled={isProcessingPayment}
-                          className="bg-slate-950 hover:bg-slate-900 border border-slate-800 disabled:opacity-40 text-emerald-400 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
+                          className="bg-slate-950 hover:bg-slate-900 border border-slate-800 disabled:opacity-40 active:scale-98 text-emerald-400 py-3.5 rounded-2xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm cursor-pointer"
                         >
                           {isProcessingPayment && pendingPaymentMethod === 'razorpay' ? (
                             <>
@@ -3079,20 +3275,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                             </>
                           ) : (
                             <>
-                              <CreditCard className="w-4 h-4" />
+                              <CreditCard className="w-4 h-4 text-emerald-400" />
                               <span>Pay directly with Razorpay (₹{selectedMinutes * selectedConsultant.price_per_minute})</span>
                             </>
                           )}
                         </button>
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-3.5">
                         {/* Insufficient wallet balance -> Direct payment with Razorpay */}
                         <button
                           type="button"
                           onClick={() => handleInitiateDirectRazorpayPayment()}
                           disabled={isProcessingPayment}
-                          className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 py-3.5 rounded-xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-sm"
+                          className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 active:scale-98 text-slate-950 py-3.5 rounded-2xl text-xs font-black w-full transition-all flex items-center justify-center space-x-2 shadow-[0_4px_20px_rgba(16,185,129,0.2)] cursor-pointer"
                         >
                           {isProcessingPayment && pendingPaymentMethod === 'razorpay' ? (
                             <>
@@ -3107,11 +3303,11 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           )}
                         </button>
 
-                        {/* Wallet Insufficient Warning quick link */}
-                        <div className="bg-rose-500/10 p-3 rounded-xl border border-rose-500/10 text-[10px] text-rose-300 flex items-start space-x-2">
-                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                          <div className="space-y-1">
-                            <p>
+                        {/* Sophisticated, Neat Wallet alert block */}
+                        <div className="bg-rose-500/[0.03] p-4.5 rounded-2xl border border-rose-500/10 text-xs text-slate-300 flex items-start space-x-3 shadow-md">
+                          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                          <div className="space-y-2">
+                            <p className="leading-relaxed font-sans text-xs text-slate-400">
                               Aapke wallet me chat booking ke liye paryapt balance nahi hai. Aap chahein toh upar diye button se direct **Razorpay** se pay kar sakte hain ya fir wallet recharge kar sakte hain.
                             </p>
                             <button
@@ -3119,7 +3315,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                               onClick={() => {
                                 setShowRechargeModal(true);
                               }}
-                              className="text-emerald-400 hover:underline font-bold text-xs flex items-center space-x-1"
+                              className="text-emerald-400 hover:text-emerald-300 font-black text-xs flex items-center space-x-1.5 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shadow-sm"
                             >
                               <span>Recharge Wallet First</span>
                               <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -3128,7 +3324,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         </div>
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
 
               </div>
@@ -3249,6 +3445,43 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           </div>
         )}
       </AnimatePresence>
+
+      {/* Lightbox / Zoom Photo Modal */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div 
+            className="relative max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-3 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top close button inside the modal frame */}
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-4 right-4 bg-slate-950/80 hover:bg-slate-950 text-slate-300 hover:text-white p-2 rounded-full border border-slate-800 transition-all z-20"
+              title="Close Preview"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            
+            {/* Image */}
+            <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center">
+              <img
+                src={lightboxImage}
+                alt="Enlarged Profile"
+                className="w-full h-full object-contain"
+                onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'; }}
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            
+            <div className="mt-3 text-center">
+              <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Profile Picture Preview</p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

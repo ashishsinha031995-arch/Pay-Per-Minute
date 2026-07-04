@@ -68,7 +68,7 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
       db.prepare('UPDATE consultants SET is_online = ? WHERE id = ?').run(is_online ? 1 : 0, id);
     }
     if (is_busy !== undefined) {
-      db.prepare('UPDATE consultants SET is_busy = ? WHERE id = ?').run(is_busy ? 1 : 0, id);
+      db.prepare('UPDATE consultants SET is_busy = ?, manual_busy = ? WHERE id = ?').run(is_busy ? 1 : 0, is_busy ? 1 : 0, id);
       
       // If the consultant marked themselves as free (not busy), check if there are users in queue after a 3-second delay
       if (!is_busy) {
@@ -83,7 +83,7 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
       }
     }
 
-    const updated = db.prepare('SELECT id, is_online, is_busy FROM consultants WHERE id = ?').get(id);
+    const updated = db.prepare('SELECT id, is_online, is_busy, manual_busy FROM consultants WHERE id = ?').get(id);
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

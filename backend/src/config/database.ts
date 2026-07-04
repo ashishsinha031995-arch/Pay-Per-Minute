@@ -333,6 +333,7 @@ export function initDb() {
       price_per_minute REAL DEFAULT 10.0,
       is_online INTEGER DEFAULT 0,
       is_busy INTEGER DEFAULT 0,
+      manual_busy INTEGER DEFAULT 0,
       is_active INTEGER DEFAULT 1,
       wallet_today REAL DEFAULT 0.0,
       wallet_monthly REAL DEFAULT 0.0,
@@ -624,6 +625,7 @@ export function initDb() {
 
   try { db.exec("ALTER TABLE support_tickets ADD COLUMN closed_at TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE support_tickets ADD COLUMN resolved_at TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN manual_busy INTEGER DEFAULT 0;"); } catch(_) {}
 
   try {
     db.exec(`

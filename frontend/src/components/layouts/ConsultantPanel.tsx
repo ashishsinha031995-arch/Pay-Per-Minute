@@ -349,6 +349,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules'>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Real-time fluctuating velocity meter metrics
   const [liveVelocityScore, setLiveVelocityScore] = useState(76);
@@ -369,6 +370,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [kycFeedbackSuccess, setKycFeedbackSuccess] = useState<string | null>(null);
   const [bankFeedbackError, setBankFeedbackError] = useState<string | null>(null);
   const [bankFeedbackSuccess, setBankFeedbackSuccess] = useState<string | null>(null);
+  const [profileFeedbackError, setProfileFeedbackError] = useState<string | null>(null);
+  const [profileFeedbackSuccess, setProfileFeedbackSuccess] = useState<string | null>(null);
 
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1269,6 +1272,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     e.preventDefault();
     if (!currentConsultant) return;
     setError(null);
+    setProfileFeedbackError(null);
+    setProfileFeedbackSuccess(null);
     try {
       const activePlan = plans.find(p => p.id === wallet?.plan_id);
       const maxRate = activePlan?.max_consultant_rate ?? 1000.0;
@@ -1291,6 +1296,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       if (!res.ok) throw new Error(data.error || 'Failed to save profile changes');
       
       setSuccess('Profile updated successfully!');
+      setProfileFeedbackSuccess('profile saved successfully');
+      setProfileFeedbackError(null);
       
       // Sync local state inputs immediately with updated values from server
       if (data.photo_url !== undefined) setPhotoUrl(data.photo_url || '');
@@ -1305,9 +1312,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       // Force loadConsultantStatsAndStatus to re-fetch and update
       await loadConsultantStatsAndStatus(currentConsultant.id);
       
-      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => {
+        setSuccess(null);
+        setProfileFeedbackSuccess(null);
+      }, 4000);
     } catch (err: any) {
       setError(err.message);
+      setProfileFeedbackError(err.message);
+      setProfileFeedbackSuccess(null);
     }
   };
 
@@ -2510,7 +2522,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               <img
                 src={photoUrl || currentConsultant.photo_url}
                 alt={currentConsultant.display_name}
-                className="w-9 h-9 rounded-xl object-cover border border-emerald-500"
+                className="w-9 h-9 rounded-xl object-cover border border-emerald-500 cursor-pointer hover:scale-105 transition-transform"
+                onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
+                title="Click to view photo"
               />
               <div>
                 <h3 className="text-xs font-bold leading-tight truncate max-w-[110px]">{currentConsultant.display_name}</h3>
@@ -2574,7 +2588,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     <img
                       src={photoUrl || currentConsultant.photo_url}
                       alt={currentConsultant.display_name}
-                      className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-500 shadow-md"
+                      className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-500 shadow-md cursor-pointer hover:scale-105 transition-transform"
+                      onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
+                      title="Click to view photo"
                     />
                     <div>
                       <h3 className="font-extrabold text-sm text-slate-100 font-sans tracking-wide truncate max-w-[160px] sm:max-w-[180px]">
@@ -2862,7 +2878,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <img
                     src={photoUrl || currentConsultant.photo_url}
                     alt={currentConsultant.display_name}
-                    className="w-20 h-20 mx-auto rounded-2xl object-cover border-2 border-emerald-500 shadow-md transition-transform hover:scale-105 duration-300"
+                    className="w-20 h-20 mx-auto rounded-2xl object-cover border-2 border-emerald-500 shadow-md transition-transform hover:scale-105 duration-300 cursor-pointer"
+                    onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
+                    title="Click to view photo"
                   />
                   <span className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] shadow ${isOnline ? (isBusy ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-slate-600'}`} title={isOnline ? (isBusy ? 'Busy' : 'Online') : 'Offline'}>
                     ⚡
@@ -4236,7 +4254,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <img 
                             src={photoUrl} 
                             alt="Live Preview" 
-                            className="w-10 h-10 rounded-lg object-cover border border-slate-800" 
+                            className="w-10 h-10 rounded-lg object-cover border border-slate-800 cursor-pointer hover:opacity-85 transition-opacity" 
+                            onClick={() => setLightboxImage(photoUrl)}
+                            title="Click to view photo"
                             onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} 
                             referrerPolicy="no-referrer" 
                           />
@@ -4305,6 +4325,16 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     >
                       Save Profile & Consultation Settings
                     </button>
+                    {profileFeedbackSuccess && (
+                      <p className="text-xs text-emerald-400 font-bold mt-2 text-center bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl">
+                        ✓ {profileFeedbackSuccess}
+                      </p>
+                    )}
+                    {profileFeedbackError && (
+                      <p className="text-xs text-rose-400 font-bold mt-2 text-center bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-xl">
+                        ✗ {profileFeedbackError}
+                      </p>
+                    )}
                   </form>
                 </motion.div>
               )}
@@ -5634,6 +5664,43 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox / Zoom Photo Modal */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div 
+            className="relative max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-3 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top close button inside the modal frame */}
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-4 right-4 bg-slate-950/80 hover:bg-slate-950 text-slate-300 hover:text-white p-2 rounded-full border border-slate-800 transition-all z-20"
+              title="Close Preview"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            
+            {/* Image */}
+            <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center">
+              <img
+                src={lightboxImage}
+                alt="Enlarged Profile"
+                className="w-full h-full object-contain"
+                onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'; }}
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            
+            <div className="mt-3 text-center">
+              <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Profile Picture Preview</p>
             </div>
           </div>
         </div>

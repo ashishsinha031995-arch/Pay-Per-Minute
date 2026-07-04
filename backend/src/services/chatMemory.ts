@@ -122,9 +122,17 @@ export const ChatMemoryService = {
     
     // 1. Generate the transcript using individual messages
     const transcript = messages.map(m => {
-      const timeStr = new Date(m.created_at).toLocaleTimeString();
-      const textVal = m.text.startsWith('[VOICE_NOTE]:') ? '[Voice Note 🎙️]' : m.text;
-      return `[${timeStr}] ${m.sender_name}: ${textVal}`;
+      let timeStr = 'Unknown Time';
+      try {
+        if (m.created_at) {
+          const d = new Date(m.created_at);
+          if (!isNaN(d.getTime())) {
+            timeStr = d.toLocaleTimeString();
+          }
+        }
+      } catch (e) {}
+      const textVal = (m.text && typeof m.text === 'string' && m.text.startsWith('[VOICE_NOTE]:')) ? '[Voice Note 🎙️]' : (m.text || '');
+      return `[${timeStr}] ${m.sender_name || 'User'}: ${textVal}`;
     }).join('\n');
 
     const consultantMsgs = messages.filter(m => m.sender_type === 'consultant');

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Send, Clock, User, Sparkles, MessageSquare, AlertTriangle, ArrowLeft, Check, CheckCheck, CheckCircle, ShieldAlert, XCircle, Ban, Mic, Square, Trash2 } from 'lucide-react';
+import { Send, Clock, User, Sparkles, MessageSquare, AlertTriangle, ArrowLeft, Check, CheckCheck, CheckCircle, ShieldAlert, XCircle, Ban, Mic, Square, Trash2, X } from 'lucide-react';
 import { Message, Session } from '../../types';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -25,6 +25,7 @@ export function ChatRoom({
   const currentUser = currentUserProp || authContext?.currentUser;
   const refreshUserProfile = refreshUserProfileProp || authContext?.refreshUserProfile;
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
@@ -121,6 +122,14 @@ export function ChatRoom({
 
   const [textInput, setTextInput] = useState('');
   
+  // Custom confirmation dialog state
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+  
   // Real-time socket states
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [partnerOnline, setPartnerOnline] = useState(false);
@@ -138,24 +147,29 @@ export function ChatRoom({
 
   const handleExitQueue = async () => {
     if (!sessionId) return;
-    if (window.confirm("Aap sach mein queue se bahar nikalna chahte hain? Aapka paid amount refund ho jayega. (Are you sure you want to exit the queue? Your payment will be refunded to your wallet.)")) {
-      try {
-        setIsExitingQueue(true);
-        const res = await fetch(`/api/sessions/${sessionId}/cancel`, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          setSessionInfo(prev => prev ? { ...prev, status: 'cancelled' } : null);
-          setShowBusyPopup(false);
-        } else {
-          alert(data.error || "Failed to exit queue.");
+    setConfirmState({
+      isOpen: true,
+      title: "Exit Queue?",
+      message: "Aap sach mein queue se bahar nikalna chahte hain? Aapka paid amount refund ho jayega. (Are you sure you want to exit the queue? Your payment will be refunded to your wallet.)",
+      onConfirm: async () => {
+        try {
+          setIsExitingQueue(true);
+          const res = await fetch(`/api/sessions/${sessionId}/cancel`, { method: 'POST' });
+          const data = await res.json();
+          if (data.success) {
+            setSessionInfo(prev => prev ? { ...prev, status: 'cancelled' } : null);
+            setShowBusyPopup(false);
+          } else {
+            alert(data.error || "Failed to exit queue.");
+          }
+        } catch (err: any) {
+          console.error("Error exiting queue:", err);
+          alert("An error occurred. Please try again.");
+        } finally {
+          setIsExitingQueue(false);
         }
-      } catch (err: any) {
-        console.error("Error exiting queue:", err);
-        alert("An error occurred. Please try again.");
-      } finally {
-        setIsExitingQueue(false);
       }
-    }
+    });
   };
 
   useEffect(() => {
@@ -802,9 +816,39 @@ export function ChatRoom({
       {/* Session Title Bar */}
       <div className="bg-slate-900 text-white p-4 rounded-t-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
         <div className="flex items-center space-x-3">
-          <div className="bg-slate-950 p-2.5 rounded-xl text-emerald-400 border border-slate-800 flex-shrink-0">
-            {role === 'user' ? <Sparkles className="w-5 h-5" /> : <User className="w-5 h-5" />}
-          </div>
+          <button
+            onClick={onClose}
+            className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm"
+            title="Go Back"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-bold font-sans">Go Back</span>
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => {
+              const photo = role === 'user' ? sessionInfo?.consultant_photo : sessionInfo?.user_photo;
+              if (photo) setLightboxImage(photo);
+            }}
+            className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex-shrink-0 w-11 h-11 overflow-hidden hover:border-emerald-500 transition-all cursor-pointer flex items-center justify-center relative group"
+            title="Click to view photo"
+          >
+            {(() => {
+              const photo = role === 'user' ? sessionInfo?.consultant_photo : sessionInfo?.user_photo;
+              if (photo) {
+                return (
+                  <img
+                    src={photo}
+                    alt=""
+                    className="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform"
+                    referrerPolicy="no-referrer"
+                  />
+                );
+              }
+              return role === 'user' ? <Sparkles className="w-5 h-5 text-emerald-400" /> : <User className="w-5 h-5 text-emerald-400" />;
+            })()}
+          </button>
           <div>
             <h3 className="font-bold text-sm text-slate-100">
               {role === 'user' ? sessionInfo?.consultant_name : sessionInfo?.user_name}
@@ -841,26 +885,40 @@ export function ChatRoom({
               {role === 'user' && (
                 <button
                   id="user-end-chat-btn"
-                  onClick={async () => {
-                    if (!window.confirm('Kya aap sach mein is consultation ko end karna chahte hain? (Are you sure you want to end this consultation?)')) return;
-                    try {
-                      setIsEnding(true);
-                      const res = await fetch(`/api/sessions/${sessionId}/end`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ended_by: role })
-                      });
-                      if (res.ok) {
-                        setToastMessage({ type: 'success', text: 'Consultation ended successfully.' });
-                      } else {
-                        const errData = await res.json();
-                        alert(errData.error || 'Failed to end session');
+                  onClick={() => {
+                    setConfirmState({
+                      isOpen: true,
+                      title: 'End Consultation?',
+                      message: 'Kya aap sach mein is consultation ko end karna chahte hain? (Are you sure you want to end this consultation?)',
+                      onConfirm: async () => {
+                        try {
+                          setIsEnding(true);
+                          const res = await fetch(`/api/sessions/${sessionId}/end`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ended_by: role })
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setToastMessage({ type: 'success', text: 'Consultation ended successfully.' });
+                            setSessionCompleted(true);
+                            setSessionTranscript(data.transcript || '');
+                            setRemainingSeconds(0);
+                            setSessionInfo(prev => prev ? { ...prev, status: data.status || 'completed', transcript: data.transcript } : null);
+                            if (currentUser?.id && refreshUserProfile) {
+                              refreshUserProfile(currentUser.id);
+                            }
+                          } else {
+                            const errData = await res.json();
+                            alert(errData.error || 'Failed to end session');
+                          }
+                        } catch (err) {
+                          console.error('Error manual ending:', err);
+                        } finally {
+                          setIsEnding(false);
+                        }
                       }
-                    } catch (err) {
-                      console.error('Error manual ending:', err);
-                    } finally {
-                      setIsEnding(false);
-                    }
+                    });
                   }}
                   disabled={isEnding}
                   className="bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center space-x-1"
@@ -875,69 +933,58 @@ export function ChatRoom({
                 <div className="flex items-center space-x-1.5">
                   <button
                     id="consultant-block-btn"
-                    onClick={async () => {
+                    onClick={() => {
                       const uName = sessionInfo.user_name;
-                      if (!window.confirm(`Kya aap "${uName}" ko block karna chahte hain? Woh aapse dubara chat nahi kar payenge aur yeh session end ho jayega.`)) return;
-                      try {
-                        setIsBlocking(true);
-                        // 1. Block request
-                        const blockRes = await fetch('/api/consultants/block', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            consultant_id: sessionInfo.consultant_id,
-                            user_name: uName
-                          })
-                        });
-                        if (blockRes.ok) {
-                          // 2. End current session
-                          await fetch(`/api/sessions/${sessionId}/end`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ended_by: role })
-                          });
-                          setToastMessage({ type: 'success', text: `Blocked ${uName} and ended chat.` });
-                        } else {
-                          const blockErr = await blockRes.json();
-                          alert(blockErr.error || 'Failed to block user');
+                      setConfirmState({
+                        isOpen: true,
+                        title: 'Block User?',
+                        message: `"${uName}" will get blocked and not able to contact you in future, Are you sure you want to block.`,
+                        confirmText: 'Yes, Block',
+                        cancelText: 'No, Cancel',
+                        onConfirm: async () => {
+                          try {
+                            setIsBlocking(true);
+                            // 1. Block request
+                            const blockRes = await fetch('/api/consultants/block', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                consultant_id: sessionInfo.consultant_id,
+                                user_name: uName
+                              })
+                            });
+                            if (blockRes.ok) {
+                              // 2. End current session immediately and do money deduction calculation according to time
+                              const endRes = await fetch(`/api/sessions/${sessionId}/end`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ended_by: role })
+                              });
+                              if (endRes.ok) {
+                                const data = await endRes.json();
+                                setSessionCompleted(true);
+                                setSessionTranscript(data.transcript || '');
+                                setRemainingSeconds(0);
+                                setSessionInfo(prev => prev ? { ...prev, status: data.status || 'completed', transcript: data.transcript } : null);
+                              }
+                              setToastMessage({ type: 'success', text: `Blocked ${uName} and ended chat.` });
+                            } else {
+                              const blockErr = await blockRes.json();
+                              alert(blockErr.error || 'Failed to block user');
+                            }
+                          } catch (err) {
+                            console.error('Error blocking:', err);
+                          } finally {
+                            setIsBlocking(false);
+                          }
                         }
-                      } catch (err) {
-                        console.error('Error blocking:', err);
-                      } finally {
-                        setIsBlocking(false);
-                      }
+                      });
                     }}
                     disabled={isBlocking}
                     className="bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-850 font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center space-x-1"
                   >
                     <Ban className="w-3.5 h-3.5" />
                     <span>Block User</span>
-                  </button>
-
-                  <button
-                    id="consultant-end-chat-btn"
-                    onClick={async () => {
-                      if (!window.confirm('Kya aap is session ko end karna chahte hain?')) return;
-                      try {
-                        setIsEnding(true);
-                        const res = await fetch(`/api/sessions/${sessionId}/end`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ ended_by: role })
-                        });
-                        if (res.ok) {
-                          setToastMessage({ type: 'success', text: 'Session manually completed.' });
-                        }
-                      } catch (err) {
-                        console.error('Error ending:', err);
-                      } finally {
-                        setIsEnding(false);
-                      }
-                    }}
-                    disabled={isEnding}
-                    className="bg-slate-850 hover:bg-slate-850/80 text-slate-300 font-semibold text-xs px-3 py-2 rounded-xl transition-all"
-                  >
-                    End Session
                   </button>
                 </div>
               )}
@@ -1142,14 +1189,19 @@ export function ChatRoom({
             >
               <div className={`flex items-start max-w-[85%] ${isMe ? 'flex-row-reverse space-x-3 space-x-reverse' : 'space-x-3'}`}>
                 {/* Profile Pic */}
-                <div className="w-8 h-8 rounded-full border border-slate-800/80 overflow-hidden bg-slate-950 shrink-0 self-start mt-1 shadow">
+                <button
+                  type="button"
+                  onClick={() => setLightboxImage(avatarSrc)}
+                  className="w-8 h-8 rounded-full border border-slate-800/80 overflow-hidden bg-slate-950 shrink-0 self-start mt-1 shadow cursor-pointer hover:border-emerald-500 hover:scale-105 transition-all p-0 flex items-center justify-center"
+                  title="View Photo"
+                >
                   <img
                     src={avatarSrc}
                     alt=""
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
-                </div>
+                </button>
 
                 {/* Message bubble column */}
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
@@ -1433,6 +1485,174 @@ export function ChatRoom({
               >
                 {isExitingQueue ? 'Exiting Queue...' : 'Exit Queue & Refund'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom High-Reliability Confirmation Modal */}
+      {confirmState && confirmState.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 text-center space-y-6 shadow-2xl relative overflow-hidden animate-in zoom-in duration-200">
+            <div className="mx-auto w-12 h-12 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="font-extrabold text-base text-slate-100">{confirmState.title}</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {confirmState.message}
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-center w-full pt-2">
+              <button
+                onClick={() => setConfirmState(null)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 px-4 rounded-xl text-xs transition-all border border-slate-700/50"
+              >
+                {confirmState.cancelText || 'No, Keep Chat'}
+              </button>
+              <button
+                onClick={() => {
+                  const cb = confirmState.onConfirm;
+                  setConfirmState(null);
+                  cb();
+                }}
+                className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-lg shadow-rose-500/15"
+              >
+                {confirmState.confirmText || 'Yes, End Chat'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Completed Popup Modal - Both User and Consultant */}
+      {sessionCompleted && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[90] p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 text-center space-y-6 shadow-2xl relative overflow-hidden animate-in zoom-in duration-200 my-8">
+            <div className="mx-auto w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-8 h-8 text-emerald-400" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="font-extrabold text-lg text-emerald-400">Session Completed Successfully</h3>
+              <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                {role === 'user' 
+                  ? 'Your consultation session has ended. We hope you got answer to your queries!'
+                  : 'Billing countdown has run out. Net earnings have been credited to your secure wallet.'}
+              </p>
+            </div>
+
+            {/* Rating Section - ONLY for user */}
+            {role === 'user' && (
+              <div className="bg-slate-950/50 border border-slate-800/80 rounded-2xl p-4 space-y-4 text-left">
+                <span className="block text-[11px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-1.5 font-bold text-center">
+                  RATE YOUR CONSULTATION EXPERIENCE
+                </span>
+                
+                {reviewSubmitted ? (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-center text-xs text-emerald-400 font-sans font-bold animate-pulse">
+                    ✨ Thank you! Aapka feedback successfully submit ho gaya hai.
+                  </div>
+                ) : (
+                  <form onSubmit={handleReviewSubmit} className="space-y-3">
+                    {reviewError && (
+                      <div className="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-center text-[11px] text-rose-400 font-sans">
+                        {reviewError}
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold text-center">Stars Rating</label>
+                      <div className="flex items-center justify-center space-x-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            type="button"
+                            key={star}
+                            onClick={() => setReviewRating(star)}
+                            className={`text-2xl transition-colors ${
+                              reviewRating >= star ? 'text-amber-400' : 'text-slate-700 hover:text-amber-500'
+                            }`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold">Your Written Review</label>
+                      <textarea
+                        value={reviewText}
+                        onChange={(e) => setReviewText(e.target.value)}
+                        placeholder="Apna anubhav share karein... (e.g. Bohat accha guidance mila, highly recommended)"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[65px] font-sans"
+                        required
+                      />
+                      <div className="flex justify-between items-center mt-1">
+                        <span className={`text-[10px] font-mono ${reviewText.trim() === '' ? 'text-slate-500' : reviewText.trim().split(/\s+/).length > 30 ? 'text-rose-400 font-bold' : 'text-slate-500'}`}>
+                          Words: {reviewText.trim() === '' ? 0 : reviewText.trim().split(/\s+/).length}/30
+                        </span>
+                        {reviewText.trim() !== '' && reviewText.trim().split(/\s+/).length > 30 && (
+                          <span className="text-[10px] text-rose-400 font-sans">Maximum 30 words allowed!</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={reviewSubmitting || (reviewText.trim() === '' ? 0 : reviewText.trim().split(/\s+/).length) > 30}
+                      className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold py-2 px-4 rounded-xl w-full transition-all"
+                    >
+                      {reviewSubmitting ? 'Submitting Review...' : 'Submit Review Feedback'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* Go Back / Exit button inside the Session Completed Popup */}
+            <button
+              onClick={onClose}
+              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs py-2.5 px-4 rounded-xl w-full transition-all flex items-center justify-center space-x-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Go Back</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox / Zoom Photo Modal */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div 
+            className="relative max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-3 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top close button inside the modal frame */}
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-4 right-4 bg-slate-950/80 hover:bg-slate-950 text-slate-300 hover:text-white p-2 rounded-full border border-slate-800 transition-all z-20"
+              title="Close Preview"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            
+            {/* Image */}
+            <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center">
+              <img
+                src={lightboxImage}
+                alt="Enlarged Profile"
+                className="w-full h-full object-contain"
+                onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'; }}
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            
+            <div className="mt-3 text-center">
+              <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Profile Picture Preview</p>
             </div>
           </div>
         </div>

@@ -121,8 +121,40 @@ export function startChatExpiryJob(io: Server) {
           }
         }
       }
+
+      // Run self-healing reconciliation of consultant busy states
+      reconcileConsultantBusyStates(io);
     } catch (error) {
       console.error('Error in Server-Authoritative Timer Loop:', error);
     }
   }, 2000); // Check every 2 seconds
 }
+
+function reconcileConsultantBusyStates(io: Server) {
+  try {
+    // 1. Get all consultants who are currently marked as is_busy = 1, but NOT manually busy
+    const busyConsultants = db.prepare("SELECT id, display_name FROM consultants WHERE is_busy = 1 AND (manual_busy IS NULL OR manual_busy = 0)").all() as any[];
+    
+    for (const consultant of busyConsultants) {
+      const consultantId = consultant.id;
+      
+      // 2. Check if this consultant has any active or pending session
+      const activeOrPending = db.prepare(`
+        SELECT id FROM sessions 
+        WHERE consultant_id = ? AND status IN ('active', 'pending')
+        LIMIT 1
+      `).get(consultantId);
+      
+      if (!activeOrPending) {
+        // No active or pending session found!
+        console.log(`[Self-Healing] Consultant ${consultant.display_name} (ID: ${consultantId}) is marked busy but has no active/pending sessions. Reconciling.`);
+        
+        // Find next in queue, or mark as not busy
+        processNextInQueue(consultantId, io);
+      }
+    }
+  } catch (err) {
+    console.error('[Self-Healing] Error reconciling consultant busy states:', err);
+  }
+}
+

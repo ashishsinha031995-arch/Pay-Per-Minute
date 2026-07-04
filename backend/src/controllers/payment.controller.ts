@@ -392,7 +392,7 @@ export const endSessionManually = (req: Request, res: Response) => {
     let actual_consultant_earnings = 0;
     let finalStatus = 'completed';
 
-    if (consultantMsgCount === 0 && !isUserEnding) {
+    if (consultantMsgCount === 0) {
       // Consultant did not reply or participate at all! Refund user 100%!
       actualMinutes = 0;
       actualCost = 0.0;
@@ -405,15 +405,35 @@ export const endSessionManually = (req: Request, res: Response) => {
         const start = new Date(sess.started_at);
         const now = new Date();
         const diffMs = now.getTime() - start.getTime();
-        const actualSeconds = Math.max(0, Math.floor(diffMs / 1000));
-        actualMinutes = Math.min(sess.duration_minutes, Math.max(1, Math.ceil(actualSeconds / 60)));
+        if (!isNaN(diffMs)) {
+          const actualSeconds = Math.max(0, Math.floor(diffMs / 1000));
+          actualMinutes = Math.min(sess.duration_minutes, Math.max(1, Math.ceil(actualSeconds / 60)));
+        } else {
+          actualMinutes = 1;
+        }
       } else {
         actualMinutes = 1;
       }
+
+      if (isNaN(actualMinutes) || !isFinite(actualMinutes)) {
+        actualMinutes = 1;
+      }
       actualCost = sess.price_per_minute * actualMinutes;
+      if (isNaN(actualCost) || !isFinite(actualCost)) {
+        actualCost = sess.total_paid;
+      }
       refundAmount = Math.max(0, sess.total_paid - actualCost);
+      if (isNaN(refundAmount) || !isFinite(refundAmount)) {
+        refundAmount = 0;
+      }
       actual_commission = actualCost * (sess.commission_rate / 100);
+      if (isNaN(actual_commission) || !isFinite(actual_commission)) {
+        actual_commission = 0;
+      }
       actual_consultant_earnings = actualCost - actual_commission;
+      if (isNaN(actual_consultant_earnings) || !isFinite(actual_consultant_earnings)) {
+        actual_consultant_earnings = 0;
+      }
       finalStatus = 'completed';
     }
 
@@ -481,7 +501,7 @@ export const endSessionManually = (req: Request, res: Response) => {
       }
     }
 
-    res.json({ success: true, status: 'completed', transcript, actualMinutes, actualCost, refundAmount });
+    res.json({ success: true, status: finalStatus, transcript, actualMinutes, actualCost, refundAmount });
   } catch (err: any) {
     console.error('Error ending session manually:', err);
     res.status(500).json({ error: err.message });
@@ -517,11 +537,18 @@ export function processNextInQueue(consultantId: number, io: any) {
         io.to(nextQueuedSess.id).emit('queue:activated', { session_id: nextQueuedSess.id });
       }
     } else {
-      console.log(`[Queue System] No queued sessions found for consultant ${consultantId}. Marking as not busy.`);
-      // Update is_busy = 0
-      db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
-      if (io) {
-        io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 0 });
+      // Check if they are manually busy
+      const cons = db.prepare('SELECT manual_busy FROM consultants WHERE id = ?').get(consultantId) as { manual_busy: number } | undefined;
+      if (cons && cons.manual_busy === 1) {
+        console.log(`[Queue System] No queued sessions found for consultant ${consultantId}, but consultant is manually set to busy. Keeping is_busy = 1.`);
+        db.prepare('UPDATE consultants SET is_busy = 1 WHERE id = ?').run(consultantId);
+      } else {
+        console.log(`[Queue System] No queued sessions found for consultant ${consultantId}. Marking as not busy.`);
+        // Update is_busy = 0
+        db.prepare('UPDATE consultants SET is_busy = 0 WHERE id = ?').run(consultantId);
+        if (io) {
+          io.emit('consultant:status_update', { consultant_id: Number(consultantId), is_busy: 0 });
+        }
       }
     }
   } catch (err) {

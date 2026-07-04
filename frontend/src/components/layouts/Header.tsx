@@ -51,7 +51,16 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
             {/* Desktop-only Auth Badge */}
             {currentUser && currentRole === 'user' ? (
               <div className="hidden lg:flex items-center space-x-3 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800/80">
-                <div className="relative w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0 group">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentUser.photo_url) {
+                      window.dispatchEvent(new CustomEvent('view-user-photo', { detail: currentUser.photo_url }));
+                    }
+                  }}
+                  className="relative w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0 group cursor-pointer hover:scale-105 active:scale-95 transition-all p-0 border-0 bg-transparent focus:outline-none"
+                  title="Click to view photo"
+                >
                   {/* Subtle pulsing backdrop */}
                   <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 opacity-60 blur-[1px] animate-pulse group-hover:scale-110 transition-transform duration-300" />
                   {currentUser.photo_url ? (
@@ -61,7 +70,7 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                       <User className="w-3.5 h-3.5 text-emerald-400" />
                     </div>
                   )}
-                </div>
+                </button>
                 <div className="text-xs flex items-center">
                   <span className="text-slate-200 font-bold mr-2">{currentUser.display_name} (ID: {currentUser.id})</span>
                   <button
@@ -161,7 +170,16 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                   </button>
 
                   {/* Profile Avatar with custom breath-glow and rotatory aura animation */}
-                  <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center relative group">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentUser.photo_url) {
+                        window.dispatchEvent(new CustomEvent('view-user-photo', { detail: currentUser.photo_url }));
+                      }
+                    }}
+                    className="flex-shrink-0 w-10 h-10 flex items-center justify-center relative group cursor-pointer hover:scale-105 active:scale-95 transition-all p-0 border-0 bg-transparent focus:outline-none"
+                    title="Click to view photo"
+                  >
                     {/* Glowing breath backlight layer */}
                     <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 opacity-60 blur-[3px] animate-pulse group-hover:scale-110 transition-transform duration-500" />
                     {/* Slow elegant rotating gradient ring overlay */}
@@ -179,7 +197,7 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                         <User className="w-5 h-5 text-emerald-400" />
                       </div>
                     )}
-                  </div>
+                  </button>
 
                   {/* Hamburger Menu Icon */}
                   <div className="flex items-center justify-center">
