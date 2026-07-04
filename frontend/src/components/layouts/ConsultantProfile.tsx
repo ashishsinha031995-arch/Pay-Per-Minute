@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2 } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, DollarSign, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -476,6 +476,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       loadPastHistoryFromLocalStorage();
     }
   }, [activeSessionId, currentUser?.username]);
+
+  // Periodic sync of past sessions to check for any active/ongoing sessions
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadPastHistoryFromLocalStorage();
+    }, 10000); // sync every 10 seconds
+    return () => clearInterval(interval);
+  }, [currentUser?.username]);
 
   // Fetch registered consultants directory
   const fetchConsultants = async () => {
@@ -1174,6 +1182,37 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           <span>{success}</span>
         </div>
       )}
+
+      {/* ⚡ ACTIVE SESSION REJOIN BANNER */}
+      {currentUser && (() => {
+        const activeUserSession = userPastSessions.find(s => s.status === 'active');
+        if (!activeUserSession) return null;
+        return (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-cyan-500/15 border-2 border-cyan-500/30 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl shadow-cyan-500/5 text-left"
+          >
+            <div className="flex items-center space-x-3.5">
+              <div className="bg-cyan-500/20 p-2.5 rounded-xl animate-pulse flex-shrink-0">
+                <Zap className="w-5 h-5 text-cyan-400" />
+              </div>
+              <div className="text-left">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-400">⚡ LIVE NOW / ONGOING</span>
+                <h4 className="text-sm font-bold text-cyan-200">Aapka active consultation session chal raha hai!</h4>
+                <p className="text-xs text-slate-400">Consultant: <strong className="text-slate-200">{activeUserSession.consultant_name}</strong> (Session ID: #{activeUserSession.id})</p>
+              </div>
+            </div>
+            <button
+              onClick={() => onSelectSession(activeUserSession.id, currentUser?.display_name || currentUser?.username || 'User', 'user')}
+              className="w-full sm:w-auto bg-cyan-500 hover:bg-cyan-600 active:scale-95 text-slate-950 font-black text-xs px-6 py-3 rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 shrink-0"
+            >
+              <span>Join Your Chatroom</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </motion.div>
+        );
+      })()}
 
       {/* 🟢 DYNAMIC HAMBURGER NAVIGATION DRAWER */}
       {currentUser && (
@@ -2854,6 +2893,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           }}
                           title="Click to view photo"
                           referrerPolicy="no-referrer"
+                          onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
                         />
                       ) : (
                         <div className="w-16 h-16 rounded-xl bg-slate-850 flex items-center justify-center border border-slate-800 text-slate-400 font-bold shrink-0">
@@ -2961,6 +3001,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     onClick={() => setLightboxImage(selectedConsultant.photo_url)}
                     title="Click to view photo"
                     referrerPolicy="no-referrer"
+                    onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=300'; }}
                   />
                 ) : (
                   <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-slate-900 border-2 font-black text-2xl flex items-center justify-center shadow-2xl ${

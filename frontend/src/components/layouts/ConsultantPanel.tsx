@@ -2525,6 +2525,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 className="w-9 h-9 rounded-xl object-cover border border-emerald-500 cursor-pointer hover:scale-105 transition-transform"
                 onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
                 title="Click to view photo"
+                onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
               />
               <div>
                 <h3 className="text-xs font-bold leading-tight truncate max-w-[110px]">{currentConsultant.display_name}</h3>
@@ -2591,6 +2592,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-500 shadow-md cursor-pointer hover:scale-105 transition-transform"
                       onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
                       title="Click to view photo"
+                      onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
                     />
                     <div>
                       <h3 className="font-extrabold text-sm text-slate-100 font-sans tracking-wide truncate max-w-[160px] sm:max-w-[180px]">
@@ -2881,6 +2883,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     className="w-20 h-20 mx-auto rounded-2xl object-cover border-2 border-emerald-500 shadow-md transition-transform hover:scale-105 duration-300 cursor-pointer"
                     onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
                     title="Click to view photo"
+                    onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=300'; }}
                   />
                   <span className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] shadow ${isOnline ? (isBusy ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-slate-600'}`} title={isOnline ? (isBusy ? 'Busy' : 'Online') : 'Offline'}>
                     ⚡

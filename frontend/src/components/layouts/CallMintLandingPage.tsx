@@ -549,6 +549,7 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
                         alt={cons.display_name} 
                         className="w-14 h-14 rounded-2xl object-cover border border-slate-800"
                         referrerPolicy="no-referrer"
+                        onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
                       />
                     ) : (
                       <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-2xl font-bold text-emerald-400 font-mono">

@@ -240,8 +240,9 @@ export const getConsultantStats = (req: Request, res: Response) => {
     }
 
     const sessions = db.prepare(`
-      SELECT s.*, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
+      SELECT s.*, u.photo_url as user_photo, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
       FROM sessions s
+      LEFT JOIN users u ON s.user_id = u.id
       LEFT JOIN reviews r ON s.id = r.session_id
       WHERE s.consultant_id = ?
       ORDER BY s.created_at DESC

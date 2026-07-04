@@ -797,7 +797,7 @@ export function ChatRoom({
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 h-[calc(100vh-100px)] flex flex-col justify-between">
+    <div className="fixed inset-0 z-[150] md:relative md:inset-auto md:z-0 bg-slate-950 md:bg-transparent w-full max-w-4xl mx-auto px-0 md:px-4 sm:px-6 lg:px-8 py-0 md:py-4 h-full md:h-[calc(100vh-100px)] flex flex-col justify-between overflow-hidden">
       
       {/* Consultant Queue Banner */}
       {role === 'consultant' && queueCount > 0 && (
@@ -814,15 +814,15 @@ export function ChatRoom({
       )}
 
       {/* Session Title Bar */}
-      <div className="bg-slate-900 text-white p-4 rounded-t-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
-        <div className="flex items-center space-x-3">
+      <div className="bg-slate-900 text-white p-3 sm:p-4 md:rounded-t-2xl rounded-none border-b md:border border-slate-800 flex flex-row items-center justify-between gap-2 sm:gap-3 shadow-sm shrink-0">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           <button
             onClick={onClose}
-            className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm"
+            className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-xl transition-all flex items-center space-x-1 shadow-sm"
             title="Go Back"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-bold font-sans">Go Back</span>
+            <ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+            <span className="text-[11px] font-bold font-sans hidden sm:inline">Go Back</span>
           </button>
           
           <button
@@ -831,7 +831,7 @@ export function ChatRoom({
               const photo = role === 'user' ? sessionInfo?.consultant_photo : sessionInfo?.user_photo;
               if (photo) setLightboxImage(photo);
             }}
-            className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex-shrink-0 w-11 h-11 overflow-hidden hover:border-emerald-500 transition-all cursor-pointer flex items-center justify-center relative group"
+            className="bg-slate-950 p-0.5 sm:p-1 rounded-xl border border-slate-800 flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 overflow-hidden hover:border-emerald-500 transition-all cursor-pointer flex items-center justify-center relative group"
             title="Click to view photo"
           >
             {(() => {
@@ -843,34 +843,37 @@ export function ChatRoom({
                     alt=""
                     className="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform"
                     referrerPolicy="no-referrer"
+                    onError={(e) => { (e.target as any).src = role === 'user' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'; }}
                   />
                 );
               }
               return role === 'user' ? <Sparkles className="w-5 h-5 text-emerald-400" /> : <User className="w-5 h-5 text-emerald-400" />;
             })()}
           </button>
-          <div>
-            <h3 className="font-bold text-sm text-slate-100">
+          <div className="min-w-0">
+            <h3 className="font-bold text-xs sm:text-sm text-slate-100 max-w-[100px] sm:max-w-none truncate">
               {role === 'user' ? sessionInfo?.consultant_name : sessionInfo?.user_name}
             </h3>
-            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5 text-[10px] text-slate-400 font-sans">
+            <div className="flex items-center gap-x-1.5 sm:gap-x-2 gap-y-0.5 mt-0.5 text-[9px] sm:text-[10px] text-slate-400 font-sans flex-wrap">
               {/* Our Connection Status */}
               <span className="flex items-center space-x-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${lowInternet ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-                <span>You: {lowInternet ? 'Low internet' : 'Online'}</span>
+                <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${lowInternet ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                <span className="hidden sm:inline">You: {lowInternet ? 'Low internet' : 'Online'}</span>
+                <span className="sm:hidden">{lowInternet ? 'Low' : 'You'}</span>
               </span>
               
-              <span className="text-slate-700">•</span>
+              <span className="text-slate-750 font-sans">•</span>
               
               {/* Partner Connection Status */}
               <span className="flex items-center space-x-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
-                <span>Partner: {partnerOnline ? 'Connected' : 'Waiting...'}</span>
+                <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                <span className="hidden sm:inline">Partner: {partnerOnline ? 'Connected' : 'Waiting...'}</span>
+                <span className="sm:hidden">{partnerOnline ? 'Live' : 'Wait'}</span>
               </span>
 
-              <span className="text-slate-700">•</span>
+              <span className="text-slate-750 font-sans hidden sm:inline">•</span>
               
-              <span className="text-slate-500 font-mono">
+              <span className="text-slate-500 font-mono hidden sm:inline">
                 Tariff: ₹{sessionInfo?.price_per_minute || '--'}/min
               </span>
             </div>
@@ -878,7 +881,7 @@ export function ChatRoom({
         </div>
 
         {/* Action Buttons & Countdown display */}
-        <div className="flex items-center flex-wrap gap-2">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
           {/* User End Chat option */}
           {!sessionCompleted && sessionInfo && (sessionInfo.status === 'active' || sessionInfo.status === 'pending') && (
             <div className="flex items-center space-x-2">
@@ -921,10 +924,10 @@ export function ChatRoom({
                     });
                   }}
                   disabled={isEnding}
-                  className="bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center space-x-1"
+                  className="bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 font-bold text-xs p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center space-x-1"
                 >
-                  <XCircle className="w-3.5 h-3.5" />
-                  <span>End Chat</span>
+                  <XCircle className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                  <span className="hidden sm:inline">End Chat</span>
                 </button>
               )}
 
@@ -981,10 +984,10 @@ export function ChatRoom({
                       });
                     }}
                     disabled={isBlocking}
-                    className="bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-850 font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center space-x-1"
+                    className="bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-850 font-bold text-xs p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center space-x-1"
                   >
-                    <Ban className="w-3.5 h-3.5" />
-                    <span>Block User</span>
+                    <Ban className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                    <span className="hidden sm:inline">Block User</span>
                   </button>
                 </div>
               )}
@@ -992,13 +995,13 @@ export function ChatRoom({
           )}
 
           {/* Countdown display */}
-          <div className="flex items-center space-x-2 bg-slate-950 border border-slate-850 px-3.5 py-2 rounded-xl text-rose-400">
+          <div className="flex items-center space-x-1 sm:space-x-2 bg-slate-950 border border-slate-850 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-rose-400 flex-shrink-0">
             <Clock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
-            <div className="text-xs font-black font-mono tracking-wider">
+            <div className="text-[10px] sm:text-xs font-black font-mono tracking-wider">
               {sessionInfo?.status === 'queued' ? (
-                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wide">In Queue</span>
+                <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wide">In Queue</span>
               ) : sessionInfo?.status === 'pending' ? (
-                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wide">Pending Accept</span>
+                <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wide">Pending Accept</span>
               ) : sessionCompleted ? (
                 '00:00'
               ) : (
@@ -1010,7 +1013,7 @@ export function ChatRoom({
       </div>
 
       {/* Live messaging feed */}
-      <div className="flex-1 bg-slate-950 border-x border-slate-900 p-6 overflow-y-auto space-y-4 min-h-[300px]">
+      <div className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto space-y-4 min-h-[300px]">
         
         {/* Sleek Low Internet Banner */}
         {lowInternet && (
@@ -1200,6 +1203,7 @@ export function ChatRoom({
                     alt=""
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
+                    onError={(e) => { (e.target as any).src = msg.sender_type === 'consultant' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
                   />
                 </button>
 
@@ -1366,7 +1370,7 @@ export function ChatRoom({
       </div>
 
       {/* Input panel */}
-      <div className="bg-slate-900 border-x border-b border-slate-800 p-4 rounded-b-2xl">
+      <div className="bg-slate-900 md:border-x md:border-b border-t border-slate-800 p-3 sm:p-4 md:rounded-b-2xl rounded-none shrink-0">
         {sessionInfo?.status === 'queued' || sessionInfo?.status === 'pending' ? (
           <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3.5 text-center text-xs font-mono text-slate-400">
             ⏳ Waiting in queue... You can start messaging as soon as the consultant accepts your chat.

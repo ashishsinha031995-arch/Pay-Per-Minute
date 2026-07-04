@@ -64,7 +64,13 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                   {/* Subtle pulsing backdrop */}
                   <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 opacity-60 blur-[1px] animate-pulse group-hover:scale-110 transition-transform duration-300" />
                   {currentUser.photo_url ? (
-                    <img src={currentUser.photo_url} alt="" className="w-6 h-6 rounded-full object-cover border border-emerald-400/30 relative z-10 animate-fade-in" referrerPolicy="no-referrer" />
+                    <img 
+                      src={currentUser.photo_url} 
+                      alt="" 
+                      className="w-6 h-6 rounded-full object-cover border border-emerald-400/30 relative z-10 animate-fade-in" 
+                      referrerPolicy="no-referrer" 
+                      onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                    />
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-slate-900 flex items-center justify-center border border-emerald-400/20 relative z-10">
                       <User className="w-3.5 h-3.5 text-emerald-400" />
@@ -191,6 +197,7 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                         alt=""
                         className="w-10 h-10 rounded-full object-cover border border-emerald-400/30 shadow-md block relative z-10"
                         referrerPolicy="no-referrer"
+                        onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-emerald-400/20 shadow-md relative z-10">

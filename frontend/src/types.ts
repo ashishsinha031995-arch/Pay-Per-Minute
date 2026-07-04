@@ -79,6 +79,8 @@ export interface Session {
   transcript: string | null;
   refunded_minutes?: number;
   refunded_amount?: number;
+  user_photo?: string | null;
+  consultant_photo?: string | null;
 }
 
 export interface Message {
