@@ -179,7 +179,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [currentConsultant]);
+  }, [currentConsultant?.id]);
 
   const handleMarkAsRead = async (id: number) => {
     if (!currentConsultant || !currentConsultant.id) return;
@@ -796,7 +796,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       loadConsultantStatsAndStatus(currentConsultant.id, true);
     }, 30000);
     return () => clearInterval(interval);
-  }, [currentConsultant]);
+  }, [currentConsultant?.id]);
 
   // Fluctuating real-time earning index & performance values
   useEffect(() => {
@@ -828,14 +828,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return () => {
       socket.disconnect();
     };
-  }, [currentConsultant]);
+  }, [currentConsultant?.id]);
 
   // Trigger immediate refresh when a session finishes (activeSessionId transitions to falsy)
   useEffect(() => {
     if (currentConsultant && !activeSessionId) {
       loadConsultantStatsAndStatus(currentConsultant.id, true);
     }
-  }, [activeSessionId, currentConsultant]);
+  }, [activeSessionId, currentConsultant?.id]);
 
   // Logout handler
   function handleLogout() {
@@ -2705,10 +2705,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('dashboard');
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
-                    <TrendingUp className="w-4 h-4 shrink-0" />
-                    <span>🏠 Dashboard Home</span>
+                    <TrendingUp className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'dashboard' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                    <span>Home</span>
                   </button>
 
                   <button
@@ -2723,11 +2723,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
                     <div className="flex items-center space-x-3.5">
-                      <Flame className="w-4 h-4 shrink-0" />
-                      <span>🔥 Availability & Plan</span>
+                      <Flame className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'status' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>My Current Plan</span>
                     </div>
                     {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
                   </button>
@@ -2744,11 +2744,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
                     <div className="flex items-center space-x-3.5">
-                      <Settings2 className="w-4 h-4 shrink-0" />
-                      <span>⚙️ Profile Settings</span>
+                      <Settings2 className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'profile' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>Profile Settings</span>
                     </div>
                     {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
                   </button>
@@ -2765,11 +2765,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
                     <div className="flex items-center space-x-3.5">
-                      <Calendar className="w-4 h-4 shrink-0" />
-                      <span>📅 Availability Schedule</span>
+                      <Calendar className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'schedules' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>Availability Schedule</span>
                     </div>
                     {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
                   </button>
@@ -2786,11 +2786,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
                     <div className="flex items-center space-x-3.5">
-                      <UserCheck className="w-4 h-4 shrink-0" />
-                      <span>🔒 KYC Verification</span>
+                      <UserCheck className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'kyc' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>KYC Verification</span>
                     </div>
                     {hasActivePlan ? (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${kycStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : kycStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
@@ -2813,11 +2813,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
                     <div className="flex items-center space-x-3.5">
-                      <Wallet className="w-4 h-4 shrink-0" />
-                      <span>🏦 Bank Details</span>
+                      <Wallet className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'bank' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>Bank Details</span>
                     </div>
                     {hasActivePlan ? (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${bankStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : bankStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
@@ -2840,11 +2840,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
                     <div className="flex items-center space-x-3.5">
-                      <FileText className="w-4 h-4 shrink-0" />
-                      <span>💬 Consultation History</span>
+                      <FileText className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'sessions' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>Consultation History</span>
                     </div>
                     {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
                   </button>
@@ -2861,11 +2861,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'followers' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'followers' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
                     <div className="flex items-center space-x-3.5">
-                      <Users className="w-4 h-4 shrink-0" />
-                      <span>👥 Your Followers</span>
+                      <Users className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'followers' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>Your Followers</span>
                     </div>
                     {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
                   </button>
@@ -2877,10 +2877,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('support');
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                    className={`group w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
                   >
-                    <HelpCircle className="w-4 h-4 shrink-0" />
-                    <span>🙋 Help & Customer Support</span>
+                    <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                    <span>Help & Customer Support</span>
                   </button>
                 </div>
 
@@ -2982,7 +2982,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       ₹{currentConsultant.price_per_minute || 0}/min
                     </span>
                   </motion.div>
-                  <span className="text-[10px] font-mono text-emerald-400 block mt-1">● Certified Partner</span>
+                  <span className="text-[10px] font-mono text-emerald-400 block mt-1">👥 {currentConsultant.followers_count || 0} Followers</span>
                   <span className="text-[9px] font-mono text-slate-500 block mt-0.5">ID: #{currentConsultant.id}</span>
                 </div>
 
@@ -3078,10 +3078,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setSuccess(null);
                     setActiveTab('dashboard');
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <TrendingUp className="w-4 h-4 shrink-0" />
-                  <span>🏠 Dashboard Home</span>
+                  <TrendingUp className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'dashboard' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>Home</span>
                 </button>
                 
                 <button
@@ -3095,10 +3095,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('status');
                     }
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <Flame className="w-4 h-4 shrink-0" />
-                  <span>🔥 Availability & Plan</span>
+                  <Flame className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'status' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>My Current Plan</span>
                   {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
                 
@@ -3113,10 +3113,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('profile');
                     }
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <Settings2 className="w-4 h-4 shrink-0" />
-                  <span>⚙️ Profile Settings</span>
+                  <Settings2 className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'profile' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>Profile Settings</span>
                   {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
@@ -3131,10 +3131,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('schedules');
                     }
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <Calendar className="w-4 h-4 shrink-0" />
-                  <span>📅 Availability Schedule</span>
+                  <Calendar className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'schedules' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>Availability Schedule</span>
                   {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
@@ -3149,10 +3149,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('kyc');
                     }
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <UserCheck className="w-4 h-4 shrink-0" />
-                  <span>🔒 KYC Verification</span>
+                  <UserCheck className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'kyc' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>KYC Verification</span>
                   {hasActivePlan ? (
                     <span className={`text-[9px] ml-auto px-1.5 py-0.5 rounded font-bold ${kycStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : kycStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
                       {kycStatus === 'approved' ? 'Approved' : kycStatus === 'pending' ? 'Review' : 'Update'}
@@ -3173,10 +3173,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('bank');
                     }
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <Wallet className="w-4 h-4 shrink-0" />
-                  <span>🏦 Bank Details</span>
+                  <Wallet className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'bank' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>Bank Details</span>
                   {hasActivePlan ? (
                     <span className={`text-[9px] ml-auto px-1.5 py-0.5 rounded font-bold ${bankStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : bankStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
                       {bankStatus === 'approved' ? 'Verified' : bankStatus === 'pending' ? 'Review' : 'Update'}
@@ -3197,10 +3197,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('sessions');
                     }
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <FileText className="w-4 h-4 shrink-0" />
-                  <span>💬 Consultation History</span>
+                  <FileText className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'sessions' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>Consultation History</span>
                   {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
@@ -3215,10 +3215,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setActiveTab('followers');
                     }
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'followers' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'followers' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span>👥 Your Followers</span>
+                  <Users className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'followers' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>Your Followers</span>
                   {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
@@ -3228,10 +3228,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setSuccess(null);
                     setActiveTab('support');
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <HelpCircle className="w-4 h-4 shrink-0" />
-                  <span>🙋 Help & Customer Support</span>
+                  <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                  <span>Help & Customer Support</span>
                 </button>
 
                 <div className="border-t border-slate-800/80 pt-4 mt-4">
@@ -3764,19 +3764,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         <span className="text-[9px] text-rose-400/80 font-mono block mt-2.5 shrink-0 truncate">Refunded</span>
                       </motion.div>
 
-                      <motion.div 
-                        whileHover={{ y: -3 }}
-                        onClick={() => setActiveTab('followers')}
-                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 hover:bg-slate-850/40 transition-all min-w-0 cursor-pointer"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Your Followers</span>
-                          <span className="text-base sm:text-lg xl:text-xl font-black text-indigo-400 mt-1 block font-sans whitespace-nowrap">
-                            {currentConsultant.followers_count || 0}
-                          </span>
-                        </div>
-                        <span className="text-[9px] text-indigo-400/80 font-mono block mt-2.5 shrink-0 truncate">View List →</span>
-                      </motion.div>
+
 
                     </div>
 
@@ -4274,7 +4262,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   {/* Top Bar / Header with Back Button */}
                   <div className="flex items-center justify-between pb-3 border-b border-slate-800 flex-wrap gap-2">
                     <div>
-                      <h3 className="font-bold text-slate-100 font-sans text-lg">Advisor Availability & Registered Plan</h3>
+                      <h3 className="font-bold text-slate-100 font-sans text-lg">My Current Plan</h3>
                       <p className="text-xs text-slate-400 font-mono">Manage your live portal visibility, view active subscription, and track payout cycles.</p>
                     </div>
                     <button

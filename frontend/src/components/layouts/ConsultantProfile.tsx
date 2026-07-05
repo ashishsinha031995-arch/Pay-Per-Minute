@@ -153,7 +153,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
   const handleMarkAsRead = async (id: number) => {
     if (!currentUser || !currentUser.id) return;
@@ -1427,14 +1427,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         setActiveDashboardTab('advisors');
                         setHamburgerOpen(false);
                       }}
-                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
                         activeDashboardTab === 'advisors'
                           ? 'bg-emerald-500 text-slate-950'
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <Sparkles className="w-4 h-4 shrink-0" />
-                      <span>🔍 Browse Advisors</span>
+                      <Sparkles className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeDashboardTab === 'advisors' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Browse Advisors</span>
                     </button>
 
                     <button
@@ -1444,14 +1446,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         setActiveDashboardTab('profile');
                         setHamburgerOpen(false);
                       }}
-                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
                         activeDashboardTab === 'profile'
                           ? 'bg-emerald-500 text-slate-950'
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <User className="w-4 h-4 shrink-0" />
-                      <span>👤 Profile Details</span>
+                      <User className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeDashboardTab === 'profile' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Profile Details</span>
                     </button>
 
                     <button
@@ -1462,14 +1466,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         fetchWalletTransactions();
                         setHamburgerOpen(false);
                       }}
-                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
                         activeDashboardTab === 'wallet'
                           ? 'bg-emerald-500 text-slate-950'
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <Wallet className="w-4 h-4 shrink-0" />
-                      <span>💳 Wallet Recharge & Ledger</span>
+                      <Wallet className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeDashboardTab === 'wallet' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Wallet Recharge & Ledger</span>
                     </button>
 
                     <button
@@ -1479,14 +1485,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         setActiveDashboardTab('following');
                         setHamburgerOpen(false);
                       }}
-                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
                         activeDashboardTab === 'following'
                           ? 'bg-emerald-500 text-slate-950'
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <User className="w-4 h-4 shrink-0 text-indigo-400" />
-                      <span>✨ Your Following List</span>
+                      <User className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeDashboardTab === 'following' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Your Following List</span>
                     </button>
 
                     <button
@@ -1497,14 +1505,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         loadPastHistoryFromLocalStorage();
                         setHamburgerOpen(false);
                       }}
-                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
                         activeDashboardTab === 'history'
                           ? 'bg-emerald-500 text-slate-950'
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <History className="w-4 h-4 shrink-0 text-emerald-400" />
-                      <span>📜 Past Consultation Chats</span>
+                      <History className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeDashboardTab === 'history' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Past Consultation Chats</span>
                     </button>
 
                     <button
@@ -1514,14 +1524,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         setActiveDashboardTab('support');
                         setHamburgerOpen(false);
                       }}
-                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
                         activeDashboardTab === 'support'
                           ? 'bg-emerald-500 text-slate-950'
                           : 'text-slate-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <HelpCircle className="w-4 h-4 shrink-0" />
-                      <span>🙋 Help & Customer Support</span>
+                      <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeDashboardTab === 'support' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Help & Customer Support</span>
                     </button>
 
                     <button
@@ -1529,11 +1541,11 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         setNotificationsModalOpen(true);
                         setHamburgerOpen(false);
                       }}
-                      className="flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-slate-300 hover:bg-slate-800/60 cursor-pointer"
+                      className="group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-slate-300 hover:bg-slate-800/60 cursor-pointer"
                     >
                       <div className="flex items-center space-x-3">
-                        <Bell className="w-4 h-4 shrink-0 text-amber-400" />
-                        <span>🔔 Announcements</span>
+                        <Bell className="w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 text-emerald-400" />
+                        <span>Announcements</span>
                       </div>
                       {unreadNotifCount > 0 && (
                         <span className="bg-rose-500 text-white text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0">
@@ -1551,7 +1563,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         className="flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 border border-transparent hover:border-rose-500/20 mt-2"
                       >
                         <LogOut className="w-4 h-4 shrink-0" />
-                        <span>🚪 Logout</span>
+                        <span>Logout</span>
                       </button>
                     )}
                   </div>

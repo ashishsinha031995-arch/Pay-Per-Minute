@@ -28,23 +28,25 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
             </div>
           </div>
 
-          {/* Center (Core Architecture Indicators) - Hidden on mobile, visible on desktop */}
-          <div className="hidden lg:flex items-center space-x-4 text-[11px] font-mono bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/80">
-            <div className="flex items-center space-x-1.5 text-emerald-400">
-              <Database className="w-3 h-3" />
-              <span>SQLite Connected</span>
+          {/* Center (Core Architecture Indicators) - Hidden on mobile, visible on desktop only in development mode */}
+          {((import.meta as any).env?.DEV || window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('ais-dev')) && (
+            <div className="hidden lg:flex items-center space-x-4 text-[11px] font-mono bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/80">
+              <div className="flex items-center space-x-1.5 text-emerald-400">
+                <Database className="w-3 h-3" />
+                <span>SQLite Connected</span>
+              </div>
+              <div className="h-3 w-px bg-slate-800" />
+              <div className={`flex items-center space-x-1.5 ${socketConnected ? 'text-emerald-400' : 'text-amber-400 animate-pulse'}`}>
+                <Radio className="w-3.5 h-3.5" />
+                <span>{socketConnected ? 'Socket.IO Live' : 'Socket Connecting...'}</span>
+              </div>
+              <div className="h-3 w-px bg-slate-800" />
+              <div className="flex items-center space-x-1.5 text-cyan-400">
+                <CreditCard className="w-3 h-3" />
+                <span>Razorpay Sandbox ready</span>
+              </div>
             </div>
-            <div className="h-3 w-px bg-slate-800" />
-            <div className={`flex items-center space-x-1.5 ${socketConnected ? 'text-emerald-400' : 'text-amber-400 animate-pulse'}`}>
-              <Radio className="w-3.5 h-3.5" />
-              <span>{socketConnected ? 'Socket.IO Live' : 'Socket Connecting...'}</span>
-            </div>
-            <div className="h-3 w-px bg-slate-800" />
-            <div className="flex items-center space-x-1.5 text-cyan-400">
-              <CreditCard className="w-3 h-3" />
-              <span>Razorpay Sandbox ready</span>
-            </div>
-          </div>
+          )}
 
           {/* Right Side (Actions / Badges / Mobile Controls) */}
           <div className="flex items-center gap-x-2">

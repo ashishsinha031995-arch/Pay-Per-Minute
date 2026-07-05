@@ -27,6 +27,51 @@ export function ChatRoom({
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   
+  const [viewportHeight, setViewportHeight] = useState<string>('100dvh');
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    // Disable body scroll when chat modal is open on mobile
+    const originalOverflow = document.body.style.overflow;
+    if (window.innerWidth < 768) {
+      document.body.style.overflow = 'hidden';
+    }
+
+    const vv = window.visualViewport;
+    if (vv) {
+      const handleViewportChange = () => {
+        setViewportHeight(`${vv.height}px`);
+        if (vv.offsetTop > 0 || window.scrollY > 0) {
+          window.scrollTo(0, 0);
+        }
+      };
+      
+      vv.addEventListener('resize', handleViewportChange);
+      vv.addEventListener('scroll', handleViewportChange);
+      handleViewportChange();
+      
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('resize', checkMobile);
+        vv.removeEventListener('resize', handleViewportChange);
+        vv.removeEventListener('scroll', handleViewportChange);
+      };
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
+  
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const cached = localStorage.getItem(`advisor_chat_messages_${sessionId}`);
@@ -875,7 +920,10 @@ export function ChatRoom({
   }
 
   return (
-    <div className="fixed inset-0 z-[150] md:relative md:inset-auto md:z-0 bg-slate-950 md:bg-transparent w-full max-w-4xl mx-auto px-0 md:px-4 sm:px-6 lg:px-8 py-0 md:py-4 h-[100dvh] md:h-[calc(100vh-100px)] flex flex-col justify-between overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[150] md:relative md:inset-auto md:z-0 bg-slate-950 md:bg-transparent w-full max-w-4xl mx-auto px-0 md:px-4 sm:px-6 lg:px-8 py-0 md:py-4 h-[100dvh] md:h-[calc(100vh-100px)] flex flex-col justify-between overflow-hidden"
+      style={isMobile ? { height: viewportHeight } : undefined}
+    >
       
       {/* Consultant Queue Banner */}
       {role === 'consultant' && queueCount > 0 && (
