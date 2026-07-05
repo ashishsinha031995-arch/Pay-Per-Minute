@@ -1,3 +1,100 @@
 @import "./styles/globals.css";
 @import "./styles/dashboard.css";
 @import "./styles/chat.css";
+
+/* CallMint Light Theme Overrides (White, Sky Blue, and Glowing Sky Blue) */
+.theme-light {
+  /* Slate backgrounds remapped to elegant white & soft sky-blue shades */
+  --color-slate-950: #f0f9ff; /* Soft sky-50 background */
+  --color-slate-900: #ffffff; /* Main card backgrounds are pure white */
+  --color-slate-850: #e0f2fe; /* Light sky-100 backgrounds */
+  --color-slate-800: #e2e8f0; /* Soft borders (slate-200) */
+  --color-slate-750: #cbd5e1;
+  --color-slate-700: #bae6fd; /* Sky-200 for prominent borders/dividers */
+  --color-slate-600: #38bdf8; /* Sky-400 accent color */
+  --color-slate-500: #0ea5e9; /* Sky-500 core blue */
+  
+  /* Text colors remapped from light-on-dark to high-contrast dark-on-light */
+  --color-slate-400: #475569; /* Slate-600 secondary text */
+  --color-slate-300: #334155; /* Slate-700 body text */
+  --color-slate-200: #1e293b; /* Slate-800 sub-headers */
+  --color-slate-100: #0f172a; /* Slate-900 titles and bold headings */
+  
+  /* Emerald/Green accents remapped to Glowing Sky Blue */
+  --color-emerald-500: #0ea5e9; /* Core glowing sky blue */
+  --color-emerald-400: #0284c7; /* Royal blue for high readability text / hover states */
+  --color-emerald-600: #0369a1; /* Deep sky blue */
+  --color-emerald-300: #38bdf8; /* Light blue highlights */
+  
+  /* Teal colors remapped to sky blue */
+  --color-teal-500: #0ea5e9;
+  --color-teal-400: #38bdf8;
+  --color-teal-300: #7dd3fc;
+  
+  /* Indigo container colors remapped to soft blue */
+  --color-indigo-950: #f0f9ff;
+  --color-indigo-900: #e0f2fe;
+}
+
+/* Custom Overrides for Light Theme to Ensure Excellent Accessibility and Beautiful Polish */
+.theme-light .text-white {
+  color: #0f172a !important;
+}
+
+/* Badges, statuses, active states, and buttons with colored backgrounds should maintain white text */
+.theme-light .bg-emerald-500 .text-white,
+.theme-light .bg-emerald-600 .text-white,
+.theme-light .bg-emerald-400 .text-white,
+.theme-light .bg-sky-500 .text-white,
+.theme-light .bg-sky-600 .text-white,
+.theme-light .bg-rose-500 .text-white,
+.theme-light .bg-rose-600 .text-white,
+.theme-light .bg-red-500 .text-white,
+.theme-light .bg-teal-500 .text-white,
+.theme-light .bg-teal-600 .text-white,
+.theme-light button.bg-emerald-500,
+.theme-light button.bg-emerald-600,
+.theme-light button.bg-sky-500,
+.theme-light button.bg-sky-600,
+.theme-light button.bg-rose-500,
+.theme-light button.bg-red-500,
+.theme-light a.bg-emerald-500,
+.theme-light [class*="bg-emerald-"] .text-white,
+.theme-light [class*="bg-rose-"] .text-white,
+.theme-light [class*="bg-teal-"] .text-white,
+.theme-light [class*="bg-sky-"] .text-white {
+  color: #ffffff !important;
+}
+
+/* Headers on light background cards (re-mapped bg-slate-900) should be deep charcoal/navy instead of white */
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-950 {
+  color: #0f172a !important;
+}
+
+/* Ensure form input fields look outstanding and clean */
+.theme-light input, 
+.theme-light select, 
+.theme-light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light input:focus, 
+.theme-light select:focus, 
+.theme-light textarea:focus {
+  border-color: #0ea5e9 !important;
+  outline: none;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Smooth transitions when switching themes */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.1s ease;
+}
+

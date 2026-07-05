@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -47,9 +47,11 @@ interface ConsultantProfileProps {
   onOpenAuth: () => void;
   activeSessionId?: string;
   onLogout?: () => void;
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
 }
 
-export function ConsultantProfile({ onSelectSession, targetUsername, onClearTargetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout }: ConsultantProfileProps) {
+export function ConsultantProfile({ onSelectSession, targetUsername, onClearTargetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout, theme = 'dark', onToggleTheme }: ConsultantProfileProps) {
   // Directory or profile selection
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
@@ -1417,6 +1419,25 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-slate-400">
                       <span>Wallet Balance:</span>
                       <span className="text-emerald-400 font-bold font-mono">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-900">
+                      <span className="text-[11px] font-mono text-slate-400">App Theme:</span>
+                      <button
+                        onClick={onToggleTheme}
+                        className="flex items-center space-x-1.5 px-2.5 py-1 bg-slate-900 hover:bg-slate-850 text-[11px] font-bold text-slate-300 hover:text-white rounded-lg border border-slate-800 transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        {theme === 'dark' ? (
+                          <>
+                            <Sun className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Light Mode</span>
+                          </>
+                        ) : (
+                          <>
+                            <Moon className="w-3.5 h-3.5 text-sky-400" />
+                            <span>Dark Mode</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
 

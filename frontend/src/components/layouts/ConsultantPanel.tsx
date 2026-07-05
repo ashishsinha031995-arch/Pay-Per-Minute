@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
@@ -10,9 +10,11 @@ interface ConsultantPanelProps {
   onNavigateToUserView: (username: string) => void;
   activeSessionId?: string;
   onLogout?: () => void;
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
 }
 
-export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId, onLogout }: ConsultantPanelProps) {
+export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId, onLogout, theme = 'dark', onToggleTheme }: ConsultantPanelProps) {
   // Authentication & Session States
   const [currentConsultant, setCurrentConsultant] = useState<Consultant | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
@@ -2680,6 +2682,30 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       <X className="w-5 h-5" />
                     </button>
                   </div>
+                </div>
+
+                {/* Theme Toggle card */}
+                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-4 flex items-center justify-between">
+                  <div className="flex flex-col text-left">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">App Theme</span>
+                    <span className="text-xs text-slate-300 font-sans mt-0.5">{theme === 'dark' ? 'Dark Theme Active' : 'Light Theme Active'}</span>
+                  </div>
+                  <button
+                    onClick={onToggleTheme}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-xs font-bold text-slate-300 hover:text-white rounded-xl border border-slate-800 transition-all cursor-pointer shadow-sm active:scale-95"
+                  >
+                    {theme === 'dark' ? (
+                      <>
+                        <Sun className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Light Mode</span>
+                      </>
+                    ) : (
+                      <>
+                        <Moon className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Dark Mode</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 {/* Profile Completion Card */}

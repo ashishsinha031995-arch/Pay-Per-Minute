@@ -31,6 +31,18 @@ export default function AppPage() {
     return 'user';
   });
   const [socketConnected, setSocketConnected] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('callmint_theme') as 'dark' | 'light') || 'dark';
+    }
+    return 'dark';
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('callmint_theme', nextTheme);
+  };
 
   // Deep linking public profiles
   const [targetUsername, setTargetUsername] = useState<string | undefined>(() => {
@@ -456,7 +468,7 @@ export default function AppPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+    <div className={`min-h-screen ${theme === 'light' ? 'theme-light bg-sky-50 text-slate-900' : 'bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-sky-500 selection:text-white`}>
       
       {/* 1. Header (Shared) */}
       <Header
@@ -481,6 +493,8 @@ export default function AppPage() {
           setSignUpType('choose');
           setAuthModalOpen(true);
         }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* 2. Main Content Routing Area */}
@@ -523,6 +537,8 @@ export default function AppPage() {
                 }}
                 activeSessionId={activeSession?.sessionId}
                 onLogout={handleLogout}
+                theme={theme}
+                onToggleTheme={toggleTheme}
               />
             )}
 
@@ -533,6 +549,8 @@ export default function AppPage() {
                 onNavigateToUserView={handleNavigateToUserView}
                 activeSessionId={activeSession?.sessionId}
                 onLogout={handleLogout}
+                theme={theme}
+                onToggleTheme={toggleTheme}
               />
             )}
 
