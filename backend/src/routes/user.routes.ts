@@ -25,7 +25,11 @@ import {
   getConsultantSchedules,
   createConsultantSchedule,
   updateConsultantSchedule,
-  deleteConsultantSchedule
+  deleteConsultantSchedule,
+  followConsultant,
+  unfollowConsultant,
+  getFollowingConsultants,
+  getConsultantFollowers
 } from '../controllers/user.controller.js';
 import {
   getClientNotifications,
@@ -49,6 +53,9 @@ router.post('/user/lock-referral', lockUserReferral);
 router.get('/user/wallet-transactions/:userId', getUserWalletTransactions);
 router.get('/user/sessions', getUserPastSessions);
 router.get('/user/active-queued-session/:userId', getActiveQueuedSessionForUser);
+router.post('/user/follow', followConsultant);
+router.post('/user/unfollow', unfollowConsultant);
+router.get('/user/:userId/following', getFollowingConsultants);
 
 // Consultant Actions
 router.get('/consultants', getActiveConsultants);
@@ -57,6 +64,7 @@ router.put('/consultants/:id/status', updateConsultantStatus);
 router.put('/consultants/:id/profile', updateConsultantProfile);
 router.get('/consultants/:id/profile', getConsultantProfileById);
 router.get('/consultants/:id/stats', getConsultantStats);
+router.get('/consultants/:id/followers', getConsultantFollowers);
 
 // Review Logs
 router.get('/consultants/:id/reviews', getConsultantReviews);

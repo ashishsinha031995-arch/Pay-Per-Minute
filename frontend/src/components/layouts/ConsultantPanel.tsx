@@ -111,6 +111,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [sessions, setSessions] = useState<Session[]>([]);
   const [salaryInfo, setSalaryInfo] = useState<any>(null);
   const [manualAdjustments, setManualAdjustments] = useState<any[]>([]);
+  const [loginHours, setLoginHours] = useState<{ daily: number, weekly: number, monthly: number } | null>(null);
 
   // --- REAL-TIME IN-APP ALERTS & BROADCASTS ---
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
@@ -175,7 +176,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
     const interval = setInterval(() => {
       fetchNotifications(false);
-    }, 4000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [currentConsultant]);
@@ -261,9 +262,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     const completed = consSessions.filter(s => s.status === 'completed');
     
     // 1. Average Login Hours (Daily, Weekly, Monthly)
-    const dailyLogin = Number((6.5 + ((consId * 7) % 3.5)).toFixed(1));
-    const weeklyLogin = Number((7.2 + ((consId * 4) % 3.1)).toFixed(1));
-    const monthlyLogin = Number((7.8 + ((consId * 9) % 2.5)).toFixed(1));
+    const dailyLogin = loginHours ? loginHours.daily : Number((6.5 + ((consId * 7) % 3.5)).toFixed(1));
+    const weeklyLogin = loginHours ? loginHours.weekly : Number((7.2 + ((consId * 4) % 3.1)).toFixed(1));
+    const monthlyLogin = loginHours ? loginHours.monthly : Number((7.8 + ((consId * 9) % 2.5)).toFixed(1));
 
     // 2. Average Chat Minutes (Daily, Weekly, Monthly)
     let baseChatMins = 0;
@@ -372,7 +373,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   // Tab Navigation & Mobile Drawer States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules' | 'followers'>('dashboard');
+  const [followersList, setFollowersList] = useState<any[]>([]);
+  const [followersLoading, setFollowersLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
   const [performanceTab, setPerformanceTab] = useState<'weekly' | 'monthly'>('weekly');
@@ -677,6 +680,28 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   }, [activeTab, currentConsultant?.id]);
 
+  const fetchConsultantFollowers = async () => {
+    if (!currentConsultant?.id) return;
+    setFollowersLoading(true);
+    try {
+      const res = await fetch(`/api/consultants/${currentConsultant.id}/followers`);
+      if (res.ok) {
+        const data = await res.json();
+        setFollowersList(data);
+      }
+    } catch (err) {
+      console.error("Error fetching followers:", err);
+    } finally {
+      setFollowersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'followers' && currentConsultant?.id) {
+      fetchConsultantFollowers();
+    }
+  }, [activeTab, currentConsultant?.id]);
+
   // Pre-fill consultant details from pre-signup form
   useEffect(() => {
     const syncPreSignupDetails = () => {
@@ -769,7 +794,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     if (!currentConsultant) return;
     const interval = setInterval(() => {
       loadConsultantStatsAndStatus(currentConsultant.id, true);
-    }, 4000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [currentConsultant]);
 
@@ -888,6 +913,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setSessions(data.sessions);
         setSalaryInfo(data.salaryInfo);
         setManualAdjustments(data.manualAdjustments || []);
+        if (data.loginHours) {
+          setLoginHours(data.loginHours);
+        }
       } else if (res.status === 404 || res.status === 401) {
         // Stale session, clean it up!
         handleLogout();
@@ -2825,6 +2853,27 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     onClick={() => {
                       setError(null);
                       setSuccess(null);
+                      if (!hasActivePlan) {
+                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to view Followers).");
+                        handleScrollToPlans();
+                      } else {
+                        setActiveTab('followers');
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'followers' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <Users className="w-4 h-4 shrink-0" />
+                      <span>👥 Your Followers</span>
+                    </div>
+                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
                       setActiveTab('support');
                       setIsMobileMenuOpen(false);
                     }}
@@ -3152,6 +3201,24 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 >
                   <FileText className="w-4 h-4 shrink-0" />
                   <span>💬 Consultation History</span>
+                  {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    if (!hasActivePlan) {
+                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to view Followers).");
+                      handleScrollToPlans();
+                    } else {
+                      setActiveTab('followers');
+                    }
+                  }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'followers' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                >
+                  <Users className="w-4 h-4 shrink-0" />
+                  <span>👥 Your Followers</span>
                   {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
@@ -3651,7 +3718,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </div>
 
                     {/* Simple Statistics Grid */}
-                    <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                    <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                       
                       <motion.div 
                         whileHover={{ y: -3 }}
@@ -3695,6 +3762,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <span className="text-base sm:text-lg xl:text-xl font-black text-rose-400 mt-1 block font-sans whitespace-nowrap">₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}</span>
                         </div>
                         <span className="text-[9px] text-rose-400/80 font-mono block mt-2.5 shrink-0 truncate">Refunded</span>
+                      </motion.div>
+
+                      <motion.div 
+                        whileHover={{ y: -3 }}
+                        onClick={() => setActiveTab('followers')}
+                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 hover:bg-slate-850/40 transition-all min-w-0 cursor-pointer"
+                      >
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Your Followers</span>
+                          <span className="text-base sm:text-lg xl:text-xl font-black text-indigo-400 mt-1 block font-sans whitespace-nowrap">
+                            {currentConsultant.followers_count || 0}
+                          </span>
+                        </div>
+                        <span className="text-[9px] text-indigo-400/80 font-mono block mt-2.5 shrink-0 truncate">View List →</span>
                       </motion.div>
 
                     </div>
@@ -3942,17 +4023,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       <div className="lg:col-span-5 flex flex-col justify-between">
                         {(() => {
                           const metrics = getPerformanceMetrics(currentConsultant.id, sessions);
-                          const needleRotation = (liveVelocityScore / 100) * 180 - 90;
+                          const repeatUserPct = metrics.repeat.daily;
+                          const needleRotation = (repeatUserPct / 100) * 180 - 90;
                           
                           return (
                             <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 flex flex-col justify-between h-full shadow-lg text-center space-y-4">
                               <div className="flex items-center justify-between border-b border-slate-900 pb-2">
                                 <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                                  ⚡ Live Performance Meter
+                                  ⚡ Repeat User Rate Meter
                                 </h4>
-                                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 px-2 py-0.5 rounded-md uppercase font-mono font-bold flex items-center gap-1">
-                                  <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse"></span>
-                                  LIVE TICK
+                                <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 px-2 py-0.5 rounded-md uppercase font-mono font-bold flex items-center gap-1">
+                                  <span className="w-1 h-1 rounded-full bg-indigo-400 animate-pulse"></span>
+                                  LIVE REPEAT %
                                 </span>
                               </div>
 
@@ -3961,9 +4043,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 <svg viewBox="0 0 200 115" className="w-full max-w-[210px] overflow-visible">
                                   <defs>
                                     <linearGradient id="performanceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                      <stop offset="0%" stopColor="#10b981" /> {/* Emerald */}
+                                      <stop offset="0%" stopColor="#6366f1" /> {/* Indigo */}
                                       <stop offset="50%" stopColor="#06b6d4" /> {/* Cyan */}
-                                      <stop offset="100%" stopColor="#f59e0b" /> {/* Amber */}
+                                      <stop offset="100%" stopColor="#10b981" /> {/* Emerald */}
                                     </linearGradient>
                                     <filter id="glow-effect" x="-20%" y="-20%" width="140%" height="140%">
                                       <feGaussianBlur stdDeviation="3" result="blur" />
@@ -3988,7 +4070,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     strokeWidth="11"
                                     strokeLinecap="round"
                                     strokeDasharray="236"
-                                    strokeDashoffset={236 - (236 * liveVelocityScore) / 100}
+                                    strokeDashoffset={236 - (236 * repeatUserPct) / 100}
                                     className="transition-all duration-1000 ease-out"
                                   />
 
@@ -4004,7 +4086,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                         y1="0"
                                         x2="0"
                                         y2="-62"
-                                        stroke="#f59e0b"
+                                        stroke="#6366f1"
                                         strokeWidth="3.5"
                                         strokeLinecap="round"
                                         filter="url(#glow-effect)"
@@ -4012,58 +4094,41 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                       {/* Indicator Arrow tip */}
                                       <polygon
                                         points="-5,-56 0,-68 5,-56"
-                                        fill="#f59e0b"
+                                        fill="#6366f1"
                                       />
                                     </motion.g>
                                   </g>
 
                                   {/* Center cap core */}
                                   <circle cx="100" cy="100" r="10" fill="#020617" stroke="#334155" strokeWidth="2" />
-                                  <circle cx="100" cy="100" r="4" fill="#f59e0b" />
+                                  <circle cx="100" cy="100" r="4" fill="#6366f1" />
 
                                   {/* Text Display */}
                                   <text x="100" y="92" textAnchor="middle" className="fill-slate-100 text-xl font-black font-sans tracking-tight">
-                                    {liveVelocityScore}%
+                                    {repeatUserPct}%
                                   </text>
                                 </svg>
 
                                 {/* Mini speedometer labels */}
                                 <div className="absolute bottom-1 inset-x-0 flex justify-between px-6 text-[9px] font-mono text-slate-500 font-bold">
                                   <span>0%</span>
-                                  <span className="text-emerald-400">OPTIMAL</span>
+                                  <span className="text-indigo-400">REPEAT USER %</span>
                                   <span>100%</span>
                                 </div>
                               </div>
 
-                              {/* Real-time Sub-metrics indicators */}
-                              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-900">
-                                <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-850 text-center">
-                                  <span className="text-[8px] text-slate-500 block uppercase font-mono tracking-wider">Login Hrs</span>
-                                  <strong className="text-xs text-slate-200 font-mono block mt-0.5">
-                                    {metrics.login.daily} hrs
-                                  </strong>
-                                  <span className="text-[7px] text-emerald-400 font-mono block">Target: 8h+</span>
-                                </div>
-
-                                <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-850 text-center">
-                                  <span className="text-[8px] text-slate-500 block uppercase font-mono tracking-wider">Call Freq</span>
-                                  <strong className="text-xs text-amber-400 font-mono block mt-0.5 animate-pulse">
-                                    {liveCallFrequency}/day
-                                  </strong>
-                                  <span className="text-[7px] text-slate-400 font-mono block">Target: 5+</span>
-                                </div>
-
-                                <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-850 text-center">
-                                  <span className="text-[8px] text-slate-500 block uppercase font-mono tracking-wider">Repeat user</span>
+                              {/* Only Repeat User Indicator */}
+                              <div className="flex justify-center items-center pt-2 border-t border-slate-900">
+                                <div className="bg-slate-900/60 py-2 px-6 rounded-xl border border-slate-850 text-center">
+                                  <span className="text-[10px] text-slate-400 uppercase font-mono tracking-wider block">Target Repeat Rate</span>
                                   <strong className="text-xs text-indigo-400 font-mono block mt-0.5">
-                                    {metrics.repeat.daily}%
+                                    40%+ Preferred
                                   </strong>
-                                  <span className="text-[7px] text-indigo-400 font-mono block">Target: 40%+</span>
                                 </div>
                               </div>
 
                               <p className="text-[9px] text-slate-500 italic leading-relaxed pt-1">
-                                *Dial fluctuates relative to live rating factors, caller throughput, and slot attendance.
+                                *Calculated live based on the ratio of returning users to unique consultees.
                               </p>
                             </div>
                           );
@@ -5459,6 +5524,77 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
                       )}
                     </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* TAB 8: Your Followers */}
+              {activeTab === 'followers' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                  id="consultant-followers-tab"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
+                    <div className="flex items-center space-x-2">
+                      <Users className="w-5 h-5 text-emerald-400" />
+                      <h3 className="font-bold text-slate-100 font-sans">Your Followers</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('dashboard')}
+                      className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
+                    >
+                      <span>Back to Dashboard</span>
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-950 rounded-xl border border-slate-850 overflow-hidden">
+                    {followersLoading ? (
+                      <div className="p-8 text-center text-slate-500 text-xs font-mono">
+                        Followers load ho rahe hain...
+                      </div>
+                    ) : followersList.length === 0 ? (
+                      <div className="p-12 text-center text-slate-500 space-y-2">
+                        <Users className="w-8 h-8 mx-auto text-slate-700" />
+                        <p className="text-sm font-bold text-slate-400">Abhi tak koi followers nahi hain</p>
+                        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                          Jaise hi users aapko follow karenge, unki profiles aur details yahan show hone lagengi.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-850">
+                        {followersList.map((follower: any, idx: number) => (
+                          <div key={follower.id || idx} className="p-4 flex items-center justify-between hover:bg-slate-900/40 transition-colors">
+                            <div className="flex items-center space-x-3.5">
+                              {follower.photo_url ? (
+                                <img
+                                  src={follower.photo_url}
+                                  alt={follower.display_name}
+                                  className="w-10 h-10 rounded-full object-cover border border-slate-800"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold font-sans">
+                                  {(follower.display_name || 'U')[0].toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <h4 className="font-bold text-sm text-slate-200">{follower.display_name || 'Anonymous User'}</h4>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-500 block uppercase font-mono tracking-wider">Followed on</span>
+                              <span className="text-xs text-slate-300 font-mono">
+                                {follower.created_at ? new Date(follower.created_at).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

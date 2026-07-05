@@ -26,7 +26,11 @@ import {
   refundSessionBySuperAdmin,
   addMoneyToWallet,
   getManualWalletAdjustments,
-  getAdminLiveQueues
+  getAdminLiveQueues,
+  updateConsultantManualFollowers,
+  getConsultantFollowersLeaderboard,
+  getConsultantRevenueLeaderboard,
+  getUserSpendsLeaderboard
 } from '../controllers/admin.controller.js';
 import {
   getAdminNotifications,
@@ -44,6 +48,10 @@ router.put('/settings/hero', updateHeroSettings);
 router.get('/emails', getSentEmailsLog);
 router.get('/audit-logs', getAdminAuditLogs);
 router.get('/consultants', getAdminConsultantsList);
+router.get('/consultants/followers-leaderboard', getConsultantFollowersLeaderboard);
+router.get('/consultants/revenue-leaderboard', getConsultantRevenueLeaderboard);
+router.get('/users/spends-leaderboard', getUserSpendsLeaderboard);
+router.put('/consultants/:id/manual-followers', updateConsultantManualFollowers);
 router.put('/consultants/:id/toggle-active', toggleConsultantActiveStatus);
 router.put('/consultants/:id', updateConsultantBySuperAdmin);
 router.post('/settings', updateAdminCommissionRateSetting);

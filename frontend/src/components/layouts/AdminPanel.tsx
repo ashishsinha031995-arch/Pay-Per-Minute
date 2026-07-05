@@ -4,7 +4,7 @@ import {
   ToggleLeft, ToggleRight, MessageSquare, Search, UserCheck, X, Calendar, BookOpen, 
   Award, CreditCard, Wallet, Landmark, BarChart3, Star, Megaphone, Bell, FileText, 
   LifeBuoy, Scroll, ShieldCheck, Check, Trash2, Edit3, Key, Mail, RefreshCw, Send, Zap, Menu, LayoutDashboard, Lock, Coins, Download, Clock,
-  Activity, UserMinus
+  Activity, UserMinus, TrendingUp
 } from 'lucide-react';
 import { Plan, Consultant, Session, AdminStats } from '../../types';
 import { 
@@ -240,9 +240,12 @@ export function AdminPanel() {
     const completed = consSessions.filter(s => s.status === 'completed');
     
     // 1. Average Login Hours (Daily, Weekly, Monthly)
-    const dailyLogin = Number((6.5 + ((consId * 7) % 3.5)).toFixed(1));
-    const weeklyLogin = Number((7.2 + ((consId * 4) % 3.1)).toFixed(1));
-    const monthlyLogin = Number((7.8 + ((consId * 9) % 2.5)).toFixed(1));
+    const foundCons = consultants.find(c => c.id === consId);
+    const realHours = foundCons?.login_hours;
+
+    const dailyLogin = realHours ? realHours.daily : Number((6.5 + ((consId * 7) % 3.5)).toFixed(1));
+    const weeklyLogin = realHours ? realHours.weekly : Number((7.2 + ((consId * 4) % 3.1)).toFixed(1));
+    const monthlyLogin = realHours ? realHours.monthly : Number((7.8 + ((consId * 9) % 2.5)).toFixed(1));
 
     // 2. Average Chat Minutes (Daily, Weekly, Monthly)
     let baseChatMins = 0;
@@ -330,6 +333,47 @@ export function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [revenueLeaderboard, setRevenueLeaderboard] = useState<any[]>([]);
+  const [revenueCategoryFilter, setRevenueCategoryFilter] = useState<string>('all');
+  const [loadingRevenueLeaderboard, setLoadingRevenueLeaderboard] = useState(false);
+
+  const [userSpendsLeaderboard, setUserSpendsLeaderboard] = useState<any[]>([]);
+  const [userSpendsMonthFilter, setUserSpendsMonthFilter] = useState<string>('all');
+  const [userSpendsAvailableMonths, setUserSpendsAvailableMonths] = useState<string[]>([]);
+  const [loadingUserSpendsLeaderboard, setLoadingUserSpendsLeaderboard] = useState(false);
+
+  const fetchRevenueLeaderboard = async (category = 'all') => {
+    try {
+      setLoadingRevenueLeaderboard(true);
+      const res = await fetch(`/api/admin/consultants/revenue-leaderboard?category=${encodeURIComponent(category)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRevenueLeaderboard(data);
+      }
+    } catch (err) {
+      console.error('Failed to load revenue leaderboard:', err);
+    } finally {
+      setLoadingRevenueLeaderboard(false);
+    }
+  };
+
+  const fetchUserSpendsLeaderboard = async (month = 'all') => {
+    try {
+      setLoadingUserSpendsLeaderboard(true);
+      const res = await fetch(`/api/admin/users/spends-leaderboard?month=${encodeURIComponent(month)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUserSpendsLeaderboard(data.leaderboard || []);
+        setUserSpendsAvailableMonths(data.available_months || []);
+      }
+    } catch (err) {
+      console.error('Failed to load user spends leaderboard:', err);
+    } finally {
+      setLoadingUserSpendsLeaderboard(false);
+    }
+  };
 
   // Transcript monitoring overlay states
   const [viewingPastSessionMessages, setViewingPastSessionMessages] = useState<any[] | null>(null);
@@ -359,6 +403,12 @@ export function AdminPanel() {
   const [filterConsCat, setFilterConsCat] = useState('all');
   const [filterConsStatus, setFilterConsStatus] = useState('all');
   const [filterConsRate, setFilterConsRate] = useState('all');
+  const [filterConsHours, setFilterConsHours] = useState('all');
+
+  // Real-time login logs state
+  const [loginLogs, setLoginLogs] = useState<any[]>([]);
+  const [showLogsView, setShowLogsView] = useState(false);
+  const [selectedLogConsultantId, setSelectedLogConsultantId] = useState<number | null>(null);
 
   // Search & Filter state for Users ledger
   const [searchUsr, setSearchUsr] = useState('');
@@ -410,7 +460,7 @@ export function AdminPanel() {
       if (!silent) setLoading(true);
       setError(null);
 
-      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes, queuesRes, notifRes] = await Promise.all([
+      const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes, queuesRes, notifRes, leaderboardRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/consultants'),
         fetch('/api/admin/sessions'),
@@ -421,10 +471,11 @@ export function AdminPanel() {
         fetch('/api/admin/reviews'),
         fetch('/api/admin/wallet/adjustments'),
         fetch('/api/admin/queues'),
-        fetch('/api/admin/notifications')
+        fetch('/api/admin/notifications'),
+        fetch('/api/admin/consultants/followers-leaderboard')
       ]);
 
-      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok || !adjRes.ok || !queuesRes.ok || !notifRes.ok) {
+      if (!statsRes.ok || !consRes.ok || !sessRes.ok || !plansRes.ok || !blockedRes.ok || !usersRes.ok || !emailsRes.ok || !reviewsRes.ok || !adjRes.ok || !queuesRes.ok || !notifRes.ok || !leaderboardRes.ok) {
         throw new Error('Failed to load admin dataset');
       }
 
@@ -439,8 +490,10 @@ export function AdminPanel() {
       const adjData = await adjRes.json();
       const queuesData = await queuesRes.json();
       const notifData = await notifRes.json();
+      const leaderboardData = await leaderboardRes.json();
 
       setStats(statsData);
+      setLeaderboard(leaderboardData);
       setCommissionRateInput(statsData.commissionRate.toString());
       if (statsData.salaryCutoffDay !== undefined) setCutoffDayInput(statsData.salaryCutoffDay.toString());
       if (statsData.salaryPayoutDay !== undefined) setPayoutDayInput(statsData.salaryPayoutDay.toString());
@@ -451,6 +504,26 @@ export function AdminPanel() {
       setAdminUsers(usersData);
       setSentEmails(emailsData);
       setReviews(reviewsData);
+      setLoginLogs([]);
+       try {
+        const revRes = await fetch(`/api/admin/consultants/revenue-leaderboard?category=${encodeURIComponent(revenueCategoryFilter)}`);
+        if (revRes.ok) {
+          const revData = await revRes.json();
+          setRevenueLeaderboard(revData);
+        }
+      } catch (e) {
+        console.error('Failed to load revenue leaderboard during admin load:', e);
+      }
+      try {
+        const userSpRes = await fetch(`/api/admin/users/spends-leaderboard?month=${encodeURIComponent(userSpendsMonthFilter)}`);
+        if (userSpRes.ok) {
+          const userSpData = await userSpRes.json();
+          setUserSpendsLeaderboard(userSpData.leaderboard || []);
+          setUserSpendsAvailableMonths(userSpData.available_months || []);
+        }
+      } catch (e) {
+        console.error('Failed to load user spends leaderboard during admin load:', e);
+      }
       if (notifData.success) {
         setAdminNotifications(notifData.notifications || []);
       }
@@ -473,19 +546,46 @@ export function AdminPanel() {
     loadAdminData();
   }, []);
 
-  // Real-time background polling (updates Super Admin Panel in real-time)
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadAdminData(true); // silent refresh (doesn't trigger full screen spinner)
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
+    if (activeTab === 'revenue_leaderboard') {
+      fetchRevenueLeaderboard(revenueCategoryFilter);
+    }
+  }, [revenueCategoryFilter, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'user_spends_leaderboard') {
+      fetchUserSpendsLeaderboard(userSpendsMonthFilter);
+    }
+  }, [userSpendsMonthFilter, activeTab]);
 
   // Manual ledger refresh function
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await loadAdminData(true);
     setTimeout(() => setIsRefreshing(false), 800);
+  };
+
+  const [updatingManualFollowersId, setUpdatingManualFollowersId] = useState<number | null>(null);
+  const [manualFollowersInputValue, setManualFollowersInputValue] = useState<string>('');
+
+  const handleUpdateManualFollowers = async (consultantId: number, countValue: number) => {
+    try {
+      const res = await fetch(`/api/admin/consultants/${consultantId}/manual-followers`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manual_followers_count: countValue })
+      });
+      if (res.ok) {
+        setSuccessMsg('Manual follower count updated successfully.');
+        setUpdatingManualFollowersId(null);
+        await loadAdminData(true);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to update manual followers count');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating manual followers');
+    }
   };
 
   const handleForceEndSession = async (sessionId: string | number) => {
@@ -1187,6 +1287,14 @@ export function AdminPanel() {
       if (filterConsRate === 'premium' && r <= 50) return false;
     }
 
+    if (filterConsHours !== 'all') {
+      const hours = (c as any).login_hours || { daily: 0, weekly: 0, monthly: 0 };
+      if (filterConsHours === 'online' && (c as any).is_online !== 1) return false;
+      if (filterConsHours === 'daily_1' && hours.daily === 0) return false;
+      if (filterConsHours === 'weekly_5' && hours.weekly < 5) return false;
+      if (filterConsHours === 'monthly_20' && hours.monthly < 20) return false;
+    }
+
     return true;
   });
 
@@ -1361,6 +1469,9 @@ export function AdminPanel() {
   const sidebarMenus = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
     { id: 'consultants', label: 'Consultants Manager', icon: Users, badge: consultants.length },
+    { id: 'followers_leaderboard', label: 'Followers Leaderboard', icon: Award },
+    { id: 'revenue_leaderboard', label: 'Revenue Leaderboard', icon: Coins },
+    { id: 'user_spends_leaderboard', label: 'User Spends Leaderboard', icon: TrendingUp },
     { id: 'queues', label: 'Live Queue Manager', icon: Clock },
     { id: 'subscriptions', label: 'Subscription Plans', icon: Award, badge: plans.length },
     { id: 'users', label: 'User Accounts', icon: UserCheck, badge: adminUsers.length },
@@ -1906,21 +2017,65 @@ export function AdminPanel() {
                     <option value="medium">Medium (₹21 - ₹50/min)</option>
                     <option value="premium">{"Premium (> ₹50/min)"}</option>
                   </select>
+
+                  {/* Filter 4: Performance & Login Hours */}
+                  <select
+                    value={filterConsHours}
+                    onChange={e => setFilterConsHours(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Performance / Hours</option>
+                    <option value="online">🟢 Currently Online</option>
+                    <option value="daily_1">📅 Active Today (Hours &gt; 0)</option>
+                    <option value="weekly_5">📈 Weekly Peak (Hours &ge; 5h)</option>
+                    <option value="monthly_20">🏆 Monthly Legend (Hours &ge; 20h)</option>
+                  </select>
                 </div>
 
-                {/* Refresh Ledger Button */}
-                <button
-                  onClick={handleManualRefresh}
-                  disabled={isRefreshing}
-                  className="bg-slate-950 border border-slate-800 hover:border-slate-750 hover:bg-slate-900 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-mono font-bold flex items-center justify-center space-x-2 transition-all min-w-[110px]"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* View Toggles: Ledger vs Real-time logs */}
+                  <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowLogsView(false)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!showLogsView ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      Experts Ledger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowLogsView(true);
+                        setSelectedLogConsultantId(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 relative ${showLogsView ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      <span>Real-Time Logs</span>
+                      {loginLogs.filter(l => !l.logout_time).length > 0 && (
+                        <span className="flex h-2 w-2 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Refresh Ledger Button */}
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={isRefreshing}
+                    className="bg-slate-950 border border-slate-800 hover:border-slate-750 hover:bg-slate-900 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-mono font-bold flex items-center justify-center space-x-2 transition-all min-w-[110px]"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Consultants Ledger */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+              {!showLogsView ? (
+                <>
+                  {/* Consultants Ledger */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
@@ -2056,6 +2211,16 @@ export function AdminPanel() {
                                   title="Reset credentials"
                                 >
                                   <Key className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedLogConsultantId(cons.id);
+                                    setShowLogsView(true);
+                                  }}
+                                  className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-indigo-400 border border-slate-850"
+                                  title="View login logs"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => {
@@ -2453,8 +2618,1079 @@ export function AdminPanel() {
                   </table>
                 </div>
               </div>
+            </>
+          ) : (
+            /* Real-Time Logs View */
+            <div className="space-y-6">
+              {/* Real-time stats cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex items-center space-x-4">
+                  <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400">
+                    <Activity className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block font-mono uppercase tracking-wider">Currently Online</span>
+                    <strong className="text-xl text-slate-100 font-bold font-mono">
+                      {loginLogs.filter(l => !l.logout_time).length}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex items-center space-x-4">
+                  <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 text-indigo-400">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block font-mono uppercase tracking-wider">Total Sessions Today</span>
+                    <strong className="text-xl text-slate-100 font-bold font-mono">
+                      {(() => {
+                        const today = new Date().toDateString();
+                        return loginLogs.filter(l => new Date(l.login_time).toDateString() === today).length;
+                      })()}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex items-center space-x-4">
+                  <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 text-amber-400">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block font-mono uppercase tracking-wider">Total Logged Hours</span>
+                    <strong className="text-xl text-slate-100 font-bold font-mono">
+                      {(() => {
+                        const totalS = loginLogs.reduce((acc, l) => acc + (l.duration_seconds || 0), 0);
+                        return (totalS / 3600).toFixed(1);
+                      })()} hrs
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter details pill */}
+              {selectedLogConsultantId !== null && (
+                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 rounded-2xl">
+                  <div className="flex items-center space-x-2 text-xs text-emerald-400 font-bold">
+                    <span>Showing logs for:</span>
+                    <span className="bg-emerald-500/20 px-2.5 py-1 rounded-lg text-slate-100 font-mono">
+                      {loginLogs.find(l => l.consultant_id === selectedLogConsultantId)?.display_name || `Advisor #${selectedLogConsultantId}`}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setSelectedLogConsultantId(null)}
+                    className="text-xs text-slate-400 hover:text-slate-100 font-mono underline cursor-pointer"
+                  >
+                    Reset Filter
+                  </button>
+                </div>
+              )}
+
+              {/* Table with logs */}
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px]">
+                        <th className="px-6 py-4">Advisor Profile</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">Login Time</th>
+                        <th className="px-6 py-4">Logout Time</th>
+                        <th className="px-6 py-4 text-right">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80 text-slate-300">
+                      {(() => {
+                        const processedLogs = loginLogs.filter(log => {
+                          if (selectedLogConsultantId !== null && log.consultant_id !== selectedLogConsultantId) {
+                            return false;
+                          }
+
+                          const term = searchCons.toLowerCase().trim();
+                          if (term) {
+                            const nameMatch = (log.display_name || '').toLowerCase().includes(term);
+                            const userMatch = (log.username || '').toLowerCase().includes(term);
+                            const catMatch = (log.category || '').toLowerCase().includes(term);
+                            if (!nameMatch && !userMatch && !catMatch) {
+                              return false;
+                            }
+                          }
+
+                          if (filterConsCat !== 'all' && normalizeCategory(log.category) !== filterConsCat) {
+                            return false;
+                          }
+
+                          if (filterConsHours !== 'all') {
+                            if (filterConsHours === 'online' && log.logout_time) return false;
+                            if (filterConsHours === 'daily_1') {
+                              const hrs = log.duration_seconds || 0;
+                              if (hrs === 0 && log.logout_time) return false;
+                            }
+                          }
+
+                          return true;
+                        });
+
+                        if (processedLogs.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-mono">
+                                No real-time login sessions match your search filters.
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return processedLogs.map(log => {
+                          const loginDate = new Date(log.login_time);
+                          const isOnline = !log.logout_time;
+                          
+                          let durationText = '';
+                          if (isOnline) {
+                            const elapsedS = Math.floor((Date.now() - loginDate.getTime()) / 1000);
+                            if (elapsedS < 60) durationText = `${elapsedS}s`;
+                            else if (elapsedS < 3600) durationText = `${Math.floor(elapsedS / 60)}m ${elapsedS % 60}s`;
+                            else durationText = `${Math.floor(elapsedS / 3600)}h ${Math.floor((elapsedS % 3600) / 60)}m`;
+                          } else {
+                            const totalS = log.duration_seconds || 0;
+                            if (totalS < 60) durationText = `${totalS}s`;
+                            else if (totalS < 3600) durationText = `${Math.floor(totalS / 60)}m ${totalS % 60}s`;
+                            else durationText = `${Math.floor(totalS / 3600)}h ${Math.floor((totalS % 3600) / 60)}m`;
+                          }
+
+                          return (
+                            <tr key={log.id} className="hover:bg-slate-950/30">
+                              <td className="px-6 py-4 flex items-center space-x-3">
+                                <img src={log.photo_url || 'https://via.placeholder.com/150'} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-800" referrerPolicy="no-referrer" />
+                                <div>
+                                  <strong 
+                                    onClick={() => setSelectedLogConsultantId(log.consultant_id)}
+                                    className="text-slate-100 font-bold block hover:underline cursor-pointer"
+                                  >
+                                    {log.display_name}
+                                  </strong>
+                                  <span className="text-[10px] text-slate-500 font-mono">ID: #{log.consultant_id} | {log.category}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                {isOnline ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
+                                    Active Now
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-500 bg-slate-950/50 border border-slate-800">
+                                    Logged Out
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 font-mono text-slate-300">
+                                {loginDate.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </td>
+                              <td className="px-6 py-4 font-mono text-slate-400">
+                                {isOnline ? (
+                                  <span className="text-emerald-500 italic font-medium animate-pulse">Ongoing Session</span>
+                                ) : (
+                                  new Date(log.logout_time!).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-right font-mono font-bold text-slate-100">
+                                {durationText}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
+        </div>
+      )}
+
+          {/* ========================================================= */}
+          {/* TAB: FOLLOWERS LEADERBOARD */}
+          {activeTab === 'followers_leaderboard' && (() => {
+            // Compute some high-level stats
+            const totalFollowersAll = leaderboard.reduce((acc, c) => acc + (c.followers_count || 0), 0);
+            const topFollowed = leaderboard[0];
+
+            return (
+              <div className="space-y-6 animate-fade-in text-left">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-100 tracking-tight flex items-center gap-2">
+                      <Award className="w-5 h-5 text-indigo-400" />
+                      <span>Followers Leaderboard & Manual Controls</span>
+                    </h2>
+                    <p className="text-xs text-slate-400">Professional Super Admin dashboard for tracking and managing consultant popularity metrics.</p>
+                  </div>
+                  <button
+                    onClick={handleManualRefresh}
+                    className="bg-indigo-600/10 hover:bg-indigo-600/25 text-indigo-400 text-xs font-bold px-4 py-2 rounded-xl border border-indigo-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Sync Metrics</span>
+                  </button>
+                </div>
+
+                {/* Bento Statistics Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Total Followers */}
+                  <div className="bg-gradient-to-br from-indigo-950/40 via-slate-900 to-indigo-950/20 border border-indigo-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-indigo-500/15 p-3 rounded-xl text-indigo-400 border border-indigo-500/20">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Total Platform Followers</span>
+                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight">{totalFollowersAll}</strong>
+                    </div>
+                  </div>
+
+                  {/* Top Creator Spotlight */}
+                  <div className="bg-gradient-to-br from-amber-950/40 via-slate-900 to-amber-950/20 border border-amber-500/15 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-amber-500/15 p-3 rounded-xl text-amber-400 border border-amber-500/20">
+                      <Award className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Top Popular Consultant</span>
+                      <strong className="text-base font-black text-amber-400 truncate block max-w-[200px]">
+                        {topFollowed ? topFollowed.display_name : 'No consultants'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Average Followers */}
+                  <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-emerald-950/20 border border-emerald-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-emerald-500/15 p-3 rounded-xl text-emerald-400 border border-emerald-500/20">
+                      <Percent className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Average Popularity</span>
+                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight">
+                        {leaderboard.length > 0 ? Math.round(totalFollowersAll / leaderboard.length) : 0} <span className="text-xs text-slate-400 font-normal">/ expert</span>
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top 3 Podium (Visual Showcase) */}
+                {leaderboard.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                    {leaderboard.slice(0, 3).map((cons, index) => {
+                      const ranks = [
+                        { color: 'from-amber-400 to-yellow-500', shadow: 'shadow-amber-500/10', border: 'border-amber-400/30', medal: '🥇 First Place' },
+                        { color: 'from-slate-300 to-slate-400', shadow: 'shadow-slate-300/5', border: 'border-slate-300/20', medal: '🥈 Second Place' },
+                        { color: 'from-amber-600 to-amber-700', shadow: 'shadow-amber-700/5', border: 'border-amber-700/20', medal: '🥉 Third Place' }
+                      ];
+                      const style = ranks[index] || ranks[2];
+                      const totalFollows = cons.followers_count || 0;
+                      const actualFollows = Math.max(0, totalFollows - (cons.manual_followers_count || 0));
+
+                      return (
+                        <div
+                          key={cons.id}
+                          className={`relative bg-slate-900/60 border ${style.border} rounded-2xl p-5 text-center flex flex-col justify-between gap-3 shadow-xl ${style.shadow}`}
+                        >
+                          {/* Rank Ribbon */}
+                          <span className={`absolute top-4 right-4 bg-gradient-to-r ${style.color} text-slate-950 font-black font-mono text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full`}>
+                            Rank #{index + 1}
+                          </span>
+
+                          <div className="flex flex-col items-center gap-2">
+                            {/* Avatar */}
+                            {cons.photo_url ? (
+                              <img
+                                src={cons.photo_url}
+                                alt={cons.display_name}
+                                className="w-16 h-16 rounded-full object-cover border border-slate-800"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
+                              />
+                            ) : (
+                              <div className="w-16 h-16 rounded-full bg-slate-950 border border-slate-850 font-black text-lg flex items-center justify-center text-indigo-400">
+                                {cons.display_name?.slice(0, 1)}
+                              </div>
+                            )}
+
+                            <div>
+                              <h3 className="font-extrabold text-sm text-slate-100">{cons.display_name}</h3>
+                              <p className="text-[10px] font-mono text-slate-500">@{cons.username}</p>
+                              <span className="text-[9px] bg-slate-950 text-indigo-400 border border-slate-850 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider inline-block mt-1">
+                                {cons.category || 'Consultants'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Followers Breakdown */}
+                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/60 space-y-1">
+                            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                              <span>Actual Followers:</span>
+                              <span className="text-slate-300 font-bold">{actualFollows}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                              <span>Manual Injection:</span>
+                              <span className="text-indigo-400 font-bold">{cons.manual_followers_count || 0}</span>
+                            </div>
+                            <div className="border-t border-slate-850 pt-1 flex items-center justify-between text-[11px] font-mono text-slate-400 font-bold">
+                              <span>Total Followers:</span>
+                              <span className="text-emerald-400 font-extrabold">{totalFollows}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Complete Leaderboard Table & Manual Editor */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+                  <div className="p-4 border-b border-slate-850 bg-slate-950/20 flex items-center justify-between">
+                    <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-400">Complete Rankings & Manual Override</h3>
+                    <span className="text-[10px] font-mono text-slate-500">{leaderboard.length} Experts onboarded</span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-850 text-slate-400 text-[10px] font-mono font-bold uppercase tracking-wider bg-slate-950/40">
+                          <th className="px-6 py-3">Rank</th>
+                          <th className="px-6 py-3">Consultant</th>
+                          <th className="px-6 py-3">Category</th>
+                          <th className="px-6 py-3">Actual followers</th>
+                          <th className="px-6 py-3">Manual adjustment</th>
+                          <th className="px-6 py-3 text-right">Total followers</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-850 font-sans text-xs">
+                        {leaderboard.map((cons, index) => {
+                          const isEditing = updatingManualFollowersId === cons.id;
+                          const totalFollows = cons.followers_count || 0;
+                          const manualFollows = cons.manual_followers_count || 0;
+                          const actualFollows = Math.max(0, totalFollows - manualFollows);
+
+                          return (
+                            <tr key={cons.id} className="hover:bg-slate-850/30 transition-colors">
+                              {/* Rank */}
+                              <td className="px-6 py-4 font-mono font-bold text-slate-400">
+                                #{index + 1}
+                              </td>
+
+                              {/* Consultant details */}
+                              <td className="px-6 py-4">
+                                <div className="flex items-center space-x-3">
+                                  {cons.photo_url ? (
+                                    <img
+                                      src={cons.photo_url}
+                                      alt={cons.display_name}
+                                      className="w-8 h-8 rounded-lg object-cover border border-slate-800 shrink-0"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 font-bold text-xs flex items-center justify-center text-indigo-400 shrink-0">
+                                      {cons.display_name?.slice(0, 1)}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <h4 className="font-bold text-slate-200">{cons.display_name}</h4>
+                                    <p className="text-[10px] font-mono text-slate-500">@{cons.username}</p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Category */}
+                              <td className="px-6 py-4 font-mono text-slate-400">
+                                {cons.category || 'Consultants'}
+                              </td>
+
+                              {/* Actual Followers */}
+                              <td className="px-6 py-4 font-mono font-bold text-slate-300">
+                                {actualFollows}
+                              </td>
+
+                              {/* Manual Adjustment Field */}
+                              <td className="px-6 py-4">
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1.5 max-w-[150px]">
+                                    <input
+                                      type="number"
+                                      value={manualFollowersInputValue}
+                                      onChange={(e) => setManualFollowersInputValue(e.target.value)}
+                                      className="w-full bg-slate-950 border border-indigo-500/50 rounded-lg px-2 py-1 text-slate-100 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs"
+                                      placeholder="Count"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const parsed = parseInt(manualFollowersInputValue, 10);
+                                        if (!isNaN(parsed)) {
+                                          handleUpdateManualFollowers(cons.id, parsed);
+                                        }
+                                      }}
+                                      className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer"
+                                      title="Save Count"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => setUpdatingManualFollowersId(null)}
+                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors cursor-pointer"
+                                      title="Cancel"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 group/btn">
+                                    <span className="font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/10">
+                                      {manualFollows}
+                                    </span>
+                                    <button
+                                      onClick={() => {
+                                        setUpdatingManualFollowersId(cons.id);
+                                        setManualFollowersInputValue(manualFollows.toString());
+                                      }}
+                                      className="opacity-0 group-hover/btn:opacity-100 p-1 rounded hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 transition-all flex items-center gap-0.5 cursor-pointer text-[10px]"
+                                      title="Adjust Count"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                      <span>Edit</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Total Followers */}
+                              <td className="px-6 py-4 text-right font-mono font-black text-slate-100">
+                                <span className="bg-slate-950/80 px-2.5 py-1 rounded-md border border-slate-850 text-emerald-400 text-xs">
+                                  {totalFollows}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ========================================================= */}
+          {/* TAB: REVENUE LEADERBOARD */}
+          {activeTab === 'revenue_leaderboard' && (() => {
+            // Compute high-level stats based on revenueLeaderboard
+            const totalRevAll = revenueLeaderboard.reduce((acc, c) => acc + (c.total_revenue || 0), 0);
+            const totalCommAll = revenueLeaderboard.reduce((acc, c) => acc + (c.total_commission || 0), 0);
+            const topEarner = revenueLeaderboard[0];
+
+            // Extract unique categories from the consultants list to populate the filter dropdown
+            const categories = ['all', ...Array.from(new Set(consultants.map(c => c.category).filter(Boolean)))];
+
+            return (
+              <div className="space-y-6 animate-fade-in text-left">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-100 tracking-tight flex items-center gap-2">
+                      <Coins className="w-5 h-5 text-amber-400" />
+                      <span>Top 20 Consultants & Revenue Leaderboard</span>
+                    </h2>
+                    <p className="text-xs text-slate-400">Professional Super Admin dashboard for tracking total platform revenue, commission earnings, and top performers.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Category Filter Dropdown */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono">Category:</span>
+                      <select
+                        value={revenueCategoryFilter}
+                        onChange={(e) => setRevenueCategoryFilter(e.target.value)}
+                        className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-300 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      >
+                        {categories.map((cat: any) => (
+                          <option key={cat} value={cat}>
+                            {cat === 'all' ? 'All Categories (Overall)' : cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => fetchRevenueLeaderboard(revenueCategoryFilter)}
+                      className="bg-amber-600/10 hover:bg-amber-600/25 text-amber-400 text-xs font-bold px-4 py-2 rounded-xl border border-amber-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bento Statistics Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Total Revenue */}
+                  <div className="bg-gradient-to-br from-amber-950/30 via-slate-900 to-amber-950/10 border border-amber-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-amber-500/15 p-3 rounded-xl text-amber-400 border border-amber-500/20">
+                      <DollarSign className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Total Leaderboard Revenue</span>
+                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight font-sans">₹{totalRevAll.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                    </div>
+                  </div>
+
+                  {/* Top Earner Spotlight */}
+                  <div className="bg-gradient-to-br from-emerald-950/30 via-slate-900 to-emerald-950/10 border border-emerald-500/15 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-emerald-500/15 p-3 rounded-xl text-emerald-400 border border-emerald-500/20">
+                      <Award className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Top Earning Consultant</span>
+                      <strong className="text-base font-black text-emerald-400 truncate block max-w-[200px]">
+                        {topEarner && topEarner.total_revenue > 0 ? topEarner.display_name : 'No earnings'}
+                      </strong>
+                      {topEarner && topEarner.total_revenue > 0 && (
+                        <span className="text-xs text-slate-400 font-mono">₹{topEarner.total_revenue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Platform Commission */}
+                  <div className="bg-gradient-to-br from-indigo-950/30 via-slate-900 to-indigo-950/10 border border-indigo-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-indigo-500/15 p-3 rounded-xl text-indigo-400 border border-indigo-500/20">
+                      <Percent className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Total Commission Generated</span>
+                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight font-sans">₹{totalCommAll.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top 3 Podium (Visual Showcase) */}
+                {revenueLeaderboard.length > 0 && revenueLeaderboard.some(c => c.total_revenue > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                    {revenueLeaderboard.slice(0, 3).filter(c => c.total_revenue > 0).map((cons, index) => {
+                      const ranks = [
+                        { color: 'from-amber-400 to-yellow-500', shadow: 'shadow-amber-500/10', border: 'border-amber-400/30', medal: '🥇 Golden Leader' },
+                        { color: 'from-slate-300 to-slate-400', shadow: 'shadow-slate-300/5', border: 'border-slate-300/20', medal: '🥈 Silver Runner-Up' },
+                        { color: 'from-amber-600 to-amber-700', shadow: 'shadow-amber-700/5', border: 'border-amber-700/20', medal: '🥉 Bronze Finalist' }
+                      ];
+                      const style = ranks[index] || ranks[2];
+
+                      return (
+                        <div
+                          key={cons.id}
+                          className={`relative bg-slate-900/60 border ${style.border} rounded-2xl p-5 text-center flex flex-col justify-between gap-3 shadow-xl ${style.shadow}`}
+                        >
+                          {/* Rank Ribbon */}
+                          <span className={`absolute top-4 right-4 bg-gradient-to-r ${style.color} text-slate-950 font-black font-mono text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full`}>
+                            Rank #{index + 1}
+                          </span>
+
+                          <div className="flex flex-col items-center gap-2">
+                            {/* Avatar */}
+                            <div className="relative">
+                              {cons.photo_url ? (
+                                <img
+                                  src={cons.photo_url}
+                                  alt={cons.display_name}
+                                  className="w-16 h-16 rounded-full object-cover border-2 border-slate-850"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'; }}
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center font-bold text-slate-400">
+                                  {cons.display_name[0].toUpperCase()}
+                                </div>
+                              )}
+                              <span className="absolute -bottom-1 -right-1 bg-slate-950 border border-slate-850 text-[10px] px-1.5 py-0.5 rounded-lg font-bold text-slate-400">
+                                #{cons.id}
+                              </span>
+                            </div>
+
+                            {/* Name & Username */}
+                            <div className="mt-1">
+                              <h4 className="font-extrabold text-slate-100 text-sm truncate max-w-[180px]">{cons.display_name}</h4>
+                              <p className="text-[10px] text-slate-400 font-mono font-medium">@{cons.username}</p>
+                              <span className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/10 px-2 py-0.5 rounded-full">
+                                {cons.category || 'Consultant'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Stats Summary */}
+                          <div className="grid grid-cols-2 gap-2 bg-slate-950/60 rounded-xl p-3 border border-slate-850/60 mt-2 text-left">
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase font-mono">Revenue</span>
+                              <span className="text-sm font-extrabold text-amber-400 font-mono">₹{cons.total_revenue.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase font-mono">Sessions</span>
+                              <span className="text-sm font-extrabold text-slate-200 font-mono">{cons.total_sessions}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-[10px] text-slate-500 font-mono pt-1 text-center">
+                            Commission: <span className="text-slate-300">₹{cons.total_commission.toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Main Table for Leaders */}
+                <div className="bg-slate-900 border border-slate-850 rounded-2xl overflow-hidden shadow-xl">
+                  {/* Table Title Bar */}
+                  <div className="px-6 py-4 bg-slate-900/40 border-b border-slate-850 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-black text-sm text-slate-100 uppercase tracking-wider font-mono">Top Revenue Performers (Max 20)</h3>
+                      <p className="text-[10px] text-slate-500">Sorted by total completed consultation revenue in descending order.</p>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500">{revenueLeaderboard.length} Leaders listed</span>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    {loadingRevenueLeaderboard ? (
+                      <div className="p-12 text-center text-slate-500 font-mono text-xs">
+                        <RefreshCw className="w-5 h-5 text-amber-500 animate-spin mx-auto mb-2" />
+                        <span>Updating Leaderboard...</span>
+                      </div>
+                    ) : revenueLeaderboard.length === 0 ? (
+                      <div className="p-12 text-center text-slate-500 font-mono text-xs">
+                        No performance data registered for the selected filter.
+                      </div>
+                    ) : (
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-850/80 bg-slate-950/40 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-center w-16">Rank</th>
+                            <th className="px-6 py-3">Consultant Details</th>
+                            <th className="px-6 py-3">Category</th>
+                            <th className="px-6 py-3 text-right">Sessions Completed</th>
+                            <th className="px-6 py-3 text-right">Platform Commission (₹)</th>
+                            <th className="px-6 py-3 text-right">Total Revenue (₹)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-850/40">
+                          {revenueLeaderboard.map((cons, index) => {
+                            const rank = index + 1;
+                            const isPodium = rank <= 3;
+                            const badgeColor = 
+                              rank === 1 ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
+                              rank === 2 ? 'bg-slate-300/10 text-slate-300 border-slate-300/20' :
+                              rank === 3 ? 'bg-amber-600/10 text-amber-600 border-amber-600/20' :
+                              'bg-slate-900 text-slate-400 border-slate-800';
+
+                            return (
+                              <tr
+                                key={cons.id}
+                                className="hover:bg-slate-950/40 transition-colors"
+                              >
+                                {/* Rank */}
+                                <td className="px-6 py-4 text-center">
+                                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-xs font-black border ${badgeColor}`}>
+                                    {rank}
+                                  </span>
+                                </td>
+
+                                {/* Consultant Info */}
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    {cons.photo_url ? (
+                                      <img
+                                        src={cons.photo_url}
+                                        alt={cons.display_name}
+                                        className="w-9 h-9 rounded-full object-cover border border-slate-800"
+                                        referrerPolicy="no-referrer"
+                                        onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                                      />
+                                    ) : (
+                                      <div className="w-9 h-9 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 font-bold font-sans text-xs">
+                                        {cons.display_name[0].toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <h4 className="font-extrabold text-slate-200 text-xs flex items-center gap-1">
+                                        <span>{cons.display_name}</span>
+                                        <span className="text-[9px] font-mono font-medium text-slate-500">ID: #{cons.id}</span>
+                                      </h4>
+                                      <p className="text-[10px] text-slate-500 font-mono">@{cons.username}</p>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Category */}
+                                <td className="px-6 py-4">
+                                  <span className="text-xs font-semibold text-slate-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-850">
+                                    {cons.category || 'Consultants'}
+                                  </span>
+                                </td>
+
+                                {/* Sessions Completed */}
+                                <td className="px-6 py-4 text-right font-mono text-slate-300 text-xs font-bold">
+                                  {cons.total_sessions}
+                                </td>
+
+                                {/* Commission */}
+                                <td className="px-6 py-4 text-right font-mono text-xs text-slate-300">
+                                  ₹{cons.total_commission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+
+                                {/* Total Revenue */}
+                                <td className="px-6 py-4 text-right font-mono font-black text-slate-100">
+                                  <span className="bg-slate-950/80 px-2.5 py-1 rounded-md border border-slate-850 text-amber-400 text-xs">
+                                    ₹{cons.total_revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ========================================================= */}
+          {/* TAB: USER SPENDS LEADERBOARD */}
+          {activeTab === 'user_spends_leaderboard' && (() => {
+            // Compute high-level stats
+            const totalSpendAll = userSpendsLeaderboard.reduce((acc, u) => acc + (u.total_spend || 0), 0);
+            const totalSessionsAll = userSpendsLeaderboard.reduce((acc, u) => acc + (u.total_sessions || 0), 0);
+            const topSpender = userSpendsLeaderboard[0];
+
+            return (
+              <div className="space-y-6 animate-fade-in text-left">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-100 tracking-tight flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-400" />
+                      <span>User Spends & Conversation Leaderboard</span>
+                    </h2>
+                    <p className="text-xs text-slate-400">Track user spending habits month-on-month or overall, and see their most-consulted advisors.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Month Filter Dropdown */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono">Time Period:</span>
+                      <select
+                        value={userSpendsMonthFilter}
+                        onChange={(e) => setUserSpendsMonthFilter(e.target.value)}
+                        className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      >
+                        <option value="all">Overall (All Time)</option>
+                        {userSpendsAvailableMonths.map((m) => {
+                          // Format month to human readable e.g. July 2026
+                          const date = new Date(m + '-02'); // Offset to avoid timezone shifting
+                          const formattedMonth = isNaN(date.getTime()) 
+                            ? m 
+                            : date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                          return (
+                            <option key={m} value={m}>
+                              {formattedMonth} ({m})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => fetchUserSpendsLeaderboard(userSpendsMonthFilter)}
+                      className="bg-emerald-600/10 hover:bg-emerald-600/25 text-emerald-400 text-xs font-bold px-4 py-2 rounded-xl border border-emerald-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 animate-pulse" />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Statistics Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Total Spending */}
+                  <div className="bg-gradient-to-br from-emerald-950/30 via-slate-900 to-emerald-950/10 border border-emerald-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-emerald-500/15 p-3 rounded-xl text-emerald-400 border border-emerald-500/20">
+                      <DollarSign className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Total Leaderboard Spending</span>
+                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight font-sans">₹{totalSpendAll.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                    </div>
+                  </div>
+
+                  {/* Top Spender Highlight */}
+                  <div className="bg-gradient-to-br from-purple-950/30 via-slate-900 to-purple-950/10 border border-purple-500/15 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-purple-500/15 p-3 rounded-xl text-purple-400 border border-purple-500/20">
+                      <Award className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Top Spender Spotlight</span>
+                      <strong className="text-base font-black text-purple-400 truncate block max-w-[200px]">
+                        {topSpender && topSpender.total_spend > 0 ? topSpender.display_name : 'No spending'}
+                      </strong>
+                      {topSpender && topSpender.total_spend > 0 && (
+                        <span className="text-xs text-slate-400 font-mono">Spends: ₹{topSpender.total_spend.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Total Sessions Completed */}
+                  <div className="bg-gradient-to-br from-blue-950/30 via-slate-900 to-blue-950/10 border border-blue-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+                    <div className="bg-blue-500/15 p-3 rounded-xl text-blue-400 border border-blue-500/20">
+                      <MessageSquare className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Total Completed Sessions</span>
+                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight font-sans">{totalSessionsAll} sessions</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top 3 Spender Visual Podium */}
+                {userSpendsLeaderboard.length > 0 && userSpendsLeaderboard.some(u => u.total_spend > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                    {userSpendsLeaderboard.slice(0, 3).filter(u => u.total_spend > 0).map((usr, index) => {
+                      const ranks = [
+                        { color: 'from-yellow-400 to-amber-500', shadow: 'shadow-yellow-500/10', border: 'border-yellow-400/30', badge: '🥇 Diamond Elite' },
+                        { color: 'from-slate-300 to-slate-400', shadow: 'shadow-slate-300/5', border: 'border-slate-300/20', badge: '🥈 Platinum Core' },
+                        { color: 'from-amber-600 to-amber-700', shadow: 'shadow-amber-700/5', border: 'border-amber-700/20', badge: '🥉 Gold Member' }
+                      ];
+                      const style = ranks[index] || ranks[2];
+
+                      return (
+                        <div
+                          key={usr.id}
+                          className={`relative bg-slate-900/60 border ${style.border} rounded-2xl p-5 text-center flex flex-col justify-between gap-4 shadow-xl ${style.shadow}`}
+                        >
+                          {/* Rank ribbon */}
+                          <span className={`absolute top-4 right-4 bg-gradient-to-r ${style.color} text-slate-950 font-black font-mono text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full`}>
+                            Rank #{index + 1}
+                          </span>
+
+                          <div className="flex flex-col items-center gap-3">
+                            {/* User Avatar */}
+                            <div className="relative">
+                              {usr.photo_url ? (
+                                <img
+                                  src={usr.photo_url}
+                                  alt={usr.display_name}
+                                  className="w-16 h-16 rounded-full object-cover border-2 border-slate-850"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center font-bold text-slate-400">
+                                  {usr.display_name[0].toUpperCase()}
+                                </div>
+                              )}
+                              <span className="absolute -bottom-1 -right-1 bg-slate-950 border border-slate-850 text-[10px] px-1.5 py-0.5 rounded-lg font-bold text-slate-400">
+                                #{usr.id}
+                              </span>
+                            </div>
+
+                            {/* Info */}
+                            <div className="mt-1">
+                              <h4 className="font-extrabold text-slate-100 text-sm truncate max-w-[180px]">{usr.display_name}</h4>
+                              <p className="text-[10px] text-slate-400 font-mono font-medium">@{usr.username}</p>
+                              <span className={`inline-block mt-1 text-[9px] font-bold uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800 text-slate-300`}>
+                                {style.badge}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Spends Box */}
+                          <div className="bg-slate-950/80 rounded-xl p-3 border border-slate-850/60 text-left space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[9px] font-bold text-slate-500 uppercase font-mono">Total Spend</span>
+                              <span className="text-sm font-black text-emerald-400 font-mono">₹{usr.total_spend.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-t border-slate-900 pt-1.5">
+                              <span className="text-[9px] font-bold text-slate-500 uppercase font-mono">Sessions Count</span>
+                              <span className="text-xs font-extrabold text-slate-300 font-mono">{usr.total_sessions} ({usr.total_duration_minutes}m)</span>
+                            </div>
+                          </div>
+
+                          {/* Most talked advisor spotlight */}
+                          {usr.top_consultant ? (
+                            <div className="bg-slate-950/30 rounded-xl p-2.5 border border-slate-850/40 text-left">
+                              <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">🔥 Top Advisor Spoken With</span>
+                              <div className="flex items-center gap-2">
+                                {usr.top_consultant.consultant_photo_url ? (
+                                  <img
+                                    src={usr.top_consultant.consultant_photo_url}
+                                    alt={usr.top_consultant.consultant_display_name}
+                                    className="w-7 h-7 rounded-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                                  />
+                                ) : (
+                                  <div className="w-7 h-7 rounded-full bg-slate-850 flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                                    {usr.top_consultant.consultant_display_name[0].toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="truncate flex-1">
+                                  <span className="text-[11px] font-extrabold text-slate-200 block truncate leading-tight">{usr.top_consultant.consultant_display_name}</span>
+                                  <span className="text-[9px] font-mono text-slate-500 leading-none">@{usr.top_consultant.consultant_username}</span>
+                                </div>
+                                <div className="text-right whitespace-nowrap">
+                                  <span className="text-[10px] font-extrabold text-amber-400 block font-mono">{usr.top_consultant.sessions_with_consultant} S</span>
+                                  <span className="text-[8px] font-mono text-slate-500 block">({usr.top_consultant.duration_with_consultant} min)</span>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-slate-500 font-mono py-2 text-center bg-slate-950/20 rounded-xl">
+                              No advisor chats logged
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Main Leaderboard Table */}
+                <div className="bg-slate-900 border border-slate-850 rounded-2xl overflow-hidden shadow-xl">
+                  {/* Table Header Bar */}
+                  <div className="px-6 py-4 bg-slate-900/40 border-b border-slate-850 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-black text-sm text-slate-100 uppercase tracking-wider font-mono">All-time High Spenders (Top 20)</h3>
+                      <p className="text-[10px] text-slate-500">Ranked by total completed platform transactions and conversation duration.</p>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500">{userSpendsLeaderboard.length} Spenders listed</span>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    {loadingUserSpendsLeaderboard ? (
+                      <div className="p-12 text-center text-slate-500 font-mono text-xs">
+                        <RefreshCw className="w-5 h-5 text-emerald-500 animate-spin mx-auto mb-2" />
+                        <span>Updating Leaderboard data...</span>
+                      </div>
+                    ) : userSpendsLeaderboard.length === 0 ? (
+                      <div className="p-12 text-center text-slate-500 font-mono text-xs">
+                        No spending entries registered for the selected time period.
+                      </div>
+                    ) : (
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-850/80 bg-slate-950/40 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-center w-16">Rank</th>
+                            <th className="px-6 py-3">User Details</th>
+                            <th className="px-6 py-3">Top Advisor Consulted</th>
+                            <th className="px-6 py-3 text-right">Chats & Calls Count</th>
+                            <th className="px-6 py-3 text-right">Conversation Minutes</th>
+                            <th className="px-6 py-3 text-right">Total Spent (₹)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-850/40">
+                          {userSpendsLeaderboard.map((usr, index) => {
+                            const rank = index + 1;
+                            const badgeColor = 
+                              rank === 1 ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20' :
+                              rank === 2 ? 'bg-slate-300/10 text-slate-300 border-slate-300/20' :
+                              rank === 3 ? 'bg-amber-600/10 text-amber-600 border-amber-600/20' :
+                              'bg-slate-950 text-slate-500 border-slate-850';
+
+                            return (
+                              <tr
+                                key={usr.id}
+                                className="hover:bg-slate-950/40 transition-colors"
+                              >
+                                {/* Rank */}
+                                <td className="px-6 py-4 text-center">
+                                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-xs font-black border ${badgeColor}`}>
+                                    {rank}
+                                  </span>
+                                </td>
+
+                                {/* User Details */}
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    {usr.photo_url ? (
+                                      <img
+                                        src={usr.photo_url}
+                                        alt={usr.display_name}
+                                        className="w-9 h-9 rounded-full object-cover border border-slate-800"
+                                        referrerPolicy="no-referrer"
+                                        onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
+                                      />
+                                    ) : (
+                                      <div className="w-9 h-9 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 font-bold font-sans text-xs">
+                                        {usr.display_name[0].toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <h4 className="font-extrabold text-slate-200 text-xs flex items-center gap-1">
+                                        <span>{usr.display_name}</span>
+                                        <span className="text-[9px] font-mono font-medium text-slate-500">ID: #{usr.id}</span>
+                                      </h4>
+                                      <p className="text-[10px] text-slate-500 font-mono">@{usr.username}</p>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Top Advisor Spoken With */}
+                                <td className="px-6 py-4">
+                                  {usr.top_consultant ? (
+                                    <div className="flex items-center gap-2">
+                                      {usr.top_consultant.consultant_photo_url ? (
+                                        <img
+                                          src={usr.top_consultant.consultant_photo_url}
+                                          alt={usr.top_consultant.consultant_display_name}
+                                          className="w-7 h-7 rounded-full object-cover border border-slate-850"
+                                          referrerPolicy="no-referrer"
+                                          onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                                        />
+                                      ) : (
+                                        <div className="w-7 h-7 rounded-full bg-slate-950 border border-slate-850 flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                                          {usr.top_consultant.consultant_display_name[0].toUpperCase()}
+                                        </div>
+                                      )}
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-300 block">{usr.top_consultant.consultant_display_name}</span>
+                                        <span className="text-[10px] font-mono text-slate-500 block leading-tight">
+                                          {usr.top_consultant.sessions_with_consultant} chats • {usr.top_consultant.duration_with_consultant} mins
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-600 font-mono">None logged</span>
+                                  )}
+                                </td>
+
+                                {/* Chats completed */}
+                                <td className="px-6 py-4 text-right font-mono text-slate-300 text-xs font-bold">
+                                  {usr.total_sessions}
+                                </td>
+
+                                {/* Conversation duration */}
+                                <td className="px-6 py-4 text-right font-mono text-xs text-slate-300">
+                                  {usr.total_duration_minutes} min
+                                </td>
+
+                                {/* Total Spends */}
+                                <td className="px-6 py-4 text-right font-mono font-black text-slate-100">
+                                  <span className="bg-slate-950/80 px-2.5 py-1 rounded-md border border-slate-850 text-emerald-400 text-xs">
+                                    ₹{usr.total_spend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ========================================================= */}
           {/* TAB: LIVE QUEUE MANAGER */}

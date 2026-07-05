@@ -27,8 +27,8 @@ export const userSignUp = (req: Request, res: Response) => {
     }
 
     const finalGender = (gender || 'Male').trim();
-    const defaultGirlAvatar = 'https://i.giphy.com/OdG9tyVfD9NPM.gif';
-    const defaultBoyAvatar = 'https://i.giphy.com/W7Xq86ali939u.gif';
+    const defaultGirlAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150';
+    const defaultBoyAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
     const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? defaultGirlAvatar : defaultBoyAvatar;
 
     const stmt = db.prepare(`
@@ -66,7 +66,9 @@ export const userLogin = (req: Request, res: Response) => {
     let updatedUser = user;
     if (!user.photo_url) {
       const finalGender = (user.gender || 'Male').trim();
-      const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? 'https://i.giphy.com/OdG9tyVfD9NPM.gif' : 'https://i.giphy.com/W7Xq86ali939u.gif';
+      const defaultPhotoUrl = finalGender.toLowerCase() === 'female' 
+        ? 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150' 
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
       db.prepare('UPDATE users SET photo_url = ?, gender = ? WHERE id = ?').run(defaultPhotoUrl, finalGender, user.id);
       updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
     }

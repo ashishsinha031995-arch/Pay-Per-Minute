@@ -288,7 +288,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
 
   // Client tabs navigation state
-  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history' | 'support'>('advisors');
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history' | 'support' | 'following'>('advisors');
+  const [followingList, setFollowingList] = useState<any[]>([]);
+  const [followingLoading, setFollowingLoading] = useState(false);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
@@ -352,6 +354,28 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     if (activeDashboardTab === 'support' && currentUser?.id) {
       fetchUserTickets();
       loadPastHistoryFromLocalStorage();
+    }
+  }, [activeDashboardTab, currentUser?.id]);
+
+  const fetchFollowingList = async () => {
+    if (!currentUser?.id) return;
+    setFollowingLoading(true);
+    try {
+      const res = await fetch(`/api/user/${currentUser.id}/following`);
+      if (res.ok) {
+        const data = await res.json();
+        setFollowingList(data);
+      }
+    } catch (err) {
+      console.error("Error fetching following:", err);
+    } finally {
+      setFollowingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeDashboardTab === 'following' && currentUser?.id) {
+      fetchFollowingList();
     }
   }, [activeDashboardTab, currentUser?.id]);
 
@@ -631,6 +655,52 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       } else {
         console.error('Error loading consultant reviews and schedules:', err);
       }
+    }
+  };
+
+  const handleFollowToggle = async (cons: Consultant) => {
+    if (!currentUser) {
+      onOpenAuth();
+      return;
+    }
+    const isFollowing = !!(cons as any).is_following;
+    const endpoint = isFollowing ? 'unfollow' : 'follow';
+    try {
+      const res = await fetch(`/api/user/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, consultantId: cons.id })
+      });
+      if (res.ok) {
+        const nextIsFollowing = isFollowing ? 0 : 1;
+        // Update selectedConsultant state directly
+        setSelectedConsultant(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            is_following: nextIsFollowing,
+            followers_count: isFollowing 
+              ? Math.max(0, ((prev as any).followers_count || 1) - 1) 
+              : ((prev as any).followers_count || 0) + 1
+          };
+        });
+        
+        // Also update the consultant in the master consultants list so the dashboard list stays in sync
+        setConsultants(prevList => prevList.map(c => {
+          if (c.id === cons.id) {
+            return {
+              ...c,
+              is_following: nextIsFollowing,
+              followers_count: isFollowing 
+                ? Math.max(0, ((c as any).followers_count || 1) - 1) 
+                : ((c as any).followers_count || 0) + 1
+            };
+          }
+          return c;
+        }));
+      }
+    } catch (err) {
+      console.error("Error toggling follow status:", err);
     }
   };
 
@@ -1403,6 +1473,23 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     </button>
 
                     <button
+                      id="following-consultants-tab"
+                      onClick={() => {
+                        setSelectedConsultant(null);
+                        setActiveDashboardTab('following');
+                        setHamburgerOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeDashboardTab === 'following'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <User className="w-4 h-4 shrink-0 text-indigo-400" />
+                      <span>✨ Your Following List</span>
+                    </button>
+
+                    <button
                       id="chat-history-tab"
                       onClick={() => {
                         setSelectedConsultant(null);
@@ -1638,9 +1725,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ AI Girl Characters</span>
                 <div className="flex flex-wrap gap-2.5">
                   {[
-                    'https://i.giphy.com/OdG9tyVfD9NPM.gif', // Sipping tea & cute happy head nod
-                    'https://i.giphy.com/L20mbc7yqfsly.gif', // Wink & peace sign dance
-                    'https://i.giphy.com/1395UXCac7bUvC.gif'  // Happy cute anime dance shake
+                    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120', // Graceful smiling portrait
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120', // Modern aesthetic portrait
+                    'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=120'  // Warm cheerful portrait
                   ].map((preset, idx) => (
                     <button
                       key={`girl-${idx}`}
@@ -1659,9 +1746,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ AI Boy Characters</span>
                 <div className="flex flex-wrap gap-2.5">
                   {[
-                    'https://i.giphy.com/W7Xq86ali939u.gif', // Boy waving warmly with pleasant smile
-                    'https://i.giphy.com/5A8bW9oAoxB2o.gif', // Smug cool shades wink animation
-                    'https://i.giphy.com/11HeubD26tLB8k.gif'  // Thumbs up / shaking cheer boy animation
+                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120', // Warm elegant portrait
+                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120', // Aesthetic friendly portrait
+                    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=120'  // Sharp smiling portrait
                   ].map((preset, idx) => (
                     <button
                       key={`boy-${idx}`}
@@ -2923,6 +3010,160 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         </div>
       )}
 
+      {currentUser && !selectedConsultant && activeDashboardTab === 'following' && (
+        <div className="bg-slate-900/40 p-6 sm:p-8 rounded-3xl border border-slate-800/80 space-y-6 text-left" id="user-following-panel">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
+            <div className="flex items-center space-x-2.5">
+              <div className="bg-indigo-500/15 p-2 rounded-xl border border-indigo-500/20 text-indigo-400">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-lg text-slate-100">Your Following List</h3>
+                <p className="text-xs text-slate-400">Consultants whom you follow on CallMint</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveDashboardTab('advisors')}
+              className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-3.5 py-2 rounded-xl border border-emerald-500/20 w-fit cursor-pointer"
+            >
+              🔍 Browse More Advisors
+            </button>
+          </div>
+
+          {followingLoading ? (
+            <div className="py-20 text-center space-y-3">
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-sm text-slate-500 font-mono">Loading your following list...</p>
+            </div>
+          ) : followingList.length === 0 ? (
+            <div className="py-16 text-center max-w-md mx-auto space-y-4">
+              <div className="bg-slate-950/40 border border-slate-850 p-6 rounded-2xl inline-block">
+                <User className="w-12 h-12 text-slate-600 mx-auto" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-slate-300">Aap kisi ko follow nahi kar rahe hai</h4>
+                <p className="text-xs text-slate-500">Go to Advisor Directory and click "+ Follow" to keep track of your favorite consultants.</p>
+              </div>
+              <button
+                onClick={() => setActiveDashboardTab('advisors')}
+                className="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+              >
+                Browse Advisors
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {followingList.map((cons: any) => {
+                const totalFollowers = (cons.followers_count || 0) + (cons.manual_followers_count || 0);
+                return (
+                  <div
+                    key={cons.id}
+                    className="relative bg-gradient-to-br from-slate-950 via-slate-950 to-slate-900 border border-slate-850 p-5 rounded-2xl flex flex-col justify-between gap-4 shadow-lg hover:border-indigo-500/40 hover:shadow-indigo-500/5 transition-all duration-300 group"
+                  >
+                    {/* Upper Row: Avatar and basic info */}
+                    <div className="flex gap-4">
+                      {/* Avatar */}
+                      <div className="relative shrink-0">
+                        {cons.photo_url ? (
+                          <img
+                            src={cons.photo_url}
+                            alt={cons.display_name}
+                            className="w-14 h-14 rounded-xl object-cover border border-slate-800"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-xl bg-slate-900 border border-slate-800 font-extrabold text-base flex items-center justify-center text-indigo-400">
+                            {cons.display_name?.slice(0, 1)}
+                          </div>
+                        )}
+                        {/* Status dot */}
+                        <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-950 ${
+                          cons.is_online === 1
+                            ? cons.is_busy === 1 ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'
+                            : 'bg-slate-600'
+                        }`} />
+                      </div>
+
+                      {/* Details */}
+                      <div className="space-y-1 min-w-0 text-left">
+                        <div className="flex items-center gap-1">
+                          <h4 className="font-bold text-sm text-slate-200 truncate group-hover:text-indigo-400 transition-colors">{cons.display_name}</h4>
+                          <span className="bg-sky-500/15 text-sky-400 p-0.5 rounded-full border border-sky-500/25 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-3.5 h-3.5 fill-sky-500 text-slate-950" />
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-mono text-slate-500">@{cons.username}</p>
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          <span className="bg-slate-900 text-indigo-400 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-800 uppercase tracking-wide">
+                            {cons.category || 'Consultants'}
+                          </span>
+                          <span className="bg-slate-900 text-slate-400 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-800">
+                            ₹{cons.price_per_minute}/min
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lower Row: Follower count & Action Buttons */}
+                    <div className="flex items-center justify-between border-t border-slate-850/60 pt-3">
+                      <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                        <User className="w-3 h-3 text-indigo-400" />
+                        <span>{totalFollowers} followers</span>
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        {/* Unfollow button */}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const res = await fetch(`/api/user/unfollow`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUser.id, consultantId: cons.id })
+                              });
+                              if (res.ok) {
+                                // Instantly remove from local list
+                                setFollowingList(prev => prev.filter(item => item.id !== cons.id));
+                                // Sync the master list
+                                setConsultants(prevList => prevList.map(c => {
+                                  if (c.id === cons.id) {
+                                    return {
+                                      ...c,
+                                      is_following: 0,
+                                      followers_count: Math.max(0, ((c as any).followers_count || 1) - 1)
+                                    };
+                                  }
+                                  return c;
+                                }));
+                              }
+                            } catch (err) {
+                              console.error("Error unfollowing:", err);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-500/10 border border-slate-850 hover:border-rose-500/20 transition-all cursor-pointer"
+                        >
+                          Unfollow
+                        </button>
+
+                        {/* View Profile / Consult button */}
+                        <button
+                          onClick={() => fetchFullProfile(cons)}
+                          className="px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+                        >
+                          View Profile
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 1. SHOW PUBLIC DIRECTORY OF CONSULTANTS */}
       {!selectedConsultant && (!currentUser || activeDashboardTab === 'advisors') && (
         currentUser ? (
@@ -3176,9 +3417,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   <span className="bg-emerald-500/10 text-emerald-400 font-mono text-[10px] px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-wide self-center sm:self-auto">
                     {selectedConsultant.category || 'Consultants'}
                   </span>
+                  {/* Followers Count Badge */}
+                  <span className="bg-indigo-500/10 text-indigo-400 font-mono text-[10px] px-2.5 py-0.5 rounded-full border border-indigo-500/20 font-bold uppercase tracking-wide self-center sm:self-auto flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    <span>{((selectedConsultant as any).followers_count || 0) + ((selectedConsultant as any).manual_followers_count || 0)} Followers</span>
+                  </span>
                 </div>
-                {/* Ready to join button under username handle */}
-                <div className="pt-1 flex justify-center sm:justify-start">
+                {/* Ready to join button under username handle + Follow Button */}
+                <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-3">
                   {selectedConsultant.is_online === 1 ? (
                     selectedConsultant.is_busy === 1 ? (
                       <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold px-3 py-1 rounded-full text-xs font-mono inline-flex items-center gap-1.5 shadow-md">
@@ -3204,6 +3450,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       </span>
                       <span>Offline</span>
                     </span>
+                  )}
+
+                  {/* Elegant Follow Button */}
+                  {currentUser?.id !== selectedConsultant.id && (
+                    <button
+                      onClick={() => handleFollowToggle(selectedConsultant)}
+                      className={`px-4 py-1 rounded-full text-xs font-bold transition-all uppercase tracking-wider flex items-center gap-1 hover:scale-105 active:scale-95 cursor-pointer ${
+                        !!(selectedConsultant as any).is_following
+                          ? 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'
+                          : 'bg-gradient-to-r from-indigo-500 to-sky-500 hover:from-indigo-600 hover:to-sky-600 text-white shadow-lg shadow-indigo-500/20'
+                      }`}
+                    >
+                      <span>{!!(selectedConsultant as any).is_following ? '✓ Following' : '+ Follow'}</span>
+                    </button>
                   )}
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db, logWalletTransaction } from '../config/database.js';
+import { db, logWalletTransaction, calculateConsultantLoginHours } from '../config/database.js';
 import { getSalaryCycleInfo, checkAndResetMonthlyWallets } from '../utils/salary.js';
 import { processNextInQueue } from './payment.controller.js';
 import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
@@ -30,7 +30,20 @@ export const getActiveConsultants = (req: Request, res: Response) => {
       }
     }
 
-    const allConsultants = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id FROM consultants WHERE is_active = 1').all();
+    let queryStr = `
+      SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id, manual_followers_count,
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + manual_followers_count) AS followers_count
+    `;
+    let params: any[] = [];
+    if (userId) {
+      queryStr += `, (SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id AND f.user_id = ?) AS is_following `;
+      params.push(userId);
+    } else {
+      queryStr += `, 0 AS is_following `;
+    }
+    queryStr += ` FROM consultants WHERE is_active = 1 `;
+
+    const allConsultants = db.prepare(queryStr).all(...params);
 
     if (adminAllowOthers === 0 && lockedConsultantIds.length > 0) {
       const filtered = allConsultants.filter((c: any) => lockedConsultantIds.includes(c.id));
@@ -47,7 +60,23 @@ export const getActiveConsultants = (req: Request, res: Response) => {
 export const getConsultantProfileByUsername = (req: Request, res: Response) => {
   try {
     const { username } = req.params;
-    const consultant = db.prepare('SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, experience, languages, specializations, average_rating FROM consultants WHERE username = ? AND is_active = 1').get(username);
+    const { userId } = req.query;
+    
+    let queryStr = `
+      SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, experience, languages, specializations, average_rating, manual_followers_count,
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + manual_followers_count) AS followers_count
+    `;
+    let params: any[] = [];
+    if (userId) {
+      queryStr += `, (SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id AND f.user_id = ?) AS is_following `;
+      params.push(userId);
+    } else {
+      queryStr += `, 0 AS is_following `;
+    }
+    queryStr += ` FROM consultants WHERE username = ? AND is_active = 1 `;
+    params.push(username);
+
+    const consultant = db.prepare(queryStr).get(...params);
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found or inactive' });
     }
@@ -65,6 +94,9 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
     const { is_online, is_busy } = req.body;
 
     if (is_online !== undefined) {
+      const current = db.prepare('SELECT is_online FROM consultants WHERE id = ?').get(id) as { is_online: number } | undefined;
+      const isCurrentlyOnline = current?.is_online === 1;
+
       db.prepare('UPDATE consultants SET is_online = ? WHERE id = ?').run(is_online ? 1 : 0, id);
     }
     if (is_busy !== undefined) {
@@ -94,7 +126,12 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
 export const getConsultantProfileById = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const consultant = db.prepare('SELECT * FROM consultants WHERE id = ?').get(id);
+    const consultant = db.prepare(`
+      SELECT *,
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + manual_followers_count) AS followers_count
+      FROM consultants 
+      WHERE id = ?
+    `).get(id);
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found' });
     }
@@ -249,12 +286,14 @@ export const getConsultantStats = (req: Request, res: Response) => {
     `).all(id);
     const salaryInfo = getSalaryCycleInfo(Number(id));
     const manualAdjustments = db.prepare("SELECT * FROM manual_wallet_adjustments WHERE target_type = 'consultant' AND target_id = ? ORDER BY id DESC").all(id);
+    const loginHours = calculateConsultantLoginHours(Number(id));
 
     res.json({
       wallet: consultant,
       sessions,
       salaryInfo,
       manualAdjustments,
+      loginHours,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -391,7 +430,9 @@ export const getUserProfileInfo = (req: Request, res: Response) => {
     let finalUser = user;
     if (!user.photo_url) {
       const finalGender = (user.gender || 'Male').trim();
-      const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? 'https://i.giphy.com/OdG9tyVfD9NPM.gif' : 'https://i.giphy.com/W7Xq86ali939u.gif';
+      const defaultPhotoUrl = finalGender.toLowerCase() === 'female' 
+        ? 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150' 
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
       db.prepare('UPDATE users SET photo_url = ?, gender = ? WHERE id = ?').run(defaultPhotoUrl, finalGender, user.id);
       finalUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
     }
@@ -940,6 +981,79 @@ export const deleteConsultantSchedule = (req: Request, res: Response) => {
 
     db.prepare('DELETE FROM consultant_schedules WHERE id = ? AND consultant_id = ?').run(scheduleId, id);
     res.json({ success: true, message: 'Schedule deleted successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Follow a consultant
+export const followConsultant = (req: Request, res: Response) => {
+  try {
+    const { userId, consultantId } = req.body;
+    if (!userId || !consultantId) {
+      return res.status(400).json({ error: 'User ID and Consultant ID are required' });
+    }
+    
+    db.prepare(`
+      INSERT OR IGNORE INTO consultant_followers (user_id, consultant_id, created_at)
+      VALUES (?, ?, ?)
+    `).run(userId, consultantId, new Date().toISOString());
+    
+    res.json({ success: true, message: 'Consultant followed successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Unfollow a consultant
+export const unfollowConsultant = (req: Request, res: Response) => {
+  try {
+    const { userId, consultantId } = req.body;
+    if (!userId || !consultantId) {
+      return res.status(400).json({ error: 'User ID and Consultant ID are required' });
+    }
+    
+    db.prepare(`
+      DELETE FROM consultant_followers
+      WHERE user_id = ? AND consultant_id = ?
+    `).run(userId, consultantId);
+    
+    res.json({ success: true, message: 'Consultant unfollowed successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get list of consultants followed by user (Following list)
+export const getFollowingConsultants = (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const following = db.prepare(`
+      SELECT c.*,
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + c.manual_followers_count) AS followers_count,
+             1 AS is_following
+      FROM consultants c
+      JOIN consultant_followers f ON c.id = f.consultant_id
+      WHERE f.user_id = ? AND c.is_active = 1
+    `).all(userId);
+    res.json(following);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get list of followers for a consultant ("Your Followers" list)
+export const getConsultantFollowers = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const followers = db.prepare(`
+      SELECT u.id, u.display_name, u.photo_url, u.email, f.created_at
+      FROM users u
+      JOIN consultant_followers f ON u.id = f.user_id
+      WHERE f.consultant_id = ?
+      ORDER BY f.created_at DESC
+    `).all(id);
+    res.json(followers);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db, logWalletTransaction } from '../config/database.js';
+import { db, logWalletTransaction, calculateConsultantLoginHours } from '../config/database.js';
 import { getSalaryCycleInfo } from '../utils/salary.js';
 
 export const getAdminDashboardStats = (req: Request, res: Response) => {
@@ -77,15 +77,17 @@ export const getAdminAuditLogs = (req: Request, res: Response) => {
 export const getAdminConsultantsList = (req: Request, res: Response) => {
   try {
     const consultants = db.prepare(`
-      SELECT c.*, p.name AS plan_name 
+      SELECT c.*, p.name AS plan_name,
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + c.manual_followers_count) AS followers_count
       FROM consultants c 
       LEFT JOIN plans p ON c.plan_id = p.id 
       ORDER BY c.id DESC
     `).all() as any[];
     
-    // Attach detailed salary calculations for each consultant
+    // Attach detailed salary calculations and login hours for each consultant
     for (const cons of consultants) {
       cons.salary_info = getSalaryCycleInfo(cons.id);
+      cons.login_hours = calculateConsultantLoginHours(cons.id);
     }
     
     res.json(consultants);
@@ -922,6 +924,158 @@ export const getAdminLiveQueues = (req: Request, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const getConsultantsLoginLogsByAdmin = (req: Request, res: Response) => {
+  res.json([]);
+};
+
+// Set manual followers count for a consultant
+export const updateConsultantManualFollowers = (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { manual_followers_count } = req.body;
+    
+    if (manual_followers_count === undefined || isNaN(parseInt(manual_followers_count, 10))) {
+      return res.status(400).json({ error: 'Valid manual followers count is required' });
+    }
+    
+    db.prepare('UPDATE consultants SET manual_followers_count = ? WHERE id = ?').run(parseInt(manual_followers_count, 10), id);
+    
+    // Log to audit logs
+    const logId = 'AUD-' + Math.floor(100000 + Math.random() * 900000);
+    const timestamp = new Date().toISOString();
+    const details = `Super Admin updated manual followers count for Consultant ID #${id} to ${manual_followers_count}`;
+    try {
+      db.prepare(`
+        INSERT INTO audit_logs (id, timestamp, actor, role, action, details, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(logId, timestamp, 'Super Admin', 'Admin', 'Follower Count Adjustment', details, 'Success');
+    } catch (_) {}
+    
+    res.json({ success: true, manual_followers_count: parseInt(manual_followers_count, 10) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get consultants followers leaderboard (descending order)
+export const getConsultantFollowersLeaderboard = (req: Request, res: Response) => {
+  try {
+    const leaderboard = db.prepare(`
+      SELECT c.id, c.username, c.display_name, c.photo_url, c.category, c.manual_followers_count,
+             (SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) AS organic_followers_count,
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + c.manual_followers_count) AS followers_count
+      FROM consultants c
+      ORDER BY followers_count DESC
+    `).all();
+    res.json(leaderboard);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get top 20 consultants by revenue leaderboard
+export const getConsultantRevenueLeaderboard = (req: Request, res: Response) => {
+  try {
+    const { category } = req.query;
+    let query = `
+      SELECT c.id, c.username, c.display_name, c.photo_url, c.category,
+             COALESCE(SUM(s.total_paid), 0) AS total_revenue,
+             COALESCE(SUM(s.commission_amount), 0) AS total_commission,
+             COUNT(s.id) AS total_sessions
+      FROM consultants c
+      LEFT JOIN sessions s ON c.id = s.consultant_id AND s.status = 'completed'
+    `;
+    const params: any[] = [];
+    if (category && category !== 'all' && category !== 'All') {
+      query += ` WHERE LOWER(c.category) = ? `;
+      params.push(String(category).toLowerCase());
+    }
+    query += `
+      GROUP BY c.id
+      ORDER BY total_revenue DESC
+      LIMIT 20
+    `;
+    const leaderboard = db.prepare(query).all(...params);
+    res.json(leaderboard);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get top 20 users by spending leaderboard
+export const getUserSpendsLeaderboard = (req: Request, res: Response) => {
+  try {
+    const { month } = req.query; // 'all' or 'YYYY-MM'
+    
+    // 1. Fetch distinct months that have completed sessions
+    const monthsResult = db.prepare(`
+      SELECT DISTINCT SUBSTR(created_at, 1, 7) AS month
+      FROM sessions
+      WHERE status = 'completed' AND created_at IS NOT NULL AND created_at != ''
+      ORDER BY month DESC
+    `).all() as { month: string }[];
+    const availableMonths = monthsResult.map(m => m.month);
+
+    // 2. Fetch users and their total spend
+    let query = `
+      SELECT u.id, u.username, u.display_name, u.photo_url, u.email, u.phone,
+             COALESCE(SUM(s.total_paid), 0) AS total_spend,
+             COUNT(s.id) AS total_sessions,
+             COALESCE(SUM(s.duration_minutes), 0) AS total_duration_minutes
+      FROM users u
+      INNER JOIN sessions s ON u.id = s.user_id AND s.status = 'completed'
+    `;
+    const params: any[] = [];
+    if (month && month !== 'all' && month !== 'All') {
+      query += ` WHERE SUBSTR(s.created_at, 1, 7) = ? `;
+      params.push(String(month));
+    }
+    query += `
+      GROUP BY u.id
+      ORDER BY total_spend DESC
+      LIMIT 20
+    `;
+    const usersLeaderboard = db.prepare(query).all(...params) as any[];
+
+    // 3. For each user, fetch their most-talked-to consultant
+    const richLeaderboard = usersLeaderboard.map((user) => {
+      let favoriteQuery = `
+        SELECT c.id AS consultant_id, c.display_name AS consultant_display_name,
+               c.username AS consultant_username, c.photo_url AS consultant_photo_url,
+               COUNT(s.id) AS sessions_with_consultant,
+               COALESCE(SUM(s.duration_minutes), 0) AS duration_with_consultant,
+               COALESCE(SUM(s.total_paid), 0) AS spend_with_consultant
+        FROM sessions s
+        INNER JOIN consultants c ON s.consultant_id = c.id
+        WHERE s.user_id = ? AND s.status = 'completed'
+      `;
+      const favParams: any[] = [user.id];
+      if (month && month !== 'all' && month !== 'All') {
+        favoriteQuery += ` AND SUBSTR(s.created_at, 1, 7) = ? `;
+        favParams.push(String(month));
+      }
+      favoriteQuery += `
+        GROUP BY c.id
+        ORDER BY sessions_with_consultant DESC, spend_with_consultant DESC
+        LIMIT 1
+      `;
+      const topConsultant = db.prepare(favoriteQuery).get(...favParams) as any | undefined;
+      return {
+        ...user,
+        top_consultant: topConsultant || null
+      };
+    });
+
+    res.json({
+      available_months: availableMonths,
+      leaderboard: richLeaderboard
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 
 
 

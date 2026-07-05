@@ -1337,8 +1337,8 @@ export function ChatRoom({
         {messages.map((msg) => {
           const isMe = msg.sender_type === role;
           const avatarSrc = msg.sender_type === 'consultant'
-            ? (sessionInfo.consultant_photo || 'https://i.giphy.com/W7Xq86ali939u.gif')
-            : (sessionInfo.user_photo || 'https://i.giphy.com/OdG9tyVfD9NPM.gif');
+            ? (sessionInfo.consultant_photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100')
+            : (sessionInfo.user_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100');
 
           return (
             <div

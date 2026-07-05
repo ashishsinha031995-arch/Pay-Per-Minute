@@ -24,7 +24,8 @@ const tables = [
   'support_tickets',
   'support_ticket_replies',
   'manual_wallet_adjustments',
-  'consultant_schedules'
+  'consultant_schedules',
+  'consultant_followers'
 ];
 
 const mongoSchemas: Record<string, mongoose.Schema> = {};
@@ -359,7 +360,8 @@ export function initDb() {
       bank_ifsc_code TEXT,
       bank_name TEXT,
       bank_status TEXT DEFAULT 'unsubmitted',
-      bank_reject_reason TEXT
+      bank_reject_reason TEXT,
+      manual_followers_count INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -512,6 +514,16 @@ export function initDb() {
       created_at TEXT NOT NULL,
       FOREIGN KEY (consultant_id) REFERENCES consultants (id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS consultant_followers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      consultant_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+      FOREIGN KEY (consultant_id) REFERENCES consultants (id) ON DELETE CASCADE,
+      UNIQUE(user_id, consultant_id)
+    );
   `);
 
   // Migrate existing tables if they are missing newer columns
@@ -590,6 +602,20 @@ export function initDb() {
   try { db.exec("ALTER TABLE consultants ADD COLUMN lifetime_revenue REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN total_sessions INTEGER DEFAULT 0;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN average_rating REAL DEFAULT 5.0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN manual_followers_count INTEGER DEFAULT 0;"); } catch(_) {}
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS consultant_followers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        consultant_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (consultant_id) REFERENCES consultants (id) ON DELETE CASCADE,
+        UNIQUE(user_id, consultant_id)
+      );
+    `);
+  } catch(_) {}
 
   try { db.exec("ALTER TABLE users ADD COLUMN locked_consultant_id INTEGER DEFAULT NULL;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN admin_allow_others INTEGER DEFAULT 0;"); } catch(_) {}
@@ -1012,6 +1038,17 @@ export function initDb() {
     console.error('Error migrating IDs to 5-digit format:', err);
   }
 
+  // Fix any corrupted or Giphy URLs for existing users
+  try {
+    const maleReplacement = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
+    const femaleReplacement = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150';
+    db.prepare("UPDATE users SET photo_url = ? WHERE LOWER(gender) = 'female' AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(femaleReplacement);
+    db.prepare("UPDATE users SET photo_url = ? WHERE (LOWER(gender) != 'female' OR gender IS NULL) AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(maleReplacement);
+    console.log('[Database] Corrected existing users with broken Giphy profile photos.');
+  } catch (err) {
+    console.error('Error correcting existing users with Giphy photos:', err);
+  }
+
   // Connect to MongoDB asynchronously so it doesn't block server startup
   const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
   if (!mongoUri) {
@@ -1062,6 +1099,10 @@ export function logWalletTransaction(
   } catch (err) {
     console.error('Failed to log wallet transaction:', err);
   }
+}
+
+export function calculateConsultantLoginHours(consultantId: number) {
+  return { daily: 0.0, weekly: 0.0, monthly: 0.0 };
 }
 
 export { db };
