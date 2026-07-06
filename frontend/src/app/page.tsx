@@ -98,6 +98,7 @@ export default function AppPage() {
     sessionId: string;
     userName: string;
     role: 'user' | 'consultant';
+    isReadOnly?: boolean;
   } | null>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -114,7 +115,9 @@ export default function AppPage() {
 
   useEffect(() => {
     if (activeSession) {
-      localStorage.setItem('advisor_active_session', JSON.stringify(activeSession));
+      if (!activeSession.isReadOnly) {
+        localStorage.setItem('advisor_active_session', JSON.stringify(activeSession));
+      }
     } else {
       localStorage.removeItem('advisor_active_session');
     }
@@ -289,8 +292,8 @@ export default function AppPage() {
   }, [currentUser?.id, targetUsername]);
 
   // Handler to open an active real-time chat room
-  const handleSelectSession = (sessionId: string, userName: string, role: 'user' | 'consultant') => {
-    setActiveSession({ sessionId, userName, role });
+  const handleSelectSession = (sessionId: string, userName: string, role: 'user' | 'consultant', isReadOnly?: boolean) => {
+    setActiveSession({ sessionId, userName, role, isReadOnly });
   };
 
   // Handler to navigate directly to booking URL from Portal URL copier
@@ -532,12 +535,13 @@ export default function AppPage() {
 
       {/* 2. Main Content Routing Area */}
       <main className="flex-1 pb-12">
-        {activeSession ? (
+        {activeSession && (
           // Active Socket Chat Room overlay
           <ChatRoom
             sessionId={activeSession.sessionId}
             userName={activeSession.userName}
             role={activeSession.role}
+            isReadOnly={activeSession.isReadOnly}
             currentUser={currentUser}
             refreshUserProfile={refreshUserProfile}
             onClose={() => {
@@ -545,56 +549,56 @@ export default function AppPage() {
               if (currentUser?.id) refreshUserProfile(currentUser.id);
             }}
           />
-        ) : (
-          <>
-            {currentRole === 'user' && (
-              // User View / Consultants page
-              <ConsultantProfile
-                onSelectSession={handleSelectSession}
-                targetUsername={targetUsername}
-                onClearTargetUsername={() => {
-                  localStorage.removeItem('clicked_consultant_username');
-                  setTargetUsername(undefined);
-                  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/u/')) {
-                    window.history.pushState({}, '', '/');
-                  }
-                }}
-                currentUser={currentUser}
-                setCurrentUser={setCurrentUser}
-                onOpenAuth={() => {
-                  setAuthError(null);
-                  setAuthSuccess(null);
-                  setAuthTab('login');
-                  setSignUpType('choose');
-                  setAuthModalOpen(true);
-                }}
-                activeSessionId={activeSession?.sessionId}
-                onLogout={handleLogout}
-                theme={theme}
-                onToggleTheme={toggleTheme}
-                onInstallApp={handleInstallApp}
-              />
-            )}
-
-            {currentRole === 'consultant' && (
-              // Consultant Dashboard
-              <ConsultantPanel
-                onSelectSession={handleSelectSession}
-                onNavigateToUserView={handleNavigateToUserView}
-                activeSessionId={activeSession?.sessionId}
-                onLogout={handleLogout}
-                theme={theme}
-                onToggleTheme={toggleTheme}
-                onInstallApp={handleInstallApp}
-              />
-            )}
-
-            {currentRole === 'admin' && (
-              // Super Admin Control panel
-              <AdminPanel />
-            )}
-          </>
         )}
+
+        <div className={activeSession ? 'hidden' : ''}>
+          {currentRole === 'user' && (
+            // User View / Consultants page
+            <ConsultantProfile
+              onSelectSession={handleSelectSession}
+              targetUsername={targetUsername}
+              onClearTargetUsername={() => {
+                localStorage.removeItem('clicked_consultant_username');
+                setTargetUsername(undefined);
+                if (typeof window !== 'undefined' && window.location.pathname.startsWith('/u/')) {
+                  window.history.pushState({}, '', '/');
+                }
+              }}
+              currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
+              onOpenAuth={() => {
+                setAuthError(null);
+                setAuthSuccess(null);
+                setAuthTab('login');
+                setSignUpType('choose');
+                setAuthModalOpen(true);
+              }}
+              activeSessionId={activeSession?.sessionId}
+              onLogout={handleLogout}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              onInstallApp={handleInstallApp}
+            />
+          )}
+
+          {currentRole === 'consultant' && (
+            // Consultant Dashboard
+            <ConsultantPanel
+              onSelectSession={handleSelectSession}
+              onNavigateToUserView={handleNavigateToUserView}
+              activeSessionId={activeSession?.sessionId}
+              onLogout={handleLogout}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              onInstallApp={handleInstallApp}
+            />
+          )}
+
+          {currentRole === 'admin' && (
+            // Super Admin Control panel
+            <AdminPanel />
+          )}
+        </div>
       </main>
 
       {/* AUTHENTICATION OVERLAY MODAL */}

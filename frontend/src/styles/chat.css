@@ -1,1 +1,37 @@
 /* Custom styles for chatrooms and websocket messaging windows */
+
+/* Custom thin scrollbar matching the theme color palette */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-slate-950, #020617);
+  border-radius: 4px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-emerald-500, #10b981);
+  border-radius: 4px;
+  opacity: 0.6;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-emerald-600, #059669);
+}
+
+/* Firefox Support */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-emerald-500, #10b981) var(--color-slate-950, #020617);
+}
+
+/* Completely hidden scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

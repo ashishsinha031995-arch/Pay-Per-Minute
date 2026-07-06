@@ -39,7 +39,7 @@ const normalizeCategory = (cat: string) => {
 };
 
 interface ConsultantProfileProps {
-  onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
+  onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant', isReadOnly?: boolean) => void;
   targetUsername?: string; // If navigated from Consultant Panel profile URL
   onClearTargetUsername?: () => void;
   currentUser: any;
@@ -516,8 +516,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 console.warn('[Notification API] Received non-JSON response from /api/user/sessions:', textOutput.substring(0, 100));
               }
             }
-          } catch (fetchErr) {
-            console.error('Error fetching/parsing user sessions from API:', fetchErr);
+          } catch (fetchErr: any) {
+            if (fetchErr && fetchErr.message && fetchErr.message.includes('Failed to fetch')) {
+              console.warn('Network connection starting up. Retrying past sessions list shortly...');
+            } else {
+              console.error('Error fetching/parsing user sessions from API:', fetchErr);
+            }
           }
         }
       }
@@ -2179,17 +2183,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         {/* Right Side: Action Buttons */}
                         <div className="flex sm:flex-row md:flex-col gap-2 shrink-0 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-800/50">
                           <button
-                            onClick={async () => {
-                              try {
-                                const res = await fetch(`/api/sessions/${sess.id}`);
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  setViewingPastSessionMessages(data.messages);
-                                  setViewingPastSessionInfo(data.session);
-                                }
-                              } catch (err) {
-                                console.error(err);
-                              }
+                            onClick={() => {
+                              onSelectSession(sess.id, currentUser?.display_name || currentUser?.username || 'User', 'user', true);
                             }}
                             className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
                           >
@@ -2674,17 +2669,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                             {/* Right Side: Action Buttons */}
                             <div className="flex sm:flex-row md:flex-col gap-2 shrink-0 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-800/50">
                               <button
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch(`/api/sessions/${sess.id}`);
-                                    if (res.ok) {
-                                      const data = await res.json();
-                                      setViewingPastSessionMessages(data.messages);
-                                      setViewingPastSessionInfo(data.session);
-                                    }
-                                  } catch (err) {
-                                    console.error(err);
-                                  }
+                                onClick={() => {
+                                  onSelectSession(sess.id, currentUser?.display_name || currentUser?.username || 'User', 'user', true);
                                 }}
                                 className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
                               >

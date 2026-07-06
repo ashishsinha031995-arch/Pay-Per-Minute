@@ -11,6 +11,7 @@ interface ChatRoomProps {
   onClose: () => void;
   currentUser?: any;
   refreshUserProfile?: (id: number) => Promise<void>;
+  isReadOnly?: boolean;
 }
 
 export function ChatRoom({ 
@@ -19,7 +20,8 @@ export function ChatRoom({
   role, 
   onClose,
   currentUser: currentUserProp,
-  refreshUserProfile: refreshUserProfileProp
+  refreshUserProfile: refreshUserProfileProp,
+  isReadOnly = false
 }: ChatRoomProps) {
   const authContext = useAuthContext();
   const currentUser = currentUserProp || authContext?.currentUser;
@@ -468,6 +470,7 @@ export function ChatRoom({
 
   // 2. Setup Socket.IO dynamic listeners
   useEffect(() => {
+    if (isReadOnly) return;
     // Connect to current origin
     const socket = io();
     socketRef.current = socket;
@@ -1021,32 +1024,34 @@ export function ChatRoom({
             })()}
           </button>
           <div className="min-w-0">
-            <h3 className="font-bold text-xs sm:text-sm text-slate-100 max-w-[120px] sm:max-w-[200px] md:max-w-none truncate">
+            <h3 className={`font-bold text-slate-100 max-w-[120px] sm:max-w-[200px] md:max-w-none truncate ${isReadOnly ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'}`}>
               {role === 'user' ? sessionInfo?.consultant_name : sessionInfo?.user_name}
             </h3>
-            <div className="flex items-center gap-x-1.5 sm:gap-x-2 gap-y-0.5 mt-0.5 text-[9px] sm:text-[10px] text-slate-400 font-sans flex-wrap">
-              {/* Our Connection Status */}
-              <span className="flex items-center space-x-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${lowInternet ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-                <span className="hidden sm:inline">You: {lowInternet ? 'Low internet' : 'Online'}</span>
-                <span className="sm:hidden">{lowInternet ? 'Low' : 'You'}</span>
-              </span>
-              
-              <span className="text-slate-700 font-sans">•</span>
-              
-              {/* Partner Connection Status */}
-              <span className="flex items-center space-x-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
-                <span className="hidden sm:inline">Partner: {partnerOnline ? 'Connected' : 'Waiting...'}</span>
-                <span className="sm:hidden">{partnerOnline ? 'Live' : 'Wait'}</span>
-              </span>
+            {!isReadOnly && (
+              <div className="flex items-center gap-x-1.5 sm:gap-x-2 gap-y-0.5 mt-0.5 text-[9px] sm:text-[10px] text-slate-400 font-sans flex-wrap">
+                {/* Our Connection Status */}
+                <span className="flex items-center space-x-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${lowInternet ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                  <span className="hidden sm:inline">You: {lowInternet ? 'Low internet' : 'Online'}</span>
+                  <span className="sm:hidden">{lowInternet ? 'Low' : 'You'}</span>
+                </span>
+                
+                <span className="text-slate-700 font-sans">•</span>
+                
+                {/* Partner Connection Status */}
+                <span className="flex items-center space-x-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                  <span className="hidden sm:inline">Partner: {partnerOnline ? 'Connected' : 'Waiting...'}</span>
+                  <span className="sm:hidden">{partnerOnline ? 'Live' : 'Wait'}</span>
+                </span>
 
-              <span className="text-slate-700 font-sans hidden sm:inline">•</span>
-              
-              <span className="text-slate-500 font-mono hidden sm:inline">
-                Tariff: ₹{sessionInfo?.price_per_minute || '--'}/min
-              </span>
-            </div>
+                <span className="text-slate-700 font-sans hidden sm:inline">•</span>
+                
+                <span className="text-slate-500 font-mono hidden sm:inline">
+                  Tariff: ₹{sessionInfo?.price_per_minute || '--'}/min
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1165,25 +1170,34 @@ export function ChatRoom({
           )}
 
           {/* Countdown display */}
-          <div className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-950 border border-slate-850 px-2.5 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-9 rounded-full text-rose-400 flex-shrink-0">
-            <Clock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
-            <div className="text-[10px] sm:text-xs font-black font-mono tracking-wider">
-              {sessionInfo?.status === 'queued' ? (
-                <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wide">In Queue</span>
-              ) : sessionInfo?.status === 'pending' ? (
-                <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wide">Pending Accept</span>
-              ) : sessionCompleted ? (
-                '00:00'
-              ) : (
-                formatTimer(remainingSeconds)
-              )}
+          {isReadOnly ? (
+            <div className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-950 border border-slate-850 px-2.5 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-9 rounded-full text-slate-400 flex-shrink-0">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+              <div className="text-[10px] sm:text-xs font-black font-mono tracking-wider text-slate-300">
+                PAST RECORD
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-950 border border-slate-850 px-2.5 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-9 rounded-full text-rose-400 flex-shrink-0">
+              <Clock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
+              <div className="text-[10px] sm:text-xs font-black font-mono tracking-wider">
+                {sessionInfo?.status === 'queued' ? (
+                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wide">In Queue</span>
+                ) : sessionInfo?.status === 'pending' ? (
+                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wide">Pending Accept</span>
+                ) : sessionCompleted ? (
+                  '00:00'
+                ) : (
+                  formatTimer(remainingSeconds)
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Sleek Notification Enable Banner */}
-      {'Notification' in window && notificationPermission !== 'granted' && !isNotificationDismissed && (
+      {!isReadOnly && 'Notification' in window && notificationPermission !== 'granted' && !isNotificationDismissed && (
         isNotificationMinimized ? (
           <div className="bg-emerald-500/5 border-b border-emerald-500/10 text-slate-300 text-[11px] px-3.5 py-2 flex items-center justify-between shrink-0 animate-in fade-in duration-200 relative z-20">
             <div className="flex items-center space-x-2 truncate">
@@ -1377,7 +1391,7 @@ export function ChatRoom({
       {/* Live messaging feed */}
       <div 
         ref={messagesContainerRef}
-        className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto space-y-4 min-h-0 md:min-h-[300px]"
+        className={`flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto ${isReadOnly ? 'no-scrollbar' : 'thin-scrollbar'} space-y-4 min-h-0 md:min-h-[300px]`}
       >
         
         {/* Sleek Low Internet Banner */}
@@ -1639,8 +1653,19 @@ export function ChatRoom({
           </div>
         )}
 
+        {/* Chat Ended marker below the very last message for past records */}
+        {isReadOnly && (
+          <div className="flex items-center justify-center py-6">
+            <div className="flex items-center space-x-2 bg-slate-900/40 border border-slate-800/60 px-4 py-2 rounded-full text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest select-none shadow-inner">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+              <span>Chat Ended</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+            </div>
+          </div>
+        )}
+
         {/* COMPLETED BANNER LOGS */}
-        {sessionCompleted && (
+        {!isReadOnly && sessionCompleted && (
           <div className="space-y-4 pt-6 border-t border-slate-900 max-w-md mx-auto">
             <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-center space-y-2">
               <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto" />
@@ -1735,79 +1760,81 @@ export function ChatRoom({
       </div>
 
       {/* Input panel */}
-      <div className="bg-slate-900 md:border-x md:border-b border-t border-slate-800 p-2 sm:p-2.5 md:rounded-b-2xl rounded-none shrink-0">
-        {sessionInfo?.status === 'queued' || sessionInfo?.status === 'pending' ? (
-          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3 text-center text-xs font-mono text-slate-400">
-            ⏳ Waiting in queue... You can start messaging as soon as the consultant accepts your chat.
-          </div>
-        ) : sessionInfo?.status === 'cancelled' || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed' ? (
-          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3 text-center text-xs font-mono text-slate-400">
-            🚫 Chat is inactive. Message inputs are disabled.
-          </div>
-        ) : isRecording ? (
-          <div className="flex items-center justify-between bg-slate-950 border border-red-500/30 p-1.5 px-3 rounded-full h-9 sm:h-10">
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-              </span>
-              <span className="text-[11px] sm:text-xs font-mono text-red-400 font-bold">
-                Recording ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})
-              </span>
+      {isReadOnly ? null : (
+        <div className="bg-slate-900 md:border-x md:border-b border-t border-slate-800 p-2 sm:p-2.5 md:rounded-b-2xl rounded-none shrink-0">
+          {sessionInfo?.status === 'queued' || sessionInfo?.status === 'pending' ? (
+            <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3 text-center text-xs font-mono text-slate-400">
+              ⏳ Waiting in queue... You can start messaging as soon as the consultant accepts your chat.
             </div>
-            <div className="flex items-center space-x-1">
-              <button
-                type="button"
-                onClick={cancelRecording}
-                className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-rose-400 transition-colors"
-                title="Cancel Recording"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={stopRecording}
-                className="bg-red-500 hover:bg-red-600 text-white w-7 h-7 rounded-full transition-all flex items-center justify-center"
-                title="Stop & Send Voice Note"
-              >
-                <Square className="w-3 h-3 fill-current" />
-              </button>
+          ) : sessionInfo?.status === 'cancelled' || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed' ? (
+            <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3 text-center text-xs font-mono text-slate-400">
+              🚫 Chat is inactive. Message inputs are disabled.
             </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSendMessage} className="flex space-x-2 sm:space-x-2.5 items-center">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder={sessionCompleted ? 'Session ended. Inputs disabled.' : 'Type your consultation message here...'}
-              value={textInput}
-              onChange={handleTextInputChange}
-              disabled={sessionCompleted}
-              className="flex-1 bg-slate-950 border border-slate-850 rounded-full px-4 h-9 sm:h-10 text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/60 disabled:opacity-55 shadow-inner"
-            />
-            
-            {/* Consultant-only Voice Recording button */}
-            {role === 'consultant' && !sessionCompleted && (
-              <button
-                type="button"
-                onClick={startRecording}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-800 hover:border-slate-700 flex-shrink-0 transition-all flex items-center justify-center"
-                title="Record Voice Note"
-              >
-                <Mic className="w-4 h-4" />
-              </button>
-            )}
+          ) : isRecording ? (
+            <div className="flex items-center justify-between bg-slate-950 border border-red-500/30 p-1.5 px-3 rounded-full h-9 sm:h-10">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+                <span className="text-[11px] sm:text-xs font-mono text-red-400 font-bold">
+                  Recording ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})
+                </span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-rose-400 transition-colors"
+                  title="Cancel Recording"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="bg-red-500 hover:bg-red-600 text-white w-7 h-7 rounded-full transition-all flex items-center justify-center"
+                  title="Stop & Send Voice Note"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSendMessage} className="flex space-x-2 sm:space-x-2.5 items-center">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder={sessionCompleted ? 'Session ended. Inputs disabled.' : 'Type your consultation message here...'}
+                value={textInput}
+                onChange={handleTextInputChange}
+                disabled={sessionCompleted}
+                className="flex-1 bg-slate-950 border border-slate-850 rounded-full px-4 h-9 sm:h-10 text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/60 disabled:opacity-55 shadow-inner"
+              />
+              
+              {/* Consultant-only Voice Recording button */}
+              {role === 'consultant' && !sessionCompleted && (
+                <button
+                  type="button"
+                  onClick={startRecording}
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-800 hover:border-slate-700 flex-shrink-0 transition-all flex items-center justify-center"
+                  title="Record Voice Note"
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
+              )}
 
-            <button
-              type="submit"
-              disabled={sessionCompleted || !textInput.trim()}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 flex-shrink-0 transition-all flex items-center justify-center shadow-md"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        )}
-      </div>
+              <button
+                type="submit"
+                disabled={sessionCompleted || !textInput.trim()}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 flex-shrink-0 transition-all flex items-center justify-center shadow-md"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* Busy Queue Popup Modal for Queued Users */}
       {role === 'user' && sessionInfo?.status === 'queued' && showBusyPopup && (
@@ -1898,7 +1925,7 @@ export function ChatRoom({
       )}
 
       {/* Session Completed Popup Modal - Both User and Consultant */}
-      {sessionCompleted && (
+      {!isReadOnly && sessionCompleted && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[90] p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 text-center space-y-6 shadow-2xl relative overflow-hidden animate-in zoom-in duration-200 my-8">
             <div className="mx-auto w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center">

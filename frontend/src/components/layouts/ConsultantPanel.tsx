@@ -6,7 +6,7 @@ import { IncomingRequestNotification } from '../IncomingRequestNotification';
 import { io } from 'socket.io-client';
 
 interface ConsultantPanelProps {
-  onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant') => void;
+  onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant', isReadOnly?: boolean) => void;
   onNavigateToUserView: (username: string) => void;
   activeSessionId?: string;
   onLogout?: () => void;
@@ -4692,17 +4692,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                       )}
                                     </div>
                                     <button
-                                      onClick={async () => {
-                                        try {
-                                          const res = await fetch(`/api/sessions/${sess.id}`);
-                                          if (res.ok) {
-                                            const data = await res.json();
-                                            setViewingPastSessionMessages(data.messages);
-                                            setViewingPastSessionInfo(data.session);
-                                          }
-                                        } catch (err) {
-                                          console.error(err);
-                                        }
+                                      onClick={() => {
+                                        onSelectSession(sess.id, currentConsultant?.display_name || 'Consultant', 'consultant', true);
                                       }}
                                       className="text-[10px] text-emerald-400 hover:underline hover:text-emerald-300 font-bold font-mono transition-all"
                                     >
