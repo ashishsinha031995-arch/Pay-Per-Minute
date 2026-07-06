@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
@@ -12,9 +12,10 @@ interface ConsultantPanelProps {
   onLogout?: () => void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
+  onInstallApp?: () => void;
 }
 
-export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId, onLogout, theme = 'dark', onToggleTheme }: ConsultantPanelProps) {
+export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId, onLogout, theme = 'dark', onToggleTheme, onInstallApp }: ConsultantPanelProps) {
   // Authentication & Session States
   const [currentConsultant, setCurrentConsultant] = useState<Consultant | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
@@ -2685,7 +2686,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 {/* Theme Toggle card */}
-                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-4 flex items-center justify-between">
+                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-3 flex items-center justify-between">
                   <div className="flex flex-col text-left">
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">App Theme</span>
                     <span className="text-xs text-slate-300 font-sans mt-0.5">{theme === 'dark' ? 'Dark Theme Active' : 'Light Theme Active'}</span>
@@ -2705,6 +2706,22 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         <span>Dark Mode</span>
                       </>
                     )}
+                  </button>
+                </div>
+
+                {/* Add to Home Screen PWA card */}
+                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-4 flex items-center justify-between">
+                  <div className="flex flex-col text-left">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">PWA App</span>
+                    <span className="text-xs text-slate-300 font-sans mt-0.5">Use on Home Screen</span>
+                  </div>
+                  <button
+                    onClick={onInstallApp}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-600 hover:to-emerald-600 active:scale-95 text-xs font-bold text-white rounded-xl transition-all cursor-pointer shadow-md"
+                    title="Install CallMint on your home screen"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-white" />
+                    <span className="text-white">Install App</span>
                   </button>
                 </div>
 

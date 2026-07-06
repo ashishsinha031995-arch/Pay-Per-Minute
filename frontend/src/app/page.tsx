@@ -5,7 +5,7 @@ import { AdminPanel } from '../components/layouts/AdminPanel';
 import { ConsultantPanel } from '../components/layouts/ConsultantPanel';
 import { ConsultantProfile } from '../components/layouts/ConsultantProfile';
 import { ChatRoom } from '../components/modals/ChatRoom';
-import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy } from 'lucide-react';
+import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy, Smartphone } from 'lucide-react';
 
 export default function AppPage() {
   // Navigation & Role states
@@ -37,6 +37,39 @@ export default function AppPage() {
     }
     return 'dark';
   });
+
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      try {
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User choice outcome: ${outcome}`);
+      } catch (err) {
+        console.error('Error in userChoice:', err);
+      }
+      setDeferredPrompt(null);
+    } else {
+      setIsInstallGuideOpen(true);
+    }
+  };
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -539,6 +572,7 @@ export default function AppPage() {
                 onLogout={handleLogout}
                 theme={theme}
                 onToggleTheme={toggleTheme}
+                onInstallApp={handleInstallApp}
               />
             )}
 
@@ -551,6 +585,7 @@ export default function AppPage() {
                 onLogout={handleLogout}
                 theme={theme}
                 onToggleTheme={toggleTheme}
+                onInstallApp={handleInstallApp}
               />
             )}
 
@@ -1062,6 +1097,58 @@ export default function AppPage() {
               </>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* PWA INSTALLATION GUIDE MODAL */}
+      {isInstallGuideOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full relative shadow-2xl overflow-hidden">
+            <button
+              onClick={() => setIsInstallGuideOpen(false)}
+              className="absolute top-4 right-4 p-2 bg-slate-950/80 hover:bg-slate-800/80 text-slate-400 hover:text-white rounded-xl transition-all active:scale-95 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="text-center mt-2">
+              <div className="w-14 h-14 bg-gradient-to-r from-sky-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg mb-4">
+                <Smartphone className="w-7 h-7 text-white" />
+              </div>
+
+              <h3 className="text-lg font-bold text-slate-100 font-sans">Install CallMint</h3>
+              <p className="text-xs text-slate-400 font-sans mt-1.5 px-4">
+                Install CallMint on your home screen for quick, full-screen, native access.
+              </p>
+
+              <div className="mt-5 space-y-4 text-left border-t border-slate-800/60 pt-4">
+                {/* iOS Instructions */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">iOS (Safari)</span>
+                  <p className="text-xs text-slate-300 font-sans leading-relaxed">
+                    1. Tap the <strong className="text-white">Share</strong> button in Safari (icon with arrow up).<br />
+                    2. Scroll down and tap <strong className="text-white">Add to Home Screen</strong>.
+                  </p>
+                </div>
+
+                {/* Android / Chrome Instructions */}
+                <div className="space-y-1.5 border-t border-slate-850/40 pt-3">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md">Android / Chrome</span>
+                  <p className="text-xs text-slate-300 font-sans leading-relaxed">
+                    1. Tap the browser's menu button <strong className="text-white">⋮</strong> (three dots).<br />
+                    2. Select <strong className="text-white">Install App</strong> or <strong className="text-white">Add to Home screen</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsInstallGuideOpen(false)}
+                className="w-full mt-6 bg-slate-950 border border-slate-850 hover:border-slate-700 text-slate-200 hover:text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-sm active:scale-95 cursor-pointer"
+              >
+                Close Guide
+              </button>
+            </div>
           </div>
         </div>
       )}

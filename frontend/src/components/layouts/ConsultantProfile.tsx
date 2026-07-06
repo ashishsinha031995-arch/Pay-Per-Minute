@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -49,9 +49,10 @@ interface ConsultantProfileProps {
   onLogout?: () => void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
+  onInstallApp?: () => void;
 }
 
-export function ConsultantProfile({ onSelectSession, targetUsername, onClearTargetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout, theme = 'dark', onToggleTheme }: ConsultantProfileProps) {
+export function ConsultantProfile({ onSelectSession, targetUsername, onClearTargetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout, theme = 'dark', onToggleTheme, onInstallApp }: ConsultantProfileProps) {
   // Directory or profile selection
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
@@ -1420,7 +1421,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       <span>Wallet Balance:</span>
                       <span className="text-emerald-400 font-bold font-mono">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</span>
                     </div>
-                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-900">
+                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-800/80">
                       <span className="text-[11px] font-mono text-slate-400">App Theme:</span>
                       <button
                         onClick={onToggleTheme}
@@ -1437,6 +1438,17 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                             <span>Dark Mode</span>
                           </>
                         )}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-800/80">
+                      <span className="text-[11px] font-mono text-slate-400">PWA App:</span>
+                      <button
+                        onClick={onInstallApp}
+                        className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-600 hover:to-emerald-600 active:scale-95 text-[11px] font-bold text-white rounded-lg transition-all cursor-pointer shadow-md"
+                        title="Install CallMint on your home screen"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-white" />
+                        <span className="text-white">Add to Home Screen</span>
                       </button>
                     </div>
                   </div>
