@@ -28,6 +28,7 @@ export function ChatRoom({
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   
   const [viewportHeight, setViewportHeight] = useState<string>('100dvh');
+  const [viewportTop, setViewportTop] = useState<string>('0px');
   const [isMobile, setIsMobile] = useState<boolean>(false);
 
   useEffect(() => {
@@ -49,7 +50,8 @@ export function ChatRoom({
     if (vv) {
       const handleViewportChange = () => {
         setViewportHeight(`${vv.height}px`);
-        if (vv.offsetTop > 0 || window.scrollY > 0) {
+        setViewportTop(`${vv.offsetTop}px`);
+        if (window.scrollY > 0) {
           window.scrollTo(0, 0);
         }
       };
@@ -428,6 +430,7 @@ export function ChatRoom({
 
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 1. Load initial session data and past messages
@@ -676,9 +679,16 @@ export function ChatRoom({
     }
   }, [lowInternet]);
 
-  // 3. Scroll to bottom on message updates
+  // 3. Scroll to bottom on message updates safely using direct element scroll
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // 4. Send Message Handler
@@ -934,7 +944,7 @@ export function ChatRoom({
   return (
     <div 
       className="fixed inset-0 z-[150] md:relative md:inset-auto md:z-0 bg-slate-950 md:bg-transparent w-full max-w-4xl mx-auto px-0 md:px-4 sm:px-6 lg:px-8 py-0 md:py-4 h-[100dvh] md:h-[calc(100vh-100px)] flex flex-col justify-between overflow-hidden"
-      style={isMobile ? { height: viewportHeight } : undefined}
+      style={isMobile ? { height: viewportHeight, top: viewportTop, bottom: 'auto' } : undefined}
     >
       
       {/* Consultant Queue Banner */}
@@ -1343,7 +1353,10 @@ export function ChatRoom({
       )}
 
       {/* Live messaging feed */}
-      <div className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto space-y-4 min-h-0 md:min-h-[300px]">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto space-y-4 min-h-0 md:min-h-[300px]"
+      >
         
         {/* Sleek Low Internet Banner */}
         {lowInternet && (
