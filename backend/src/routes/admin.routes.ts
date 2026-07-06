@@ -23,6 +23,7 @@ import {
   updatePlanBySuperAdmin,
   deletePlanBySuperAdmin,
   updateHeroSettings,
+  updateClassicAvatarsByAdmin,
   refundSessionBySuperAdmin,
   addMoneyToWallet,
   getManualWalletAdjustments,
@@ -45,6 +46,7 @@ router.get('/queues', getAdminLiveQueues);
 
 router.get('/stats', getAdminDashboardStats);
 router.put('/settings/hero', updateHeroSettings);
+router.put('/settings/avatars', updateClassicAvatarsByAdmin);
 router.get('/emails', getSentEmailsLog);
 router.get('/audit-logs', getAdminAuditLogs);
 router.get('/consultants', getAdminConsultantsList);

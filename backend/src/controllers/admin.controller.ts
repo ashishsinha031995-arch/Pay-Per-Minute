@@ -1086,6 +1086,21 @@ export const getUserSpendsLeaderboard = (req: Request, res: Response) => {
   }
 };
 
+// Update list of classic avatars by admin
+export const updateClassicAvatarsByAdmin = (req: Request, res: Response) => {
+  try {
+    const { avatars } = req.body;
+    if (!Array.isArray(avatars)) {
+      return res.status(400).json({ error: 'Avatars must be an array of image URL strings.' });
+    }
+    const cleanAvatars = avatars.map(url => String(url).trim()).filter(url => url.length > 0);
+    db.prepare('INSERT OR REPLACE INTO admin_settings (key, value) VALUES (?, ?)').run('classic_avatars', JSON.stringify(cleanAvatars));
+    res.json({ success: true, avatars: cleanAvatars });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 
 
 

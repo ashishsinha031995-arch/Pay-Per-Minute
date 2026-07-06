@@ -2582,6 +2582,12 @@ export function SettingsPanel() {
   const [savingHero, setSavingHero] = useState(false);
   const [activeConfigCategory, setActiveConfigCategory] = useState<'global' | 'Astrologers' | 'Influencers' | 'Coaches' | 'Consultants' | 'Lawyers' | 'Mentors' | 'Doctors' | 'Singers' | 'Advisors' | 'Friends'>('global');
 
+  // Avatar settings states
+  const [avatarsList, setAvatarsList] = useState<string[]>([]);
+  const [newAvatarUrl, setNewAvatarUrl] = useState('');
+  const [loadingAvatars, setLoadingAvatars] = useState(true);
+  const [savingAvatars, setSavingAvatars] = useState(false);
+
   React.useEffect(() => {
     const fetchHeroSettings = async () => {
       try {
@@ -2596,7 +2602,21 @@ export function SettingsPanel() {
         setLoadingHero(false);
       }
     };
+    const fetchAvatarsList = async () => {
+      try {
+        const res = await fetch('/api/settings/avatars');
+        if (res.ok) {
+          const data = await res.json();
+          setAvatarsList(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch avatars list:', err);
+      } finally {
+        setLoadingAvatars(false);
+      }
+    };
     fetchHeroSettings();
+    fetchAvatarsList();
   }, []);
 
   const handleSaveHero = async () => {
@@ -2621,6 +2641,45 @@ export function SettingsPanel() {
     }
   };
 
+  const handleSaveAvatarsList = async (updatedList: string[]) => {
+    setSavingAvatars(true);
+    try {
+      const res = await fetch('/api/admin/settings/avatars', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatars: updatedList })
+      });
+      if (res.ok) {
+        setAvatarsList(updatedList);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save avatars list');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingAvatars(false);
+    }
+  };
+
+  const handleAddAvatar = () => {
+    if (!newAvatarUrl.trim()) return;
+    if (!newAvatarUrl.trim().startsWith('http://') && !newAvatarUrl.trim().startsWith('https://')) {
+      alert('Kripya valid HTTP/HTTPS image URL enter karein.');
+      return;
+    }
+    const updated = [...avatarsList, newAvatarUrl.trim()];
+    handleSaveAvatarsList(updated);
+    setNewAvatarUrl('');
+  };
+
+  const handleDeleteAvatar = (indexToDelete: number) => {
+    const updated = avatarsList.filter((_, idx) => idx !== indexToDelete);
+    handleSaveAvatarsList(updated);
+  };
+
   const saveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     setSaved(true);
@@ -2630,68 +2689,136 @@ export function SettingsPanel() {
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-left">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Left Side: General Platform configuration */}
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-          <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider mb-4">Core Platform Configuration Settings</h3>
-          <form onSubmit={saveSettings} className="space-y-4">
-            <div>
-              <label className="block text-[11px] text-slate-400 font-mono mb-1">Platform Identity Name *</label>
-              <input
-                type="text"
-                value={platformName}
-                onChange={e => setPlatformName(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+        {/* Left Side: General Platform configuration and Avatars management */}
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+            <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider mb-4">Core Platform Configuration Settings</h3>
+            <form onSubmit={saveSettings} className="space-y-4">
               <div>
-                <label className="block text-[11px] text-slate-400 font-mono mb-1">Currency Code</label>
-                <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                  <option value="INR">INR (₹)</option>
-                  <option value="USD">USD ($)</option>
-                </select>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">Platform Identity Name *</label>
+                <input
+                  type="text"
+                  value={platformName}
+                  onChange={e => setPlatformName(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  required
+                />
               </div>
-              <div>
-                <label className="block text-[11px] text-slate-400 font-mono mb-1">Default Timezone</label>
-                <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                  <option value="IST">Asia/Kolkata (IST)</option>
-                  <option value="UTC">Coordinated Universal Time (UTC)</option>
-                </select>
-              </div>
-            </div>
 
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-slate-200 block">System Maintenance Mode</span>
-                <p className="text-[10px] text-slate-500 mt-0.5">Redirect public visitors to a "Service Restoring" card during DB alterations.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Currency Code</label>
+                  <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Default Timezone</label>
+                  <select className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    <option value="IST">Asia/Kolkata (IST)</option>
+                    <option value="UTC">Coordinated Universal Time (UTC)</option>
+                  </select>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setMaintenance(!maintenance)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                  maintenance 
-                    ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/15' 
-                    : 'bg-slate-800 hover:bg-slate-750 text-slate-400 border-slate-700'
-                }`}
-              >
-                {maintenance ? '🔴 Maintenance On' : '🟢 Standard Live'}
-              </button>
-            </div>
 
-            <div className="flex items-center justify-between pt-2">
-              {saved && (
-                <span className="text-emerald-400 text-xs font-mono">✓ Platform settings updated successfully!</span>
-              )}
-              <button
-                type="submit"
-                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold transition-all ml-auto"
-              >
-                Save Parameters
-              </button>
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-200 block">System Maintenance Mode</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Redirect public visitors to a "Service Restoring" card during DB alterations.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMaintenance(!maintenance)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
+                    maintenance 
+                      ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/15' 
+                      : 'bg-slate-800 hover:bg-slate-750 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  {maintenance ? '🔴 Maintenance On' : '🟢 Standard Live'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                {saved && (
+                  <span className="text-emerald-400 text-xs font-mono">✓ Platform settings updated successfully!</span>
+                )}
+                <button
+                  type="submit"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold transition-all ml-auto"
+                >
+                  Save Parameters
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Classic Static Avatars management section */}
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+            <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
+              <Users className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Classic Static Avatars Management</h3>
             </div>
-          </form>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Super Admin panel se classic static avatars add aur delete karein. Ye dynamic list direct users aur consultants ke profile editor bar mein selection ke liye use hogi.
+            </p>
+
+            {loadingAvatars ? (
+              <div className="text-xs text-slate-500 font-mono py-6 text-center animate-pulse">Loading avatars list...</div>
+            ) : (
+              <div className="space-y-4">
+                {/* List of current avatars */}
+                <div>
+                  <span className="block text-[10px] text-slate-400 font-mono mb-2 uppercase tracking-wider">Current Live Avatars ({avatarsList.length})</span>
+                  {avatarsList.length === 0 ? (
+                    <div className="bg-slate-950/40 border border-dashed border-slate-800/80 p-6 rounded-xl text-center text-xs text-slate-500">
+                      No classic avatars registered. Please add at least one avatar.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 bg-slate-950/55 p-3 rounded-xl border border-slate-800/60">
+                      {avatarsList.map((avatarUrl, index) => (
+                        <div key={index} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-800 bg-slate-900">
+                          <img src={avatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAvatar(index)}
+                            className="absolute inset-0 bg-rose-950/85 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                            title="Delete Avatar"
+                          >
+                            <Trash2 className="w-4 h-4 text-rose-200" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add dynamic avatar */}
+                <div className="space-y-2 pt-2 border-t border-slate-800/40">
+                  <label className="block text-[10px] text-slate-400 font-mono mb-1 uppercase tracking-wider">Add New Avatar Image URL</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newAvatarUrl}
+                      onChange={(e) => setNewAvatarUrl(e.target.value)}
+                      placeholder="https://images.unsplash.com/photo-..."
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddAvatar}
+                      disabled={savingAvatars || !newAvatarUrl.trim()}
+                      className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Avatar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Side: Dynamic Hero Content settings */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone, ArrowUpRight, ArrowDownLeft, RefreshCw, Download, TrendingUp, Check, FileText, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -89,6 +89,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [heroSettings, setHeroSettings] = useState<any>(null);
+  const [classicAvatars, setClassicAvatars] = useState<string[]>([]);
 
   // --- REAL-TIME IN-APP ALERTS & BROADCASTS ---
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
@@ -208,7 +209,19 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         }
       }
     };
+    const fetchClassicAvatars = async () => {
+      try {
+        const res = await fetch('/api/settings/avatars');
+        if (res.ok) {
+          const data = await res.json();
+          setClassicAvatars(data);
+        }
+      } catch (err) {
+        console.error('Failed to load classic avatars:', err);
+      }
+    };
     fetchHeroSettings();
+    fetchClassicAvatars();
   }, []);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,11 +304,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
 
   // Client tabs navigation state
-  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history' | 'support' | 'following'>('advisors');
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history' | 'support' | 'following' | 'notifications'>('advisors');
   const [followingList, setFollowingList] = useState<any[]>([]);
   const [followingLoading, setFollowingLoading] = useState(false);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [walletTxFilter, setWalletTxFilter] = useState<'all' | 'recharge' | 'consultation' | 'refund' | 'admin_credit'>('all');
 
   // Support ticket states
   const [userTickets, setUserTickets] = useState<any[]>([]);
@@ -507,7 +521,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 if (Array.isArray(data)) {
                   data.forEach(s => {
                     if (!sessionMap.has(s.id)) {
-                      sessionMap.set(s.id, s);
+                      if (currentUser) {
+                        const isMatch = s.user_id === currentUser.id || String(s.user_name).toLowerCase() === String(currentUser.username).toLowerCase();
+                        if (isMatch) {
+                          sessionMap.set(s.id, s);
+                        }
+                      } else {
+                        sessionMap.set(s.id, s);
+                      }
                     }
                   });
                 }
@@ -1202,72 +1223,6 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 text-slate-100">
       
-      {/* Upper bar with User Profile and History Button */}
-      {!targetUsername && (
-        <div 
-          style={{ 
-            backgroundImage: `url(${heroSettings?.banner_bg_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop'})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
-          }}
-          className="relative overflow-hidden p-6 sm:p-8 rounded-2xl border border-slate-800 shadow-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-6 text-left"
-        >
-          {/* Black Glassmorphism Overlay */}
-          <div className="absolute inset-0 bg-slate-950/85 pointer-events-none" />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/70 to-emerald-950/20 pointer-events-none" />
-          <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
-          <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
-
-          <div className="relative z-10 space-y-2 max-w-2xl">
-            <h1 className="text-xl sm:text-2xl font-black text-slate-100 flex items-center gap-2 flex-wrap drop-shadow-md">
-              <Sparkles className="w-5 h-5 text-emerald-400 shrink-0 animate-pulse" />
-              <span>{heroSettings?.banner_headline || "🔥 Skip the Search. Talk to Who You Want."}</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed drop-shadow-sm">
-              {heroSettings?.banner_description !== undefined ? heroSettings.banner_description : "Premium minute-billed live consultations with top-tier specialists"}
-            </p>
-          </div>
-          
-          <div className="relative z-10 flex flex-wrap items-center gap-3 shrink-0">
-            {currentUser && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono bg-slate-950/95 backdrop-blur px-3 py-2.5 rounded-xl text-emerald-400 border border-slate-800/80 font-bold">
-                  Wallet Balance: ₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}
-                </span>
-                <button
-                  onClick={() => {
-                    if (selectedConsultant) {
-                      setShowRechargeModal(true);
-                    } else {
-                      setActiveDashboardTab('wallet');
-                      fetchWalletTransactions();
-                    }
-                  }}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black py-2.5 px-4 rounded-xl transition-all flex items-center space-x-1 border border-emerald-400/20 shadow-sm hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Wallet className="w-3.5 h-3.5" />
-                  <span>Recharge Page</span>
-                </button>
-              </div>
-            )}
-            <button
-              onClick={() => {
-                if (selectedConsultant) {
-                  setShowHistoryModal(true);
-                  loadPastHistoryFromLocalStorage();
-                } else {
-                  setActiveDashboardTab('history');
-                  loadPastHistoryFromLocalStorage();
-                }
-              }}
-              className="bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-xs font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center space-x-2 border border-slate-800 shadow-sm hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>📜 View My Chat History</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Direct link banner */}
       {targetUsername && selectedConsultant && (
         <div className="bg-slate-900 border border-emerald-500/20 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl relative overflow-hidden">
@@ -1399,11 +1354,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     <div className="absolute right-0 top-0 flex items-center space-x-1.5">
                       <button
                         onClick={() => {
-                          setNotificationsModalOpen(true);
+                          setSelectedConsultant(null);
+                          setActiveDashboardTab('notifications');
                           setHamburgerOpen(false);
                         }}
                         className="relative p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg transition-all border border-slate-800/80 hover:bg-slate-800 active:scale-95 cursor-pointer"
-                        title="View Announcements"
+                        title="View Notifications"
                       >
                         <Bell className="w-4 h-4 text-amber-400" />
                         {unreadNotifCount > 0 && (
@@ -1575,17 +1531,26 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                     <button
                       onClick={() => {
-                        setNotificationsModalOpen(true);
+                        setSelectedConsultant(null);
+                        setActiveDashboardTab('notifications');
                         setHamburgerOpen(false);
                       }}
-                      className="group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-slate-300 hover:bg-slate-800/60 cursor-pointer"
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeDashboardTab === 'notifications'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
                     >
                       <div className="flex items-center space-x-3">
-                        <Bell className="w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 text-emerald-400" />
-                        <span>Announcements</span>
+                        <Bell className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeDashboardTab === 'notifications' ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>Notifications</span>
                       </div>
                       {unreadNotifCount > 0 && (
-                        <span className="bg-rose-500 text-white text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0">
+                        <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                          activeDashboardTab === 'notifications' ? 'bg-slate-950 text-emerald-400' : 'bg-rose-500 text-white'
+                        }`}>
                           {unreadNotifCount} New
                         </span>
                       )}
@@ -1771,56 +1736,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
             {/* Profile photos presets bar */}
             <div className="space-y-3.5 text-left bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60 max-w-2xl">
               <div>
-                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ AI Girl Characters</span>
-                <div className="flex flex-wrap gap-2.5">
-                  {[
-                    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120', // Graceful smiling portrait
-                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120', // Modern aesthetic portrait
-                    'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=120'  // Warm cheerful portrait
-                  ].map((preset, idx) => (
-                    <button
-                      key={`girl-${idx}`}
-                      type="button"
-                      onClick={() => setEditPhotoUrl(preset)}
-                      className={`relative w-12 h-12 rounded-xl overflow-hidden border-2 transition-all duration-300 hover:scale-110 active:scale-95 ${editPhotoUrl === preset ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'}`}
-                    >
-                      <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">AI-G{idx+1}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider font-bold mb-2">✨ AI Boy Characters</span>
-                <div className="flex flex-wrap gap-2.5">
-                  {[
-                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120', // Warm elegant portrait
-                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120', // Aesthetic friendly portrait
-                    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=120'  // Sharp smiling portrait
-                  ].map((preset, idx) => (
-                    <button
-                      key={`boy-${idx}`}
-                      type="button"
-                      onClick={() => setEditPhotoUrl(preset)}
-                      className={`relative w-12 h-12 rounded-xl overflow-hidden border-2 transition-all duration-300 hover:scale-110 active:scale-95 ${editPhotoUrl === preset ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'}`}
-                    >
-                      <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      <span className="absolute bottom-0 right-0 bg-emerald-500 text-[8px] text-slate-950 font-extrabold px-1 rounded-tl-md font-mono">AI-B{idx+1}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
                 <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider mb-1.5">Classic Static Avatars</span>
                 <div className="flex flex-wrap gap-2">
-                  {[
+                  {(classicAvatars.length > 0 ? classicAvatars : [
                     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
                     'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
                     'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
                     'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
-                  ].map((preset, idx) => (
+                  ]).map((preset, idx) => (
                     <button
                       key={`classic-${idx}`}
                       type="button"
@@ -1834,95 +1757,112 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2 text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-center gap-3 pt-4 text-center">
               <button
                 type="submit"
                 disabled={profileSaving}
-                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center space-x-1 shrink-0 shadow-md active:scale-95"
+                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center justify-center space-x-1 shrink-0 shadow-md active:scale-95"
               >
-                <span>{profileSaving ? 'Saving Profile...' : 'Save Profile Changes'}</span>
+                <span>{profileSaving ? 'Saving...' : 'Save Change'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveDashboardTab('advisors')}
-                className="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 text-slate-300 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center justify-center space-x-1 shrink-0 shadow-md active:scale-95"
+                className="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 text-slate-300 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center justify-center space-x-1.5 shrink-0 shadow-md active:scale-95"
               >
-                <span>Cancel / Go Back</span>
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Go Back</span>
               </button>
-
-              {error && (
-                <div className="bg-rose-500/10 border-l-4 border-rose-500 py-2 px-3 rounded-r-xl text-rose-200 text-xs flex items-center space-x-2">
-                  <ShieldAlert className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-              {success && (
-                <div className="bg-emerald-500/10 border-l-4 border-emerald-500 py-2 px-3 rounded-r-xl text-emerald-200 text-xs flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                  <span>{success}</span>
-                </div>
-              )}
             </div>
+
+            {(error || success) && (
+              <div className="flex justify-center pt-2">
+                {error && (
+                  <div className="bg-rose-500/10 border-l-4 border-rose-500 py-2 px-3 rounded-r-xl text-rose-200 text-xs flex items-center space-x-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+                {success && (
+                  <div className="bg-emerald-500/10 border-l-4 border-emerald-500 py-2 px-3 rounded-r-xl text-emerald-200 text-xs flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>{success}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         </div>
       )}
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'wallet' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-850">
-            <div className="flex items-center space-x-2">
-              <Wallet className="w-4 h-4 text-emerald-400" />
-              <h3 className="font-bold text-sm text-slate-200">Wallet Recharge</h3>
+        <div className="space-y-6">
+          {/* Main Back navigation header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800">
+            <div className="space-y-1 text-left">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                  <Wallet className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-100">Wallet Dashboard</h3>
+                  <p className="text-xs text-slate-400 font-sans">Manage your consultation balance, load credits, and view secure statements.</p>
+                </div>
+              </div>
             </div>
             <button
               type="button"
               onClick={() => setActiveDashboardTab('advisors')}
-              className="text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center space-x-1.5 shadow-sm active:scale-95"
+              className="self-start sm:self-auto text-xs font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-2 shadow-md active:scale-95 cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Cancel / Go Back</span>
+              <ArrowLeft className="w-4 h-4 text-emerald-400" />
+              <span>Back to Advisors</span>
             </button>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80">
-          {/* Left panel: Wallet Recharge */}
-          <div className="lg:col-span-5 bg-slate-950/60 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4">
-            <div className="space-y-1 text-left">
-              <div className="flex items-center space-x-2">
-                <Wallet className="w-4 h-4 text-emerald-400" />
-                <h4 className="font-bold text-sm text-slate-200">Recharge Page</h4>
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Recharge wallet money safely. Deduct strictly on exact speaking minutes when talking to consultants.
-              </p>
-            </div>
 
-            <div className="space-y-4">
-              {/* Current Wallet Balance Display */}
-              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs text-left">
+          {/* Second Section: Recharge & Statement */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* LEFT Panel: Modern Recharge Gateway */}
+            <div className="lg:col-span-5 bg-slate-900/40 p-6 rounded-3xl border border-slate-800 space-y-5 flex flex-col justify-between self-stretch">
+              <div className="space-y-1 text-left">
+                <div className="flex items-center space-x-2">
+                  <Wallet className="w-4 h-4 text-emerald-400" />
+                  <h4 className="font-bold text-sm text-slate-200">Load Wallet Credit</h4>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Enter custom amount or pick a preset below. Balances will be deducted strictly on a per-minute base only.
+                </p>
+              </div>
+
+              {/* Wallet Balance Display Card */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 flex items-center justify-between text-left">
                 <div>
-                  <span className="text-slate-500 block font-mono text-[9px] uppercase">Wallet Balance</span>
-                  <strong className="text-emerald-400 text-base font-mono font-bold">₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}</strong>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Available Balance</span>
+                  <span className="text-2xl font-black text-emerald-400 font-mono tracking-tight flex items-baseline">
+                    <span className="text-emerald-500 font-bold text-lg mr-1">₹</span>
+                    {parseFloat(currentUser.wallet_balance || 0).toFixed(2)}
+                  </span>
                 </div>
-                <div className="text-right text-[10px] text-slate-500 font-mono">
-                  <span>Lifetime Recharges:</span>
-                  <span className="block text-slate-300 font-bold">₹{parseFloat(currentUser.lifetime_recharge || 0).toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="text-[9px] font-mono text-slate-500 uppercase block">Account status</span>
+                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-3 py-1 rounded-full text-center">Secured</span>
                 </div>
               </div>
 
-              {/* Quick Preset Buttons */}
-              <div className="space-y-1.5 text-left">
-                <span className="text-[10px] font-mono text-slate-500 uppercase block">Select Preset Amount</span>
+              {/* Presets Selection Grid */}
+              <div className="space-y-2 text-left">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Choose Preset Amount</span>
                 <div className="grid grid-cols-4 gap-2">
                   {['100', '250', '500', '1000'].map((amt) => (
                     <button
                       key={amt}
                       type="button"
                       onClick={() => setRechargeAmount(amt)}
-                      className={`py-2 px-1 text-xs rounded-xl border text-center font-bold transition-all ${
+                      className={`py-2.5 rounded-xl border text-xs font-bold transition-all active:scale-95 cursor-pointer ${
                         rechargeAmount === amt
-                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
-                          : 'border-slate-800 bg-slate-900/40 hover:border-slate-700 text-slate-300'
+                          ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400 shadow-[0_0_15px_-3px_rgba(16,185,129,0.2)]'
+                          : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       ₹{amt}
@@ -1931,128 +1871,216 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 </div>
               </div>
 
-              {/* Custom Input */}
-              <div className="flex space-x-2 text-left">
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-2 text-xs font-mono text-slate-500 font-bold">₹</span>
-                  <input
-                    type="number"
-                    value={rechargeAmount}
-                    onChange={(e) => setRechargeAmount(e.target.value)}
-                    placeholder="Enter Custom Amount"
-                    className="bg-slate-950 border border-slate-800 rounded-xl pl-6 pr-3 py-2 text-xs text-slate-100 focus:outline-none w-full font-mono font-bold text-emerald-400"
-                  />
+              {/* Custom Input Panel */}
+              <div className="space-y-2 text-left">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Or Enter Custom Amount</span>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3.5 top-[11px] text-xs font-mono text-slate-400 font-bold">₹</span>
+                    <input
+                      type="number"
+                      value={rechargeAmount}
+                      onChange={(e) => setRechargeAmount(e.target.value)}
+                      placeholder="Custom Amount"
+                      className="bg-slate-950 border border-slate-800 rounded-xl pl-7 pr-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500/50 w-full font-mono font-bold text-emerald-400"
+                    />
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleQuickRecharge(rechargeAmount)}
-                  disabled={rechargeLoading || !rechargeAmount || parseFloat(rechargeAmount) <= 0}
-                  className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-black px-4 rounded-xl text-xs transition-all shrink-0"
-                >
-                  {rechargeLoading ? 'Adding...' : 'Recharge Wallet'}
-                </button>
               </div>
 
-              {/* GST breakdown helper */}
-              {rechargeAmount && parseFloat(rechargeAmount) > 0 && (
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-850/50 text-[11px] space-y-1 text-slate-400 font-mono text-left">
+              {/* Live Invoice Breakdown Sheet */}
+              {rechargeAmount && parseFloat(rechargeAmount) > 0 ? (
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 text-xs font-mono space-y-2.5 text-left shadow-inner relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500/40 to-transparent"></div>
+                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest block mb-1">Receipt Summary Estimator</span>
                   <div className="flex justify-between">
-                    <span>Base Amount (Wallet Credit):</span>
-                    <span className="text-slate-300">₹{parseFloat(rechargeAmount).toFixed(2)}</span>
+                    <span className="text-slate-400">Add Wallet Credit:</span>
+                    <span className="text-slate-300 font-bold">₹{parseFloat(rechargeAmount).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>GST (18%):</span>
-                    <span className="text-slate-300">₹{(parseFloat(rechargeAmount) * 0.18).toFixed(2)}</span>
+                    <span className="text-slate-400">Government GST (18%):</span>
+                    <span className="text-slate-400">₹{(parseFloat(rechargeAmount) * 0.18).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between border-t border-slate-800 pt-1 text-emerald-400 font-bold">
-                    <span>Total Payable (to pay):</span>
+                  <div className="border-t border-dashed border-slate-800 my-2"></div>
+                  <div className="flex justify-between font-black text-emerald-400 text-sm">
+                    <span>Total Billed Price:</span>
                     <span>₹{(parseFloat(rechargeAmount) * 1.18).toFixed(2)}</span>
                   </div>
                 </div>
+              ) : (
+                <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-850/50 text-center text-xs text-slate-500 font-mono py-6">
+                  Select or enter amount above to calculate GST details
+                </div>
               )}
+
+              {/* Proceed Action Button */}
+              <button
+                type="button"
+                onClick={() => handleQuickRecharge(rechargeAmount)}
+                disabled={rechargeLoading || !rechargeAmount || parseFloat(rechargeAmount) <= 0}
+                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:from-slate-800 disabled:to-slate-800 disabled:opacity-40 text-slate-950 font-black py-3 rounded-xl text-xs transition-all tracking-wider shadow-lg hover:shadow-emerald-500/10 active:scale-95 cursor-pointer flex items-center justify-center space-x-2"
+              >
+                {rechargeLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                    <span>Launching Payment Gateway...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="w-4 h-4 text-slate-950" />
+                    <span>Proceed To Secure Checkout</span>
+                  </>
+                )}
+              </button>
             </div>
 
-            <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850/60 text-[10px] text-slate-400 font-mono text-left">
-              ⚡ Lifetime Recharges Done: ₹{parseFloat(currentUser.lifetime_recharge || 0).toFixed(2)}
-            </div>
-          </div>
-
-          {/* Right panel: Wallet Transaction Ledger */}
-          <div className="lg:col-span-7 bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4">
-            <h4 className="font-bold text-sm text-slate-200 flex items-center space-x-2 border-b border-slate-850 pb-2 text-left">
-              <span>💳 Wallet Transaction History (Ledger)</span>
-            </h4>
-            {loadingTransactions ? (
-              <div className="text-center py-12 text-xs text-slate-500">Loading transaction history...</div>
-            ) : walletTransactions.length === 0 ? (
-              <div className="text-center py-16 text-xs text-slate-500 bg-slate-900/20 border border-slate-850 rounded-xl">
-                No wallet transactions logged yet.<br />All recharges, consultation debits, and refunds will be listed here.
+            {/* RIGHT Panel: Breathtaking Transaction Ledger Statement */}
+            <div className="lg:col-span-7 bg-slate-900/40 p-6 rounded-3xl border border-slate-800 space-y-6 self-stretch">
+              <div className="border-b border-slate-850 pb-4 text-left space-y-1.5 w-full">
+                <div className="flex items-center space-x-2 w-full">
+                  <FileText className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <h4 className="font-bold text-base text-slate-100 tracking-tight leading-normal">
+                    Transaction Ledger Statement
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-400 font-sans leading-relaxed">
+                  All recharge actions, consultation fee debits, and refunds logged in audit logs.
+                </p>
               </div>
-            ) : (
-              <div className="overflow-y-auto max-h-[320px] pr-1 space-y-2">
-                {walletTransactions.map((tx) => {
-                  const baseAmt = parseFloat(tx.amount || 0);
-                  const gstRateVal = tx.gst_rate || 18.0;
-                  const gstAmt = tx.gst_amount !== undefined && tx.gst_amount !== null && tx.gst_amount !== 0 ? parseFloat(tx.gst_amount) : parseFloat((baseAmt * 0.18).toFixed(2));
-                  const totalPaidVal = tx.total_paid !== undefined && tx.total_paid !== null && tx.total_paid !== 0 ? parseFloat(tx.total_paid) : parseFloat((baseAmt + gstAmt).toFixed(2));
 
+              {/* ledger statement filter pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {(['all', 'recharge', 'consultation', 'refund', 'admin_credit'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setWalletTxFilter(type)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider font-bold border transition-all shrink-0 cursor-pointer ${
+                      walletTxFilter === type
+                        ? 'bg-slate-100 text-slate-950 border-slate-200 shadow-sm'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-850 hover:text-slate-200'
+                    }`}
+                  >
+                    {type === 'all' ? 'All Entries' :
+                     type === 'recharge' ? 'Recharges' :
+                     type === 'consultation' ? 'Consultations' :
+                     type === 'refund' ? 'Refunds' : 'Credits'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Transactions list container */}
+              {loadingTransactions ? (
+                <div className="text-center py-24 text-xs text-slate-500 font-mono flex flex-col items-center justify-center space-y-3">
+                  <RefreshCw className="w-6 h-6 text-emerald-400 animate-spin" />
+                  <span>Retrieving secure ledger records...</span>
+                </div>
+              ) : (() => {
+                const filteredTx = walletTransactions.filter(tx => {
+                  if (walletTxFilter === 'all') return true;
+                  if (walletTxFilter === 'recharge') return tx.type === 'recharge';
+                  if (walletTxFilter === 'consultation') return tx.type === 'consultation';
+                  if (walletTxFilter === 'refund') return tx.type === 'refund';
+                  if (walletTxFilter === 'admin_credit') return tx.type === 'admin_credit';
+                  return true;
+                });
+
+                if (filteredTx.length === 0) {
                   return (
-                    <div key={tx.id} className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-slate-800 transition-colors">
-                      <div className="space-y-1 text-left flex-1">
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
-                            tx.type === 'recharge' ? 'text-emerald-400 bg-emerald-500/10' :
-                            tx.type === 'admin_credit' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' :
-                            tx.type === 'refund' ? 'text-blue-400 bg-blue-500/10' : 'text-rose-400 bg-rose-500/10'
-                          }`}>
-                            {tx.type === 'admin_credit' ? 'SPECIAL CREDIT' : tx.type.toUpperCase()}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-mono font-bold">#{tx.id}</span>
-                        </div>
-                        <p className="text-xs text-slate-300 font-sans">{tx.description}</p>
-                        
-                        {tx.type === 'recharge' && (
-                          <div className="text-[10px] text-slate-400 font-mono bg-slate-900/40 p-1.5 rounded border border-slate-800/40 mt-1 max-w-sm space-y-0.5">
-                            <div className="flex justify-between">
-                              <span>Base Recharge amount:</span>
-                              <span className="text-slate-300">₹{baseAmt.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>GST Paid ({gstRateVal}%):</span>
-                              <span className="text-slate-300">₹{gstAmt.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between border-t border-slate-850 pt-0.5 font-bold text-emerald-400">
-                              <span>Total Billed Amount:</span>
-                              <span>₹{totalPaidVal.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        )}
-                        <span className="text-[9px] text-slate-500 font-mono block mt-1">{new Date(tx.created_at).toLocaleString()}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between md:justify-end gap-3 self-stretch md:self-auto border-t md:border-t-0 border-slate-850 pt-2 md:pt-0 shrink-0">
-                        {tx.type === 'recharge' && (
-                          <button
-                            type="button"
-                            onClick={() => downloadInvoice(tx, currentUser)}
-                            className="bg-slate-900 hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 border border-slate-800 hover:border-slate-700 px-2 py-1 rounded text-[10px] font-bold font-mono flex items-center gap-1 transition-all"
-                          >
-                            📥 Download Invoice
-                          </button>
-                        )}
-                        <div className={`font-mono text-xs font-bold ${
-                          tx.type === 'consultation' ? 'text-rose-400' : 'text-emerald-400'
-                        }`}>
-                          {tx.type === 'consultation' ? '-' : '+'}₹{baseAmt.toFixed(2)}
-                        </div>
+                    <div className="text-center py-20 text-xs text-slate-500 bg-slate-950/40 border border-slate-850 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center space-y-3">
+                      <FileText className="w-8 h-8 text-slate-600" />
+                      <div>
+                        <span className="font-bold text-slate-400">No matching statement found</span>
+                        <p className="text-[10px] text-slate-500 mt-1">There are no records matching your selected filter tab.</p>
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {filteredTx.map((tx) => {
+                      const baseAmt = parseFloat(tx.amount || 0);
+                      const gstRateVal = tx.gst_rate || 18.0;
+                      const gstAmt = tx.gst_amount !== undefined && tx.gst_amount !== null && tx.gst_amount !== 0 ? parseFloat(tx.gst_amount) : parseFloat((baseAmt * 0.18).toFixed(2));
+                      const totalPaidVal = tx.total_paid !== undefined && tx.total_paid !== null && tx.total_paid !== 0 ? parseFloat(tx.total_paid) : parseFloat((baseAmt + gstAmt).toFixed(2));
+
+                      return (
+                        <div key={tx.id} className="bg-slate-950/80 p-4 rounded-2xl border border-slate-850/80 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-800 transition-all shadow-sm">
+                          {/* Left Details block */}
+                          <div className="flex items-start gap-3 text-left flex-1 min-w-0">
+                            {/* Type Icon Indicator */}
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                              tx.type === 'recharge' ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400' :
+                              tx.type === 'admin_credit' ? 'bg-amber-500/10 border-amber-500/25 text-amber-400' :
+                              tx.type === 'refund' ? 'bg-blue-500/10 border-blue-500/25 text-blue-400' : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
+                            }`}>
+                              {tx.type === 'recharge' && <ArrowUpRight className="w-4 h-4" />}
+                              {tx.type === 'admin_credit' && <Sparkles className="w-4 h-4" />}
+                              {tx.type === 'refund' && <RefreshCw className="w-4 h-4" />}
+                              {tx.type === 'consultation' && <ArrowDownLeft className="w-4 h-4" />}
+                            </div>
+
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                <span className={`text-[8px] font-black font-mono tracking-wider px-2 py-0.5 rounded-full ${
+                                  tx.type === 'recharge' ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/15' :
+                                  tx.type === 'admin_credit' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/15' :
+                                  tx.type === 'refund' ? 'text-blue-400 bg-blue-500/10 border border-blue-500/15' : 'text-rose-400 bg-rose-500/10 border border-rose-500/15'
+                                }`}>
+                                  {tx.type === 'admin_credit' ? 'SPECIAL CREDIT' : tx.type.toUpperCase()}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono font-bold">#{tx.id}</span>
+                              </div>
+                              <p className="text-xs font-medium text-slate-200 font-sans break-words whitespace-normal text-left leading-relaxed">{tx.description}</p>
+                              
+                              {/* If recharge, show GST and total breakdowns */}
+                              {tx.type === 'recharge' && (
+                                <div className="text-[9px] text-slate-400 font-mono bg-slate-900/60 p-2.5 rounded-xl border border-slate-850 mt-2 max-w-sm space-y-1">
+                                  <div className="flex justify-between">
+                                    <span>Base Recharge credit:</span>
+                                    <span className="text-slate-300">₹{baseAmt.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Government GST ({gstRateVal}%):</span>
+                                    <span className="text-slate-300">₹{gstAmt.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between border-t border-dashed border-slate-800 pt-1 font-bold text-emerald-400">
+                                    <span>Total Billed Paid:</span>
+                                    <span>₹{totalPaidVal.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              )}
+                              <span className="text-[9px] text-slate-500 font-mono block mt-1">{new Date(tx.created_at).toLocaleString()}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Right amount & download billing column */}
+                          <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center gap-3 border-t md:border-t-0 border-slate-850 pt-3 md:pt-0 shrink-0 w-full md:w-auto">
+                            {tx.type === 'recharge' && (
+                              <button
+                                type="button"
+                                onClick={() => downloadInvoice(tx, currentUser)}
+                                className="bg-slate-900 hover:bg-slate-850 text-emerald-400 hover:text-emerald-300 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                              >
+                                <Download className="w-3 h-3 text-emerald-400" />
+                                <span>Tax Invoice</span>
+                              </button>
+                            )}
+                            <div className={`font-mono text-sm font-bold ${
+                              tx.type === 'consultation' ? 'text-rose-400' : 'text-emerald-400'
+                            }`}>
+                              {tx.type === 'consultation' ? '-' : '+'}₹{baseAmt.toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
-        </div>
         </div>
       )}
 
@@ -3195,6 +3223,89 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         </div>
       )}
 
+      {currentUser && !selectedConsultant && activeDashboardTab === 'notifications' && (
+        <div className="bg-slate-900/40 p-6 sm:p-8 rounded-3xl border border-slate-800/80 space-y-6 text-left" id="user-notifications-panel">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
+            <div className="flex items-center space-x-2.5">
+              <div className="bg-amber-500/15 p-2 rounded-xl border border-amber-500/20 text-amber-400">
+                <Bell className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-lg text-slate-100">Notifications</h3>
+                <p className="text-xs text-slate-400">Official updates, account announcements, and alert logs.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {unreadNotifCount > 0 && (
+                <button
+                  onClick={handleMarkAllAsRead}
+                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-3.5 py-2 rounded-xl border border-emerald-500/20 cursor-pointer"
+                >
+                  Mark All As Read ✓
+                </button>
+              )}
+              <button
+                onClick={() => setActiveDashboardTab('advisors')}
+                className="text-xs font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-2 shadow-md active:scale-95 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-emerald-400" />
+                <span>Back to Advisors</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {clientNotifications.length === 0 ? (
+              <div className="text-center py-20 bg-slate-950/40 border border-slate-850 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center space-y-3">
+                <Bell className="w-8 h-8 text-slate-600" />
+                <div>
+                  <span className="font-bold text-slate-400">No Notifications Yet</span>
+                  <p className="text-[10px] text-slate-500 mt-1">We'll alert you here when there are new updates or announcements.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {clientNotifications.map((n: any) => (
+                  <div
+                    key={n.id}
+                    className={`p-5 rounded-2xl border transition-all relative ${
+                      n.is_read
+                        ? 'bg-slate-950/40 border-slate-850/60 opacity-80'
+                        : 'bg-slate-900/90 border-emerald-500/20 shadow-lg shadow-emerald-500/[0.02]'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center space-x-2">
+                        <span className={`text-[8px] font-black font-mono tracking-wider px-2 py-0.5 rounded-full ${
+                          n.is_read
+                            ? 'text-slate-500 bg-slate-950 border border-slate-850'
+                            : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/15'
+                        }`}>
+                          {n.is_read ? 'READ' : 'NEW UPDATE'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                        </span>
+                      </div>
+                      {!n.is_read && (
+                        <button
+                          onClick={() => handleMarkAsRead(n.id)}
+                          className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-2.5 py-1 rounded-lg cursor-pointer transition-colors"
+                        >
+                          Mark as Read ✓
+                        </button>
+                      )}
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-200 mb-1">{n.title}</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed font-sans">{n.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 1. SHOW PUBLIC DIRECTORY OF CONSULTANTS */}
       {!selectedConsultant && (!currentUser || activeDashboardTab === 'advisors') && (
         currentUser ? (
@@ -3817,7 +3928,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
             </div>
             <div className="flex-1 space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">New Announcement</span>
+                <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">New Notification</span>
                 <button onClick={() => setLatestToast(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer">
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -3826,90 +3937,6 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               <p className="text-[11px] text-slate-400 leading-relaxed">{latestToast.message}</p>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Announcements List Modal */}
-      <AnimatePresence>
-        {notificationsModalOpen && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden shadow-2xl text-left"
-            >
-              <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/40">
-                <div className="flex items-center space-x-2">
-                  <Bell className="w-5 h-5 text-amber-400 animate-pulse" />
-                  <h3 className="font-bold text-slate-100 text-base">Official Announcements</h3>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {unreadNotifCount > 0 && (
-                    <button
-                      onClick={handleMarkAllAsRead}
-                      className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-2.5 py-1 rounded-lg cursor-pointer"
-                    >
-                      Clear All Unread
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setNotificationsModalOpen(false)}
-                    className="text-slate-400 hover:text-white bg-slate-950 p-2 border border-slate-850 rounded-xl cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-5 overflow-y-auto space-y-3.5 flex-1 bg-slate-950/30">
-                {clientNotifications.length === 0 ? (
-                  <div className="text-center py-16 text-slate-500 text-xs font-mono">
-                    📭 No official announcements posted yet.
-                  </div>
-                ) : (
-                  clientNotifications.map((n: any) => (
-                    <div
-                      key={n.id}
-                      className={`p-4 rounded-2xl border transition-all relative ${
-                        n.is_read
-                          ? 'bg-slate-900/40 border-slate-850 opacity-75'
-                          : 'bg-slate-900/90 border-emerald-500/20 shadow-lg shadow-emerald-500/[0.02]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[9px] font-mono text-slate-500">
-                          {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
-                        </span>
-                        {!n.is_read ? (
-                          <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-bold font-mono px-2 py-0.5 rounded-full border border-emerald-500/15 uppercase">
-                            New Alert
-                          </span>
-                        ) : (
-                          <span className="text-slate-600 text-[8px] font-bold font-mono uppercase">
-                            Read
-                          </span>
-                        )}
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-200 mb-1">{n.title}</h4>
-                      <p className="text-xs text-slate-400 leading-relaxed mb-3">{n.message}</p>
-
-                      {!n.is_read && (
-                        <div className="flex justify-end">
-                          <button
-                            onClick={() => handleMarkAsRead(n.id)}
-                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg border border-emerald-500/15 cursor-pointer transition-colors"
-                          >
-                            Mark as Read ✓
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </motion.div>
-          </div>
         )}
       </AnimatePresence>
 

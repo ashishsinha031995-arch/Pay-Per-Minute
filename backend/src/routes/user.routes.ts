@@ -21,6 +21,7 @@ import {
   uploadPhoto,
   lockUserReferral,
   getHeroSettings,
+  getClassicAvatars,
   getActiveQueuedSessionForUser,
   getConsultantSchedules,
   createConsultantSchedule,
@@ -41,6 +42,7 @@ const router = Router();
 
 // Public Settings
 router.get('/settings/hero', getHeroSettings);
+router.get('/settings/avatars', getClassicAvatars);
 
 // User Actions
 router.get('/user/profile/:id', getUserProfileInfo);

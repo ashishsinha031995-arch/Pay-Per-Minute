@@ -26,6 +26,13 @@ export const userSignUp = (req: Request, res: Response) => {
       }
     }
 
+    if (cleanPhone) {
+      const existingPhone = db.prepare('SELECT id FROM users WHERE phone = ?').get(cleanPhone);
+      if (existingPhone) {
+        return res.status(400).json({ error: 'Yeh phone number pehle se hi registered hai, kripya login karein ya dusra number use karein. (This phone number is already registered.)' });
+      }
+    }
+
     const finalGender = (gender || 'Male').trim();
     const defaultGirlAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150';
     const defaultBoyAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
@@ -148,6 +155,12 @@ export const consultantRegister = (req: Request, res: Response) => {
     const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
     if (existingConsultantEmail) {
       return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another.' });
+    }
+
+    const cleanPhone = phone.trim();
+    const existingConsultantPhone = db.prepare('SELECT id FROM consultants WHERE phone = ?').get(cleanPhone);
+    if (existingConsultantPhone) {
+      return res.status(400).json({ error: 'Yeh phone number pehle se hi registered hai expert panel ke sath. (This phone number is already registered as a consultant.)' });
     }
 
     let finalUsername = username ? username.trim().toLowerCase() : '';

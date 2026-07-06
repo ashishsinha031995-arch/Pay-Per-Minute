@@ -376,7 +376,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   // Tab Navigation & Mobile Drawer States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules' | 'followers'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules' | 'followers' | 'notifications'>('dashboard');
   const [followersList, setFollowersList] = useState<any[]>([]);
   const [followersLoading, setFollowersLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -2663,11 +2663,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <div className="flex items-center space-x-1.5">
                     <button
                       onClick={() => {
-                        setNotificationsModalOpen(true);
+                        setActiveTab('notifications');
                         setIsMobileMenuOpen(false);
                       }}
                       className="relative p-2 bg-slate-950 border border-slate-850 hover:border-slate-750 text-slate-400 hover:text-white rounded-xl transition-all flex items-center justify-center cursor-pointer"
-                      title="View Official Announcements"
+                      title="View Notifications"
                     >
                       <Bell className="w-5 h-5 text-amber-400 animate-pulse" />
                       {unreadNotifCount > 0 && (
@@ -2924,6 +2924,28 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   >
                     <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'}`} />
                     <span>Help & Customer Support</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      setActiveTab('notifications');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'notifications' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
+                  >
+                    <div className="flex items-center space-x-3.5">
+                      <Bell className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'notifications' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                      <span>Notifications</span>
+                    </div>
+                    {unreadNotifCount > 0 && (
+                      <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                        activeTab === 'notifications' ? 'bg-slate-950 text-emerald-400' : 'bg-rose-500 text-white'
+                      }`}>
+                        {unreadNotifCount} New
+                      </span>
+                    )}
                   </button>
                 </div>
 
@@ -3275,6 +3297,27 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 >
                   <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'}`} />
                   <span>Help & Customer Support</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setActiveTab('notifications');
+                  }}
+                  className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'notifications' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <Bell className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'notifications' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                    <span>Notifications</span>
+                  </div>
+                  {unreadNotifCount > 0 && (
+                    <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                      activeTab === 'notifications' ? 'bg-slate-950 text-emerald-400' : 'bg-rose-500 text-white'
+                    }`}>
+                      {unreadNotifCount} New
+                    </span>
+                  )}
                 </button>
 
                 <div className="border-t border-slate-800/80 pt-4 mt-4">
@@ -5621,6 +5664,96 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </motion.div>
               )}
 
+              {/* TAB 9: Notifications */}
+              {activeTab === 'notifications' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-left"
+                  id="consultant-notifications-tab"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="bg-amber-500/15 p-2 rounded-xl border border-amber-500/20 text-amber-400">
+                        <Bell className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-lg text-slate-100 font-sans tracking-tight leading-normal">Notifications</h3>
+                        <p className="text-xs text-slate-400">Official updates, policy announcements, and platform-wide alerts.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {unreadNotifCount > 0 && (
+                        <button
+                          onClick={handleMarkAllAsRead}
+                          className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-3.5 py-2 rounded-xl border border-emerald-500/20 cursor-pointer"
+                        >
+                          Mark All As Read ✓
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className="text-xs font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-2 shadow-md active:scale-95 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4 text-emerald-400 animate-pulse" />
+                        <span>Back to Dashboard</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {clientNotifications.length === 0 ? (
+                      <div className="text-center py-20 bg-slate-950/40 border border-slate-850 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center space-y-3">
+                        <Bell className="w-8 h-8 text-slate-600 animate-pulse" />
+                        <div>
+                          <span className="font-bold text-slate-400">No Notifications Yet</span>
+                          <p className="text-[10px] text-slate-500 mt-1">Platform administrators will alert you here when there are updates or policy changes.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {clientNotifications.map((n: any) => (
+                          <div
+                            key={n.id}
+                            className={`p-5 rounded-2xl border transition-all relative ${
+                              n.is_read
+                                ? 'bg-slate-950/40 border-slate-850/60 opacity-80'
+                                : 'bg-slate-900/90 border-emerald-500/20 shadow-lg shadow-emerald-500/[0.02]'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                              <div className="flex items-center space-x-2">
+                                <span className={`text-[8px] font-black font-mono tracking-wider px-2 py-0.5 rounded-full ${
+                                  n.is_read
+                                    ? 'text-slate-500 bg-slate-950 border border-slate-850'
+                                    : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/15'
+                                }`}>
+                                  {n.is_read ? 'READ' : 'NEW UPDATE'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                                </span>
+                              </div>
+                              {!n.is_read && (
+                                <button
+                                  onClick={() => handleMarkAsRead(n.id)}
+                                  className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-2.5 py-1 rounded-lg cursor-pointer transition-colors"
+                                >
+                                  Mark as Read ✓
+                                </button>
+                              )}
+                            </div>
+                            <h4 className="text-sm font-bold text-slate-200 mb-1">{n.title}</h4>
+                            <p className="text-xs text-slate-400 leading-relaxed font-sans">{n.message}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
             </div>
 
           </div>
@@ -5916,90 +6049,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           </div>
           <div className="flex-1 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">New Announcement</span>
+              <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">New Notification</span>
               <button onClick={() => setLatestToast(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
             <h4 className="text-xs font-bold text-slate-100">{latestToast.title}</h4>
             <p className="text-[11px] text-slate-400 leading-relaxed">{latestToast.message}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Announcements List Modal */}
-      {notificationsModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden shadow-2xl text-left">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/40">
-              <div className="flex items-center space-x-2">
-                <Bell className="w-5 h-5 text-amber-400 animate-pulse" />
-                <h3 className="font-bold text-slate-100 text-base">Official Announcements</h3>
-              </div>
-              <div className="flex items-center space-x-2">
-                {unreadNotifCount > 0 && (
-                  <button
-                    onClick={handleMarkAllAsRead}
-                    className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-2.5 py-1 rounded-lg cursor-pointer"
-                  >
-                    Clear All Unread
-                  </button>
-                )}
-                <button
-                  onClick={() => setNotificationsModalOpen(false)}
-                  className="text-slate-400 hover:text-white bg-slate-950 p-2 border border-slate-850 rounded-xl cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-5 overflow-y-auto space-y-3.5 flex-1 bg-slate-950/30">
-              {clientNotifications.length === 0 ? (
-                <div className="text-center py-16 text-slate-500 text-xs font-mono">
-                  📭 No official announcements posted yet.
-                </div>
-              ) : (
-                clientNotifications.map((n: any) => (
-                  <div
-                    key={n.id}
-                    className={`p-4 rounded-2xl border transition-all relative ${
-                      n.is_read
-                        ? 'bg-slate-900/40 border-slate-850 opacity-75'
-                        : 'bg-slate-900/90 border-emerald-500/20 shadow-lg shadow-emerald-500/[0.02]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[9px] font-mono text-slate-500">
-                        {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
-                      </span>
-                      {!n.is_read ? (
-                        <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-bold font-mono px-2 py-0.5 rounded-full border border-emerald-500/15 uppercase">
-                          New Alert
-                        </span>
-                      ) : (
-                        <span className="text-slate-600 text-[8px] font-bold font-mono uppercase">
-                          Read
-                        </span>
-                      )}
-                    </div>
-                    <h4 className="text-xs font-bold text-slate-200 mb-1">{n.title}</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed mb-3">{n.message}</p>
-
-                    {!n.is_read && (
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => handleMarkAsRead(n.id)}
-                          className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg border border-emerald-500/15 cursor-pointer transition-colors"
-                        >
-                          Mark as Read ✓
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </div>
       )}
