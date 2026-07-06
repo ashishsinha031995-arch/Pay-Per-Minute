@@ -432,6 +432,7 @@ export function ChatRoom({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // 1. Load initial session data and past messages
   const loadSessionDataset = async () => {
@@ -679,17 +680,33 @@ export function ChatRoom({
     }
   }, [lowInternet]);
 
-  // 3. Scroll to bottom on message updates safely using direct element scroll
-  useEffect(() => {
+  // Helper to scroll messages container to the bottom
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTo({
         top: messagesContainerRef.current.scrollHeight,
-        behavior: 'smooth'
+        behavior
       });
     } else {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior });
     }
+  };
+
+  // 3. Scroll to bottom on message updates safely using direct element scroll
+  useEffect(() => {
+    scrollToBottom('smooth');
   }, [messages]);
+
+  // Scroll to bottom when viewportHeight changes (e.g. keyboard opens/closes on mobile)
+  useEffect(() => {
+    if (isMobile) {
+      // Small timeout to allow browser layout/reflow to finish after keyboard animations
+      const timer = setTimeout(() => {
+        scrollToBottom('smooth');
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [viewportHeight, isMobile]);
 
   // 4. Send Message Handler
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -700,6 +717,12 @@ export function ChatRoom({
 
     // Clear input immediately to make UI responsive
     setTextInput('');
+    
+    // Explicitly restore focus to prevent keyboard from closing on mobile devices
+    inputRef.current?.focus();
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
 
     // Generate local offline message object
     const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
@@ -1755,6 +1778,7 @@ export function ChatRoom({
         ) : (
           <form onSubmit={handleSendMessage} className="flex space-x-3">
             <input
+              ref={inputRef}
               type="text"
               placeholder={sessionCompleted ? 'Session ended. Inputs disabled.' : 'Type your consultation message here...'}
               value={textInput}
