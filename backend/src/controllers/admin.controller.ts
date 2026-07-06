@@ -369,10 +369,20 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
+    const existingUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const cleanDisplayName = (display_name || '').trim();
     if (!cleanDisplayName) {
       return res.status(400).json({ error: 'Display Name is required' });
     }
+
+    // Keep the current photo_url if the updated one is not a valid non-empty string
+    const finalPhotoUrl = (photo_url && typeof photo_url === 'string' && photo_url.trim() !== '')
+      ? photo_url.trim()
+      : (existingUser.photo_url || null);
 
     db.prepare(`
       UPDATE users 
@@ -382,7 +392,7 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
     `).run(
       cleanDisplayName,
       email || null,
-      photo_url || null,
+      finalPhotoUrl,
       dob || null,
       gender || null,
       parseFloat(wallet_balance) || 0,

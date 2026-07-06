@@ -985,15 +985,14 @@ export function ChatRoom({
       )}
 
       {/* Session Title Bar */}
-      <div className="bg-slate-900 text-white p-3 sm:p-4 md:rounded-t-2xl rounded-none border-b md:border border-slate-800 flex flex-row items-center justify-between gap-2 sm:gap-3 shadow-sm shrink-0">
-        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+      <div className="bg-slate-900 text-white p-2.5 sm:p-3 md:rounded-t-2xl rounded-none border-b md:border border-slate-800 flex flex-row items-center justify-between gap-2 sm:gap-3 shadow-md shrink-0">
+        <div className="flex items-center space-x-2 sm:space-x-2.5 min-w-0">
           <button
             onClick={onClose}
-            className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-xl transition-all flex items-center space-x-1 shadow-sm"
+            className="w-8 h-8 sm:w-9 sm:h-9 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-full transition-all flex items-center justify-center shadow-sm shrink-0"
             title="Go Back"
           >
-            <ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-            <span className="text-[11px] font-bold font-sans hidden sm:inline">Go Back</span>
+            <ArrowLeft className="w-4 h-4" />
           </button>
           
           <button
@@ -1002,7 +1001,7 @@ export function ChatRoom({
               const photo = role === 'user' ? sessionInfo?.consultant_photo : sessionInfo?.user_photo;
               if (photo) setLightboxImage(photo);
             }}
-            className="bg-slate-950 p-0.5 sm:p-1 rounded-xl border border-slate-800 flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 overflow-hidden hover:border-emerald-500 transition-all cursor-pointer flex items-center justify-center relative group"
+            className="bg-slate-950 rounded-full border border-slate-800 flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 overflow-hidden hover:border-emerald-500/80 transition-all cursor-pointer flex items-center justify-center relative group"
             title="Click to view photo"
           >
             {(() => {
@@ -1012,37 +1011,37 @@ export function ChatRoom({
                   <img
                     src={photo}
                     alt=""
-                    className="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform"
+                    className="w-full h-full object-cover rounded-full group-hover:scale-105 transition-transform"
                     referrerPolicy="no-referrer"
                     onError={(e) => { (e.target as any).src = role === 'user' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'; }}
                   />
                 );
               }
-              return role === 'user' ? <Sparkles className="w-5 h-5 text-emerald-400" /> : <User className="w-5 h-5 text-emerald-400" />;
+              return role === 'user' ? <Sparkles className="w-4 h-4 text-emerald-400" /> : <User className="w-4 h-4 text-emerald-400" />;
             })()}
           </button>
           <div className="min-w-0">
-            <h3 className="font-bold text-xs sm:text-sm text-slate-100 max-w-[100px] sm:max-w-none truncate">
+            <h3 className="font-bold text-xs sm:text-sm text-slate-100 max-w-[120px] sm:max-w-[200px] md:max-w-none truncate">
               {role === 'user' ? sessionInfo?.consultant_name : sessionInfo?.user_name}
             </h3>
             <div className="flex items-center gap-x-1.5 sm:gap-x-2 gap-y-0.5 mt-0.5 text-[9px] sm:text-[10px] text-slate-400 font-sans flex-wrap">
               {/* Our Connection Status */}
               <span className="flex items-center space-x-1">
-                <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${lowInternet ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${lowInternet ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
                 <span className="hidden sm:inline">You: {lowInternet ? 'Low internet' : 'Online'}</span>
                 <span className="sm:hidden">{lowInternet ? 'Low' : 'You'}</span>
               </span>
               
-              <span className="text-slate-750 font-sans">•</span>
+              <span className="text-slate-700 font-sans">•</span>
               
               {/* Partner Connection Status */}
               <span className="flex items-center space-x-1">
-                <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${partnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
                 <span className="hidden sm:inline">Partner: {partnerOnline ? 'Connected' : 'Waiting...'}</span>
                 <span className="sm:hidden">{partnerOnline ? 'Live' : 'Wait'}</span>
               </span>
 
-              <span className="text-slate-750 font-sans hidden sm:inline">•</span>
+              <span className="text-slate-700 font-sans hidden sm:inline">•</span>
               
               <span className="text-slate-500 font-mono hidden sm:inline">
                 Tariff: ₹{sessionInfo?.price_per_minute || '--'}/min
@@ -1095,9 +1094,9 @@ export function ChatRoom({
                     });
                   }}
                   disabled={isEnding}
-                  className="bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 font-bold text-xs p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center space-x-1"
+                  className="bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 font-bold text-[11px] h-8 sm:h-9 px-2.5 sm:px-3 rounded-full transition-all flex items-center space-x-1"
                 >
-                  <XCircle className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                  <XCircle className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">End Chat</span>
                 </button>
               )}
@@ -1155,9 +1154,9 @@ export function ChatRoom({
                       });
                     }}
                     disabled={isBlocking}
-                    className="bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-850 font-bold text-xs p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center space-x-1"
+                    className="bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-850 font-bold text-[11px] h-8 sm:h-9 px-2.5 sm:px-3 rounded-full transition-all flex items-center space-x-1"
                   >
-                    <Ban className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                    <Ban className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Block User</span>
                   </button>
                 </div>
@@ -1166,7 +1165,7 @@ export function ChatRoom({
           )}
 
           {/* Countdown display */}
-          <div className="flex items-center space-x-1 sm:space-x-2 bg-slate-950 border border-slate-850 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-rose-400 flex-shrink-0">
+          <div className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-950 border border-slate-850 px-2.5 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-9 rounded-full text-rose-400 flex-shrink-0">
             <Clock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
             <div className="text-[10px] sm:text-xs font-black font-mono tracking-wider">
               {sessionInfo?.status === 'queued' ? (
@@ -1736,47 +1735,47 @@ export function ChatRoom({
       </div>
 
       {/* Input panel */}
-      <div className="bg-slate-900 md:border-x md:border-b border-t border-slate-800 p-3 sm:p-4 md:rounded-b-2xl rounded-none shrink-0">
+      <div className="bg-slate-900 md:border-x md:border-b border-t border-slate-800 p-2 sm:p-2.5 md:rounded-b-2xl rounded-none shrink-0">
         {sessionInfo?.status === 'queued' || sessionInfo?.status === 'pending' ? (
-          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3.5 text-center text-xs font-mono text-slate-400">
+          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3 text-center text-xs font-mono text-slate-400">
             ⏳ Waiting in queue... You can start messaging as soon as the consultant accepts your chat.
           </div>
         ) : sessionInfo?.status === 'cancelled' || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed' ? (
-          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3.5 text-center text-xs font-mono text-slate-400">
+          <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3 text-center text-xs font-mono text-slate-400">
             🚫 Chat is inactive. Message inputs are disabled.
           </div>
         ) : isRecording ? (
-          <div className="flex items-center justify-between bg-slate-950 border border-red-500/30 p-3 rounded-xl">
-            <div className="flex items-center space-x-3">
-              <span className="flex h-2.5 w-2.5 relative">
+          <div className="flex items-center justify-between bg-slate-950 border border-red-500/30 p-1.5 px-3 rounded-full h-9 sm:h-10">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <span className="flex h-2 w-2 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
-              <span className="text-xs font-mono text-red-400 font-bold">
-                Recording Voice Note ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})
+              <span className="text-[11px] sm:text-xs font-mono text-red-400 font-bold">
+                Recording ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})
               </span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
               <button
                 type="button"
                 onClick={cancelRecording}
-                className="p-2 text-slate-400 hover:text-rose-400 transition-colors"
+                className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-rose-400 transition-colors"
                 title="Cancel Recording"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={stopRecording}
-                className="bg-red-500 hover:bg-red-600 text-white p-2.5 rounded-lg transition-all flex items-center justify-center"
+                className="bg-red-500 hover:bg-red-600 text-white w-7 h-7 rounded-full transition-all flex items-center justify-center"
                 title="Stop & Send Voice Note"
               >
-                <Square className="w-3.5 h-3.5 fill-current" />
+                <Square className="w-3 h-3 fill-current" />
               </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSendMessage} className="flex space-x-3">
+          <form onSubmit={handleSendMessage} className="flex space-x-2 sm:space-x-2.5 items-center">
             <input
               ref={inputRef}
               type="text"
@@ -1784,7 +1783,7 @@ export function ChatRoom({
               value={textInput}
               onChange={handleTextInputChange}
               disabled={sessionCompleted}
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 text-base md:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-55"
+              className="flex-1 bg-slate-950 border border-slate-850 rounded-full px-4 h-9 sm:h-10 text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/60 disabled:opacity-55 shadow-inner"
             />
             
             {/* Consultant-only Voice Recording button */}
@@ -1792,7 +1791,7 @@ export function ChatRoom({
               <button
                 type="button"
                 onClick={startRecording}
-                className="bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-800 hover:border-slate-700 px-3.5 rounded-xl transition-all flex items-center justify-center"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-800 hover:border-slate-700 flex-shrink-0 transition-all flex items-center justify-center"
                 title="Record Voice Note"
               >
                 <Mic className="w-4 h-4" />
@@ -1802,9 +1801,9 @@ export function ChatRoom({
             <button
               type="submit"
               disabled={sessionCompleted || !textInput.trim()}
-              className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 px-5 rounded-xl transition-all flex items-center justify-center"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 flex-shrink-0 transition-all flex items-center justify-center shadow-md"
             >
-              <Send className="w-4 h-4 font-bold" />
+              <Send className="w-4 h-4" />
             </button>
           </form>
         )}
