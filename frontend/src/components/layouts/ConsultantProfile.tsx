@@ -227,8 +227,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           const data = await res.json();
           setClassicAvatars(data);
         }
-      } catch (err) {
-        console.error('Failed to load classic avatars:', err);
+      } catch (err: any) {
+        if (err && err.message && err.message.includes('Failed to fetch')) {
+          console.warn('Network connection starting up. Retrying classic avatars shortly...');
+        } else {
+          console.error('Failed to load classic avatars:', err);
+        }
       }
     };
     fetchHeroSettings();

@@ -286,7 +286,13 @@ export default function AppPage() {
             setCurrentUser(data.user);
           }
         })
-        .catch(err => console.error('Error locking referral:', err));
+        .catch(err => {
+          if (err && err.message && err.message.includes('Failed to fetch')) {
+            console.warn('Network connection starting up. Retrying lock referral shortly...');
+          } else {
+            console.error('Error locking referral:', err);
+          }
+        });
       }
     }
   }, [currentUser?.id, targetUsername]);
