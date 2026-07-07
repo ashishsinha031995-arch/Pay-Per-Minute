@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Edit, Check, X, Shield, Lock, Trash, HelpCircle, 
   Send, Bell, Mail, Phone, MessageSquare, AlertCircle, RefreshCw, Sparkles, AlertTriangle,
   Filter, Calendar, TrendingUp, CreditCard, ChevronRight, ShoppingCart, Percent, Layers, Landmark, Info,
-  Award, Search, Users, Wallet, Coins, Eye, Clock, CheckCircle
+  Award, Search, Users, Wallet, Coins, Eye, Clock, CheckCircle, Upload, Image
 } from 'lucide-react';
 import { 
   revenueTrendData, growthTrendData, packageSalesData, 
@@ -2587,6 +2587,9 @@ export function SettingsPanel() {
   const [newAvatarUrl, setNewAvatarUrl] = useState('');
   const [loadingAvatars, setLoadingAvatars] = useState(true);
   const [savingAvatars, setSavingAvatars] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
+  const [uploadingAvatarFile, setUploadingAvatarFile] = useState(false);
 
   React.useEffect(() => {
     const fetchHeroSettings = async () => {
@@ -2643,6 +2646,8 @@ export function SettingsPanel() {
 
   const handleSaveAvatarsList = async (updatedList: string[]) => {
     setSavingAvatars(true);
+    setAvatarError(null);
+    setAvatarSuccess(null);
     try {
       const res = await fetch('/api/admin/settings/avatars', {
         method: 'PUT',
@@ -2651,28 +2656,78 @@ export function SettingsPanel() {
       });
       if (res.ok) {
         setAvatarsList(updatedList);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
+        setAvatarSuccess('Avatars list saved successfully!');
+        setTimeout(() => setAvatarSuccess(null), 3000);
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to save avatars list');
+        setAvatarError(data.error || 'Failed to save avatars list');
       }
     } catch (err: any) {
-      alert(err.message);
+      setAvatarError(err.message || 'An error occurred while saving.');
     } finally {
       setSavingAvatars(false);
     }
   };
 
   const handleAddAvatar = () => {
+    setAvatarError(null);
+    setAvatarSuccess(null);
     if (!newAvatarUrl.trim()) return;
     if (!newAvatarUrl.trim().startsWith('http://') && !newAvatarUrl.trim().startsWith('https://')) {
-      alert('Kripya valid HTTP/HTTPS image URL enter karein.');
+      setAvatarError('Kripya valid HTTP/HTTPS image URL enter karein.');
       return;
     }
     const updated = [...avatarsList, newAvatarUrl.trim()];
     handleSaveAvatarsList(updated);
     setNewAvatarUrl('');
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAvatarError(null);
+    setAvatarSuccess(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('File size limit is 5MB. Kripya choti file select karein.');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Please select a valid image file (PNG/JPG/JPEG).');
+      return;
+    }
+
+    setUploadingAvatarFile(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64String = reader.result as string;
+        const res = await fetch('/api/user/upload-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64String })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to upload image file');
+
+        const updated = [...avatarsList, data.photo_url];
+        await handleSaveAvatarsList(updated);
+        setAvatarSuccess('Avatar image uploaded and added successfully!');
+        setTimeout(() => setAvatarSuccess(null), 3000);
+      } catch (err: any) {
+        setAvatarError(err.message || 'Failed to upload photo.');
+      } finally {
+        setUploadingAvatarFile(false);
+        // Clear input
+        e.target.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setAvatarError('Failed to read the selected file.');
+      setUploadingAvatarFile(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleDeleteAvatar = (indexToDelete: number) => {
@@ -2761,8 +2816,22 @@ export function SettingsPanel() {
               <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Classic Static Avatars Management</h3>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Super Admin panel se classic static avatars add aur delete karein. Ye dynamic list direct users aur consultants ke profile editor bar mein selection ke liye use hogi.
+              Super Admin panel se classic static avatars add aur delete karein. Aap local computer se direct photo upload kar sakte hain ya custom URL link paste kar sakte hain.
             </p>
+
+            {/* Error & Success Feedback banners (Prevents blocking browser alerts in iFrame) */}
+            {avatarError && (
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-xs flex items-center space-x-2 font-mono">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{avatarError}</span>
+              </div>
+            )}
+            {avatarSuccess && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-xl text-xs flex items-center space-x-2 font-mono">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{avatarSuccess}</span>
+              </div>
+            )}
 
             {loadingAvatars ? (
               <div className="text-xs text-slate-500 font-mono py-6 text-center animate-pulse">Loading avatars list...</div>
@@ -2773,7 +2842,7 @@ export function SettingsPanel() {
                   <span className="block text-[10px] text-slate-400 font-mono mb-2 uppercase tracking-wider">Current Live Avatars ({avatarsList.length})</span>
                   {avatarsList.length === 0 ? (
                     <div className="bg-slate-950/40 border border-dashed border-slate-800/80 p-6 rounded-xl text-center text-xs text-slate-500">
-                      No classic avatars registered. Please add at least one avatar.
+                      No classic avatars registered. Please upload or add at least one avatar.
                     </div>
                   ) : (
                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 bg-slate-950/55 p-3 rounded-xl border border-slate-800/60">
@@ -2794,26 +2863,51 @@ export function SettingsPanel() {
                   )}
                 </div>
 
-                {/* Add dynamic avatar */}
-                <div className="space-y-2 pt-2 border-t border-slate-800/40">
-                  <label className="block text-[10px] text-slate-400 font-mono mb-1 uppercase tracking-wider">Add New Avatar Image URL</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newAvatarUrl}
-                      onChange={(e) => setNewAvatarUrl(e.target.value)}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddAvatar}
-                      disabled={savingAvatars || !newAvatarUrl.trim()}
-                      className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Avatar
-                    </button>
+                {/* Add methods (Dual inputs) */}
+                <div className="space-y-4 pt-3 border-t border-slate-800/40">
+                  {/* Method 1: File Uploader */}
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-2">
+                    <span className="block text-[10px] text-slate-400 font-mono uppercase tracking-wider">Method A: Upload Local Image File</span>
+                    <label className="flex flex-col items-center justify-center border border-dashed border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900/40 transition-all rounded-xl p-4 cursor-pointer text-center group">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleFileUpload} 
+                        disabled={uploadingAvatarFile || savingAvatars} 
+                        className="hidden" 
+                      />
+                      <Upload className={`w-6 h-6 mb-1.5 transition-colors ${uploadingAvatarFile ? 'text-emerald-400 animate-bounce' : 'text-slate-500 group-hover:text-emerald-400'}`} />
+                      <span className="text-xs font-bold text-slate-300">
+                        {uploadingAvatarFile ? 'Uploading and saving image...' : 'Choose Avatar Image File'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 mt-0.5 font-mono">PNG, JPG, JPEG (Max 5MB)</span>
+                    </label>
+                  </div>
+
+                  {/* Method 2: HTTP Link */}
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-2">
+                    <span className="block text-[10px] text-slate-400 font-mono uppercase tracking-wider">Method B: Add via HTTP/HTTPS Image Link URL</span>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          value={newAvatarUrl}
+                          onChange={(e) => setNewAvatarUrl(e.target.value)}
+                          placeholder="https://images.unsplash.com/photo-..."
+                          className="bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-4 py-2 text-slate-100 text-xs w-full focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                        />
+                        <Image className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-3" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddAvatar}
+                        disabled={savingAvatars || !newAvatarUrl.trim()}
+                        className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add URL
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

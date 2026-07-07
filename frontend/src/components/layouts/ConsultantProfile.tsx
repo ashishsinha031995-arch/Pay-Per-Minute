@@ -3197,13 +3197,18 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
             </div>
           ) : (
             /* Desktop/Mobile Responsive Grid */
+            /* Desktop/Mobile Responsive Grid */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {followingList.map((cons: any) => {
                 const totalFollowers = (cons.followers_count || 0) + (cons.manual_followers_count || 0);
                 return (
                   <div
                     key={cons.id}
-                    className="bg-[#0B1528] border border-slate-800/80 p-5 rounded-[14px] flex flex-col justify-between gap-4 shadow-md transition-all duration-300 hover:border-slate-700/80 hover:shadow-lg"
+                    className={`p-5 rounded-[14px] flex flex-col justify-between gap-4 shadow-md transition-all duration-300 hover:shadow-lg ${
+                      theme === 'light'
+                        ? 'bg-sky-100/60 border border-sky-200/85 hover:border-sky-300/90 hover:bg-sky-100/85 shadow-sky-100/40'
+                        : 'bg-[#0B1528] border border-slate-800/80 hover:border-slate-700/80 shadow-md'
+                    }`}
                   >
                     {/* Upper block */}
                     <div className="flex gap-3.5 items-start">
@@ -3213,17 +3218,25 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           <img
                             src={cons.photo_url}
                             alt={cons.display_name}
-                            className="w-[52px] h-[52px] rounded-xl object-cover border border-slate-800/90"
+                            className={`w-[52px] h-[52px] rounded-xl object-cover border ${
+                              theme === 'light' ? 'border-sky-200/80' : 'border-slate-800/90'
+                            }`}
                             referrerPolicy="no-referrer"
                             onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
                           />
                         ) : (
-                          <div className="w-[52px] h-[52px] rounded-xl bg-slate-900 border border-slate-800/90 font-black text-sm flex items-center justify-center text-indigo-400 font-mono">
+                          <div className={`w-[52px] h-[52px] rounded-xl font-black text-sm flex items-center justify-center font-mono ${
+                            theme === 'light'
+                              ? 'bg-sky-200/60 border border-sky-300/60 text-indigo-600'
+                              : 'bg-slate-900 border border-slate-800/90 text-indigo-400'
+                          }`}>
                             {cons.display_name?.slice(0, 1)}
                           </div>
                         )}
                         {/* status dot */}
-                        <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0B1528] ${
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${
+                          theme === 'light' ? 'border-sky-100' : 'border-[#0B1528]'
+                        } ${
                           cons.is_online === 1
                             ? cons.is_busy === 1 ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'
                             : 'bg-slate-600'
@@ -3233,7 +3246,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       {/* Info section */}
                       <div className="min-w-0 flex-1 space-y-0.5 text-left">
                         <div className="flex items-center gap-1">
-                          <h4 className="font-medium text-xs text-slate-100 truncate">{cons.display_name}</h4>
+                          <h4 className={`font-medium text-xs truncate ${
+                            theme === 'light' ? 'text-slate-100' : 'text-slate-100'
+                          }`}>{cons.display_name}</h4>
                           <span className="bg-sky-500/15 text-sky-400 p-0.5 rounded-full border border-sky-500/25 flex items-center justify-center shrink-0">
                             <CheckCircle className="w-3 h-3 fill-sky-500 text-slate-950" />
                           </span>
@@ -3243,11 +3258,19 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         {/* Pills row */}
                         <div className="flex items-center gap-2 pt-1.5">
                           {/* Soft blue tint role tag */}
-                          <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                          <span className={`border text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono ${
+                            theme === 'light'
+                              ? 'bg-blue-500/15 text-blue-700 border-blue-400/30'
+                              : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          }`}>
                             {normalizeCategory(cons.category || 'consultant').toLowerCase().replace(/s$/, '')}
                           </span>
                           {/* Neutral gray tint rate */}
-                          <span className="bg-slate-800 text-slate-300 text-[9px] font-bold px-2 py-0.5 rounded-full font-mono">
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full font-mono ${
+                            theme === 'light'
+                              ? 'bg-slate-200 text-slate-700'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}>
                             ₹{cons.price_per_minute}/min
                           </span>
                         </div>
@@ -3255,12 +3278,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     </div>
 
                     {/* Thin horizontal divider */}
-                    <div className="border-t border-slate-800/80 w-full" />
+                    <div className={`border-t w-full ${
+                      theme === 'light' ? 'border-sky-200/60' : 'border-slate-800/80'
+                    }`} />
 
                     {/* Footer row */}
                     <div className="flex items-center justify-between gap-3 pt-0.5">
                       {/* Only the followers count is shown, icon and "followers" text removed */}
-                      <span className="text-[11px] font-bold text-slate-400 font-mono shrink-0">
+                      <span className={`text-[11px] font-bold font-mono shrink-0 ${
+                        theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                      }`}>
                         {totalFollowers}
                       </span>
 
@@ -3293,7 +3320,11 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                               console.error("Error unfollowing:", err);
                             }
                           }}
-                          className="px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-wider text-rose-400 hover:text-rose-300 border border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/5 transition-all cursor-pointer whitespace-nowrap"
+                          className={`px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+                            theme === 'light'
+                              ? 'text-rose-600 hover:text-rose-700 border border-rose-300/50 hover:bg-rose-50'
+                              : 'text-rose-400 hover:text-rose-300 border border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/5'
+                          }`}
                         >
                           Unfollow
                         </button>
