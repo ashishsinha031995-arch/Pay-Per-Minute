@@ -643,6 +643,8 @@ export function ChatRoom({
 
     // Request rejected by consultant
     socket.on('session:rejected', ({ message }) => {
+      setSessionCompleted(true);
+      localStorage.removeItem('advisor_active_session');
       setSessionInfo(prev => prev ? { ...prev, status: 'rejected' } : null);
       if (currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
@@ -651,6 +653,8 @@ export function ChatRoom({
 
     // Request cancelled by user
     socket.on('session:cancelled', ({ message }) => {
+      setSessionCompleted(true);
+      localStorage.removeItem('advisor_active_session');
       setSessionInfo(prev => prev ? { ...prev, status: 'cancelled' } : null);
       if (currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
@@ -659,6 +663,8 @@ export function ChatRoom({
 
     // Request missed by consultant
     socket.on('session:missed', ({ message }) => {
+      setSessionCompleted(true);
+      localStorage.removeItem('advisor_active_session');
       setSessionInfo(prev => prev ? { ...prev, status: 'missed' } : null);
       if (currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
@@ -1676,7 +1682,7 @@ export function ChatRoom({
         )}
 
         {/* COMPLETED BANNER LOGS */}
-        {!isReadOnly && sessionCompleted && (
+        {!isReadOnly && sessionCompleted && sessionInfo?.status === 'completed' && (
           <div className="space-y-4 pt-6 border-t border-slate-900 max-w-md mx-auto">
             <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-center space-y-2">
               <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto" />
@@ -1936,7 +1942,7 @@ export function ChatRoom({
       )}
 
       {/* Session Completed Popup Modal - Both User and Consultant */}
-      {!isReadOnly && sessionCompleted && (
+      {!isReadOnly && sessionCompleted && sessionInfo?.status === 'completed' && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[90] p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 text-center space-y-6 shadow-2xl relative overflow-hidden animate-in zoom-in duration-200 my-8">
             <div className="mx-auto w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center">

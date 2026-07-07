@@ -2210,12 +2210,32 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           <div className="flex items-center space-x-1.5 text-xs text-slate-400">
                             <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">Status:</span>
                             {sess.status === 'active' ? (
-                              <span className="inline-flex items-center text-[9px] font-mono font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 animate-pulse">
+                              <span className="inline-flex items-center text-[9px] font-mono font-black bg-cyan-500/15 text-cyan-400 px-2 py-0.5 rounded-full border border-cyan-500/20 animate-pulse">
                                 ● Live Active
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-full border border-slate-800">
+                            ) : sess.status === 'completed' ? (
+                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
                                 ✓ Completed
+                              </span>
+                            ) : sess.status === 'missed' ? (
+                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                ⚠ Missed
+                              </span>
+                            ) : sess.status === 'rejected' ? (
+                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/20">
+                                ✕ Rejected
+                              </span>
+                            ) : sess.status === 'cancelled' ? (
+                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">
+                                ✕ Cancelled
+                              </span>
+                            ) : sess.status === 'queued' ? (
+                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/20">
+                                🕒 Queued
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center text-[9px] font-mono font-bold bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20">
+                                🕒 Pending
                               </span>
                             )}
                           </div>
@@ -2696,12 +2716,32 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                               <div className="flex items-center space-x-1.5 text-xs text-slate-400">
                                 <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">Status:</span>
                                 {sess.status === 'active' ? (
-                                  <span className="inline-flex items-center text-[9px] font-mono font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 animate-pulse">
+                                  <span className="inline-flex items-center text-[9px] font-mono font-black bg-cyan-500/15 text-cyan-400 px-2 py-0.5 rounded-full border border-cyan-500/20 animate-pulse">
                                     ● Live Active
                                   </span>
-                                ) : (
-                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-full border border-slate-800">
+                                ) : sess.status === 'completed' ? (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
                                     ✓ Completed
+                                  </span>
+                                ) : sess.status === 'missed' ? (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                    ⚠ Missed
+                                  </span>
+                                ) : sess.status === 'rejected' ? (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/20">
+                                    ✕ Rejected
+                                  </span>
+                                ) : sess.status === 'cancelled' ? (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">
+                                    ✕ Cancelled
+                                  </span>
+                                ) : sess.status === 'queued' ? (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/20">
+                                    🕒 Queued
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center text-[9px] font-mono font-bold bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20">
+                                    🕒 Pending
                                   </span>
                                 )}
                               </div>
