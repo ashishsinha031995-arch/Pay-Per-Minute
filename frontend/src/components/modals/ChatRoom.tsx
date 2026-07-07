@@ -231,6 +231,15 @@ export function ChatRoom({
   }, [activeChatRemainingSeconds]);
 
   useEffect(() => {
+    if (userQueueWaitSeconds > 0) {
+      const timer = setInterval(() => {
+        setUserQueueWaitSeconds(prev => Math.max(0, prev - 1));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [userQueueWaitSeconds]);
+
+  useEffect(() => {
     if (role === 'user' && sessionInfo?.status === 'queued' && sessionInfo?.consultant_id) {
       const fetchUserQueueStatus = async () => {
         try {
@@ -1863,8 +1872,8 @@ export function ChatRoom({
               <div className="text-right">
                 <span className="text-[10px] text-slate-500 font-mono uppercase block">Wait Time</span>
                 <span className="text-sm font-extrabold text-emerald-400 font-mono">
-                  {activeChatRemainingSeconds > 0 
-                    ? `${Math.floor(activeChatRemainingSeconds / 60)}m ${activeChatRemainingSeconds % 60}s` 
+                  {userQueueWaitSeconds > 0 
+                    ? `${Math.floor(userQueueWaitSeconds / 60)}m ${userQueueWaitSeconds % 60}s` 
                     : 'Calculating...'}
                 </span>
               </div>

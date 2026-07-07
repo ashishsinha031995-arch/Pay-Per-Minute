@@ -57,6 +57,9 @@ export interface User {
   lifetime_recharge?: number;
   is_active: number; // 0 or 1
   is_blocked?: number; // 0 or 1
+  location?: string | null;
+  languages?: string | null;
+  phone?: string | null;
 }
 
 export interface Session {

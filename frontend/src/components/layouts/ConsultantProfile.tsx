@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone, ArrowUpRight, ArrowDownLeft, RefreshCw, Download, TrendingUp, Check, FileText, Filter } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone, ArrowUpRight, ArrowDownLeft, RefreshCw, Download, TrendingUp, Check, FileText, Filter, Crop, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
 import { CallMintLandingPage } from './CallMintLandingPage';
+import { ImageEditorModal } from '../modals/ImageEditorModal';
+import { ProfileChangesSuccessModal, ProfileChangeItem } from '../modals/ProfileChangesSuccessModal';
 
 const formatToLocalDateString = (dateStr: any) => {
   if (!dateStr) return '';
@@ -85,6 +87,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [editPhone, setEditPhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Advanced image editor states
+  const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
+  const [editorImageBase64, setEditorImageBase64] = useState<string | undefined>(undefined);
+
+  // Profile Success Modal states
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [profileChangesList, setProfileChangesList] = useState<ProfileChangeItem[]>([]);
 
   // 3D Perspective Tilt and Hamburger states
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
@@ -231,43 +241,51 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
     // Check size limit (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError('File size bahot badi hai. Kripya 5MB se choti image upload karein.');
+      setError('File size is too large. Please upload an image smaller than 5MB.');
       return;
     }
 
-    setUploadingPhoto(true);
     setError(null);
     setSuccess(null);
 
     try {
       const reader = new FileReader();
-      reader.onloadend = async () => {
+      reader.onloadend = () => {
         const base64String = reader.result as string;
-        try {
-          const res = await fetch('/api/user/upload-photo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64String })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
-          
-          setEditPhotoUrl(data.photo_url);
-          setSuccess('Photo successfully upload ho gayi hai!');
-          setTimeout(() => setSuccess(null), 3000);
-        } catch (uploadErr: any) {
-          setError(uploadErr.message);
-        } finally {
-          setUploadingPhoto(false);
-        }
+        setEditorImageBase64(base64String);
+        setIsImageEditorOpen(true);
+        // Clear input so selecting the same file triggers onChange again
+        e.target.value = '';
       };
       reader.onerror = () => {
-        setError('File read karne me error aaya.');
-        setUploadingPhoto(false);
+        setError('An error occurred while reading the file.');
       };
       reader.readAsDataURL(file);
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const saveCroppedPhoto = async (croppedBase64: string) => {
+    setUploadingPhoto(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch('/api/user/upload-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: croppedBase64 })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
+      
+      setEditPhotoUrl(data.photo_url);
+      setSuccess('Profile photo saved successfully with crop and alignment!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (uploadErr: any) {
+      setError(uploadErr.message || 'Photo upload and crop failed.');
+      throw uploadErr;
+    } finally {
       setUploadingPhoto(false);
     }
   };
@@ -750,6 +768,31 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     }
     const finalPhone = last10.length === 10 ? '+91' + last10 : null;
 
+    // Track changed fields
+    const changes: ProfileChangeItem[] = [];
+    if ((currentUser.display_name || '') !== (editDisplayName || '')) {
+      changes.push({ field: 'Display Name', oldValue: currentUser.display_name || 'None', newValue: editDisplayName || 'None' });
+    }
+    if ((currentUser.photo_url || '') !== (editPhotoUrl || '')) {
+      changes.push({ field: 'Profile Photo', oldValue: currentUser.photo_url || '', newValue: editPhotoUrl || '', isImage: true });
+    }
+    const currentDobFormatted = currentUser.dob ? formatToLocalDateString(currentUser.dob) : '';
+    if (currentDobFormatted !== (editDob || '')) {
+      changes.push({ field: 'Date of Birth', oldValue: currentDobFormatted || 'None', newValue: editDob || 'None' });
+    }
+    if ((currentUser.gender || 'Male') !== (editGender || 'Male')) {
+      changes.push({ field: 'Gender', oldValue: currentUser.gender || 'Male', newValue: editGender || 'Male' });
+    }
+    if ((currentUser.location || '') !== (editLocation || '')) {
+      changes.push({ field: 'Location', oldValue: currentUser.location || 'None', newValue: editLocation || 'None' });
+    }
+    if ((currentUser.languages || '') !== (editLanguages || '')) {
+      changes.push({ field: 'Languages', oldValue: currentUser.languages || 'None', newValue: editLanguages || 'None' });
+    }
+    if ((currentUser.phone || '') !== (finalPhone || '')) {
+      changes.push({ field: 'Phone Number', oldValue: currentUser.phone || 'None', newValue: finalPhone || 'None' });
+    }
+
     try {
       const res = await fetch('/api/user/update-profile', {
         method: 'POST',
@@ -769,7 +812,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       if (!res.ok) throw new Error(data.error || 'Failed to update profile');
       
       setCurrentUser(data.user);
-      setSuccess('Aapka profile successfully update ho gaya hai!');
+      setSuccess('Your profile has been updated successfully!');
+      setProfileChangesList(changes);
+      setIsSuccessModalOpen(true);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message);
@@ -901,7 +946,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
     const packagePrice = selectedMinutes * selectedConsultant.price_per_minute;
     if (currentUser.wallet_balance < packagePrice) {
-      setError(`Aapke wallet me ₹${packagePrice} nahi hai. Chat suru karne ke liye kripya recharge karein.`);
+      setError(`Insufficient balance. You need at least ₹${packagePrice} in your wallet to start the chat. Please recharge your wallet.`);
       return;
     }
 
@@ -1676,20 +1721,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               </div>
 
               <div className="md:col-span-2 space-y-2">
-                <label className="block text-[10px] font-mono text-slate-400 mb-1">Profile Photo (Upload file ya direct image link enter karein)</label>
+                <label className="block text-[10px] font-mono text-slate-400 mb-1">Profile Photo (Upload a file or enter a direct image link)</label>
                 <div className="flex flex-col sm:flex-row items-stretch gap-3">
                   <div className="relative flex-1">
                     <Camera className="w-3.5 h-3.5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      placeholder="Image link (e.g., https://example.com/photo.jpg) ya photo upload karein"
+                      placeholder="Enter image link or upload a file"
                       value={editPhotoUrl}
                       onChange={(e) => setEditPhotoUrl(e.target.value)}
                       className="bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 w-full font-mono"
                     />
                   </div>
                   
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
                     <input
                       type="file"
                       accept="image/*"
@@ -1704,6 +1749,17 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     >
                       <span>{uploadingPhoto ? 'Uploading...' : '📁 Upload Local Photo'}</span>
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditorImageBase64(undefined);
+                        setIsImageEditorOpen(true);
+                      }}
+                      className="bg-indigo-600/90 hover:bg-indigo-500 text-white border border-indigo-500/30 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shrink-0"
+                    >
+                      <Crop className="w-3.5 h-3.5" />
+                      <span>Crop & Align</span>
+                    </button>
                   </div>
                 </div>
                 {editPhotoUrl && (
@@ -1756,7 +1812,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 disabled={profileSaving}
                 className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center justify-center space-x-1 shrink-0 shadow-md active:scale-95"
               >
-                <span>{profileSaving ? 'Saving...' : 'Save Change'}</span>
+                <span>{profileSaving ? 'Saving...' : 'Save Changes'}</span>
               </button>
 
               <button
@@ -2323,7 +2379,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
             <div className="space-y-4">
               <h4 className="font-bold text-xs text-emerald-400 uppercase tracking-widest">Raise a New Support Ticket</h4>
               <p className="text-xs text-slate-400">
-                Aapka koi sawal hai ya koi problem aayi hai? Kripya neeche form bharein, hamari support team jald hi respond karegi.
+                Do you have a question or encountered a problem? Please fill out the form below and our support team will respond shortly.
               </p>
 
               <form onSubmit={async (e) => {
@@ -2384,7 +2440,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     ))}
                   </select>
                   <p className="text-[10px] text-slate-500">
-                    Jis chat mein samasya hai, kripya use select karein taaki hum behtar tarike se help kar sakein.
+                    Please select the chat session you need assistance with so we can help you better.
                   </p>
                 </div>
 
@@ -3063,31 +3119,37 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       )}
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'following' && (
-        <div className="bg-slate-900/40 p-6 sm:p-8 rounded-3xl border border-slate-800/80 space-y-6 text-left" id="user-following-panel">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
-            <div className="flex items-center space-x-2.5">
-              <div className="bg-indigo-500/15 p-2 rounded-xl border border-indigo-500/20 text-indigo-400">
+        <div className="bg-slate-900/40 p-5 sm:p-6 rounded-3xl border border-slate-800/80 space-y-6 text-left" id="user-following-panel">
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+            <div className="flex items-center gap-2.5">
+              <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-400">
                 <User className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-extrabold text-lg text-slate-100">Your Following List</h3>
-                <p className="text-xs text-slate-400">Consultants whom you follow on CallMint</p>
+                <h3 className="font-bold text-base text-slate-100">Your following list</h3>
+                <p className="text-xs text-slate-500">Consultants whom you follow on CallMint</p>
               </div>
             </div>
+
+            {/* Full-width Browse More Advisors button on mobile, auto on desktop */}
             <button
               onClick={() => setActiveDashboardTab('advisors')}
-              className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-3.5 py-2 rounded-xl border border-emerald-500/20 w-fit cursor-pointer"
+              className="bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-slate-950 font-extrabold py-2 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 cursor-pointer sm:w-auto w-full"
             >
-              🔍 Browse More Advisors
+              <Search className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Browse more advisors</span>
             </button>
           </div>
 
+          {/* Loader */}
           {followingLoading ? (
             <div className="py-20 text-center space-y-3">
               <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
               <p className="text-sm text-slate-500 font-mono">Loading your following list...</p>
             </div>
           ) : followingList.length === 0 ? (
+            /* Empty state */
             <div className="py-16 text-center max-w-md mx-auto space-y-4">
               <div className="bg-slate-950/40 border border-slate-850 p-6 rounded-2xl inline-block">
                 <User className="w-12 h-12 text-slate-600 mx-auto" />
@@ -3098,74 +3160,83 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               </div>
               <button
                 onClick={() => setActiveDashboardTab('advisors')}
-                className="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+                className="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md cursor-pointer"
               >
                 Browse Advisors
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            /* Desktop/Mobile Responsive Grid */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {followingList.map((cons: any) => {
                 const totalFollowers = (cons.followers_count || 0) + (cons.manual_followers_count || 0);
                 return (
                   <div
                     key={cons.id}
-                    className="relative bg-gradient-to-br from-slate-950 via-slate-950 to-slate-900 border border-slate-850 p-5 rounded-2xl flex flex-col justify-between gap-4 shadow-lg hover:border-indigo-500/40 hover:shadow-indigo-500/5 transition-all duration-300 group"
+                    className="bg-[#0B1528] border border-slate-800/80 p-5 rounded-[14px] flex flex-col justify-between gap-4 shadow-md transition-all duration-300 hover:border-slate-700/80 hover:shadow-lg"
                   >
-                    {/* Upper Row: Avatar and basic info */}
-                    <div className="flex gap-4">
-                      {/* Avatar */}
+                    {/* Upper block */}
+                    <div className="flex gap-3.5 items-start">
+                      {/* Square-rounded avatar with status dot */}
                       <div className="relative shrink-0">
                         {cons.photo_url ? (
                           <img
                             src={cons.photo_url}
                             alt={cons.display_name}
-                            className="w-14 h-14 rounded-xl object-cover border border-slate-800"
+                            className="w-[52px] h-[52px] rounded-xl object-cover border border-slate-800/90"
                             referrerPolicy="no-referrer"
                             onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
                           />
                         ) : (
-                          <div className="w-14 h-14 rounded-xl bg-slate-900 border border-slate-800 font-extrabold text-base flex items-center justify-center text-indigo-400">
+                          <div className="w-[52px] h-[52px] rounded-xl bg-slate-900 border border-slate-800/90 font-black text-sm flex items-center justify-center text-indigo-400 font-mono">
                             {cons.display_name?.slice(0, 1)}
                           </div>
                         )}
-                        {/* Status dot */}
-                        <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-950 ${
+                        {/* status dot */}
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0B1528] ${
                           cons.is_online === 1
                             ? cons.is_busy === 1 ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'
                             : 'bg-slate-600'
                         }`} />
                       </div>
 
-                      {/* Details */}
-                      <div className="space-y-1 min-w-0 text-left">
+                      {/* Info section */}
+                      <div className="min-w-0 flex-1 space-y-0.5 text-left">
                         <div className="flex items-center gap-1">
-                          <h4 className="font-bold text-sm text-slate-200 truncate group-hover:text-indigo-400 transition-colors">{cons.display_name}</h4>
+                          <h4 className="font-medium text-xs text-slate-100 truncate">{cons.display_name}</h4>
                           <span className="bg-sky-500/15 text-sky-400 p-0.5 rounded-full border border-sky-500/25 flex items-center justify-center shrink-0">
-                            <CheckCircle className="w-3.5 h-3.5 fill-sky-500 text-slate-950" />
+                            <CheckCircle className="w-3 h-3 fill-sky-500 text-slate-950" />
                           </span>
                         </div>
-                        <p className="text-[10px] font-mono text-slate-500">@{cons.username}</p>
-                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                          <span className="bg-slate-900 text-indigo-400 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-800 uppercase tracking-wide">
-                            {cons.category || 'Consultants'}
+                        <p className="text-[9px] font-mono text-slate-500">@{cons.username}</p>
+
+                        {/* Pills row */}
+                        <div className="flex items-center gap-2 pt-1.5">
+                          {/* Soft blue tint role tag */}
+                          <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                            {normalizeCategory(cons.category || 'consultant').toLowerCase().replace(/s$/, '')}
                           </span>
-                          <span className="bg-slate-900 text-slate-400 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-800">
+                          {/* Neutral gray tint rate */}
+                          <span className="bg-slate-800 text-slate-300 text-[9px] font-bold px-2 py-0.5 rounded-full font-mono">
                             ₹{cons.price_per_minute}/min
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Lower Row: Follower count & Action Buttons */}
-                    <div className="flex items-center justify-between border-t border-slate-850/60 pt-3">
-                      <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
-                        <User className="w-3 h-3 text-indigo-400" />
-                        <span>{totalFollowers} followers</span>
+                    {/* Thin horizontal divider */}
+                    <div className="border-t border-slate-800/80 w-full" />
+
+                    {/* Footer row */}
+                    <div className="flex items-center justify-between gap-3 pt-0.5">
+                      {/* Only the followers count is shown, icon and "followers" text removed */}
+                      <span className="text-[11px] font-bold text-slate-400 font-mono shrink-0">
+                        {totalFollowers}
                       </span>
 
-                      <div className="flex items-center gap-2">
-                        {/* Unfollow button */}
+                      {/* Action buttons nicely aligned with gap */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Outlined unfollow */}
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
@@ -3176,9 +3247,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                 body: JSON.stringify({ userId: currentUser.id, consultantId: cons.id })
                               });
                               if (res.ok) {
-                                // Instantly remove from local list
                                 setFollowingList(prev => prev.filter(item => item.id !== cons.id));
-                                // Sync the master list
                                 setConsultants(prevList => prevList.map(c => {
                                   if (c.id === cons.id) {
                                     return {
@@ -3194,15 +3263,15 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                               console.error("Error unfollowing:", err);
                             }
                           }}
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-500/10 border border-slate-850 hover:border-rose-500/20 transition-all cursor-pointer"
+                          className="px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-wider text-rose-400 hover:text-rose-300 border border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/5 transition-all cursor-pointer whitespace-nowrap"
                         >
                           Unfollow
                         </button>
 
-                        {/* View Profile / Consult button */}
+                        {/* Solid indigo view profile (smaller padding so it never overflows or merges) */}
                         <button
                           onClick={() => fetchFullProfile(cons)}
-                          className="px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+                          className="px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md active:scale-95 cursor-pointer whitespace-nowrap"
                         >
                           View Profile
                         </button>
@@ -3317,54 +3386,79 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
             };
 
             return (
-              <motion.div
-                initial={{ opacity: 0, y: -25 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
-                onMouseMove={(e) => {
-                  const card = e.currentTarget;
-                  const rect = card.getBoundingClientRect();
-                  const x = e.clientX - rect.left - rect.width / 2;
-                  const y = e.clientY - rect.top - rect.height / 2;
-                  const rx = -(y / rect.height) * 12; // tilt X
-                  const ry = (x / rect.width) * 12;   // tilt Y
-                  setTilt({ rx, ry });
-                }}
-                onMouseLeave={() => setTilt({ rx: 0, ry: 0 })}
-                style={{
-                  transform: `perspective(1000px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
-                  transformStyle: 'preserve-3d',
-                  transition: 'transform 0.1s ease-out'
-                }}
-                className="relative bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-8 md:p-12 rounded-3xl text-center space-y-4 max-w-4xl mx-auto overflow-hidden shadow-2xl group cursor-default"
-              >
-                {/* Visual Highlights & Accents */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.05),transparent_70%)] pointer-events-none" />
-                <div className="absolute -top-16 -left-16 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-16 -right-16 w-48 h-48 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+              <>
+                {/* Desktop Hero Section */}
+                <motion.div
+                  initial={{ opacity: 0, y: -25 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                  onMouseMove={(e) => {
+                    const card = e.currentTarget;
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left - rect.width / 2;
+                    const y = e.clientY - rect.top - rect.height / 2;
+                    const rx = -(y / rect.height) * 12; // tilt X
+                    const ry = (x / rect.width) * 12;   // tilt Y
+                    setTilt({ rx, ry });
+                  }}
+                  onMouseLeave={() => setTilt({ rx: 0, ry: 0 })}
+                  style={{
+                    transform: `perspective(1000px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+                    transformStyle: 'preserve-3d',
+                    transition: 'transform 0.1s ease-out'
+                  }}
+                  className="hidden md:block relative bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-8 md:p-12 rounded-3xl text-center space-y-4 max-w-4xl mx-auto overflow-hidden shadow-2xl group cursor-default"
+                >
+                  {/* Visual Highlights & Accents */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.05),transparent_70%)] pointer-events-none" />
+                  <div className="absolute -top-16 -left-16 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute -bottom-16 -right-16 w-48 h-48 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
 
-                <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase">
-                  {resolvedHero.tagline}
-                </span>
+                  <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase">
+                    {resolvedHero.tagline}
+                  </span>
 
-                <h2 className="text-3xl md:text-4xl font-black text-slate-100 tracking-tight leading-none bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
-                  {resolvedHero.headline}
-                </h2>
+                  <h2 className="text-3xl md:text-4xl font-black text-slate-100 tracking-tight leading-none bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+                    {resolvedHero.headline}
+                  </h2>
 
-                <p className="text-xs md:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                  {resolvedHero.description}
-                </p>
+                  <p className="text-xs md:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                    {resolvedHero.description}
+                  </p>
+                </motion.div>
 
-                <div className="flex items-center justify-center space-x-2 pt-2 text-[10px] font-mono text-slate-500">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                  <span>3D Animated Perspective Active</span>
-                </div>
-              </motion.div>
+                {/* Mobile Hero Section (Rounded-2xl/16px, slightly tinted dark-teal background and thin border, centered content) */}
+                <motion.div
+                  initial={{ opacity: 0, y: -15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                  className="block md:hidden bg-[#042424]/45 border border-teal-500/20 p-6 rounded-2xl text-center space-y-3 max-w-md mx-auto overflow-hidden relative"
+                >
+                  {/* Subtle teal background accent */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(20,184,166,0.08),transparent_70%)] pointer-events-none" />
+
+                  {/* Centered live chat portal badge */}
+                  <div className="inline-flex items-center gap-1.5 bg-teal-500/10 text-teal-300 border border-teal-500/20 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider mx-auto">
+                    <Zap className="w-3.5 h-3.5 text-teal-400 fill-teal-400/25" />
+                    <span>Live chat consultation portal</span>
+                  </div>
+
+                  {/* Bold headline (24px, medium weight) */}
+                  <h2 className="text-2xl font-medium text-slate-100 tracking-tight leading-snug">
+                    Consult with India's elite specialists and advisors
+                  </h2>
+
+                  {/* Short muted 2-3 line description */}
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+                    Real-time live chat with professional consultants, astrologers, coaches, and legal mentors. Start secure, private sessions instantly.
+                  </p>
+                </motion.div>
+              </>
             );
           })()}
 
-          {/* Category selection tabs */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          {/* Category selection tabs (Desktop: wrap row, Mobile: Horizontal scroll) */}
+          <div className="hidden md:flex flex-wrap items-center justify-center gap-2">
             {['All', 'Astrologers', 'Influencers', 'Mentors', 'Doctors', 'Lawyers', 'Singers', 'Advisors', 'Friends', 'Coaches', 'Consultants'].map((category) => (
               <button
                 key={category}
@@ -3378,6 +3472,36 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 {category}
               </button>
             ))}
+          </div>
+
+          {/* Mobile Category Selection (Horizontal scroll, label, outlined pills, swipe hint) */}
+          <div className="block md:hidden space-y-2">
+            <div className="text-left px-1">
+              <span className="text-[10px] font-extrabold font-mono tracking-wider text-slate-500 uppercase block mb-1.5">
+                Browse by category
+              </span>
+              <div className="flex overflow-x-auto gap-2 py-2 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
+                {['All', 'Astrologers', 'Influencers', 'Mentors', 'Doctors', 'Lawyers', 'Singers', 'Advisors', 'Friends', 'Coaches', 'Consultants'].map((category) => {
+                  const isActive = selectedCategory === category;
+                  return (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`shrink-0 py-2 px-4 rounded-full text-xs font-bold transition-all border ${
+                        isActive
+                          ? 'bg-emerald-400 border-emerald-400 text-slate-950 font-black shadow-md'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-center gap-1.5 text-[9px] font-mono text-slate-500 mt-1 animate-pulse">
+                <span>← swipe to see more →</span>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -3740,7 +3864,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                       {currentUser && currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute) && (
                         <div className="text-[11px] text-amber-500/90 text-center bg-amber-500/5 py-2 px-3 rounded-xl border border-amber-500/10 mt-1 leading-relaxed">
-                          Aapke wallet me chat booking ke liye paryapt balance nahi hai. Kripya upar recharge option se wallet recharge karein.
+                          Insufficient wallet balance to book a chat. Please recharge your wallet above.
                         </div>
                       )}
                     </div>
@@ -3816,6 +3940,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           </div>
         </div>
       )}
+
+      <ImageEditorModal
+        isOpen={isImageEditorOpen}
+        onClose={() => setIsImageEditorOpen(false)}
+        currentImage={editorImageBase64 || editPhotoUrl}
+        initialGender={editGender}
+        onSave={saveCroppedPhoto}
+      />
+
+      <ProfileChangesSuccessModal
+        isOpen={isSuccessModalOpen}
+        onClose={() => setIsSuccessModalOpen(false)}
+        changes={profileChangesList}
+      />
 
     </div>
   );

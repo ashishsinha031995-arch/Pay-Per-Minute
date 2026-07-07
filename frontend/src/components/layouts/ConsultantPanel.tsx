@@ -4,6 +4,9 @@ import { motion } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
 import { io } from 'socket.io-client';
+import { ImageEditorModal } from '../modals/ImageEditorModal';
+import { Crop } from 'lucide-react';
+import { ProfileChangesSuccessModal, ProfileChangeItem } from '../modals/ProfileChangesSuccessModal';
 
 interface ConsultantPanelProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant', isReadOnly?: boolean) => void;
@@ -220,6 +223,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
   // Profile Form States
   const [photoUrl, setPhotoUrl] = useState('');
+  const [consultantGender, setConsultantGender] = useState('Male');
+  const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
+  const [editorImageBase64, setEditorImageBase64] = useState<string | undefined>(undefined);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [profileChangesList, setProfileChangesList] = useState<ProfileChangeItem[]>([]);
   const [bio, setBio] = useState('');
   const [pricePerMin, setPricePerMin] = useState('20');
   const hasInitializedProfileRef = useRef(false);
@@ -435,7 +443,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
     // Check size limit (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError('File size bahot badi hai. Kripya 5MB se choti image upload karein.');
+      setError('File size is too large. Please upload an image smaller than 5MB.');
       return;
     }
 
@@ -445,63 +453,72 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
     
     if (!allowedExtensions.includes(fileExtension || '') || !allowedMimeTypes.includes(file.type)) {
-      setError('Sirf PNG aur JPG/JPEG format ki photo upload ki jaa sakti hai (Only PNG & JPG allowed).');
+      setError('Only PNG and JPG/JPEG image formats are allowed for upload.');
       return;
     }
 
-    setUploadingPhoto(true);
     setError(null);
     setSuccess(null);
 
     try {
       const reader = new FileReader();
-      reader.onloadend = async () => {
+      reader.onloadend = () => {
         const base64String = reader.result as string;
-        try {
-          const res = await fetch('/api/user/upload-photo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64String })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
-          
-          setPhotoUrl(data.photo_url);
-          
-          // Sync with local consultant state and local storage immediately
-          if (currentConsultant) {
-            const updated = { ...currentConsultant, photo_url: data.photo_url };
-            setCurrentConsultant(updated);
-            localStorage.setItem('consultant_session', JSON.stringify(updated));
-
-            // IMMEDIATELY write back to database profile so it persists on reload and doesn't disappear
-            const rateVal = parseFloat(pricePerMin) || 10.0;
-            await fetch(`/api/consultants/${currentConsultant.id}/profile`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                photo_url: data.photo_url,
-                bio: bio || '',
-                price_per_minute: rateVal
-              })
-            });
-          }
-          
-          setSuccess('Profile photo successfully upload ho gayi hai!');
-          setTimeout(() => setSuccess(null), 3000);
-        } catch (uploadErr: any) {
-          setError(uploadErr.message);
-        } finally {
-          setUploadingPhoto(false);
-        }
+        setEditorImageBase64(base64String);
+        setIsImageEditorOpen(true);
+        // Reset input value so same file can be chosen again
+        e.target.value = '';
       };
       reader.onerror = () => {
-        setError('File read karne me error aaya.');
-        setUploadingPhoto(false);
+        setError('An error occurred while reading the file.');
       };
       reader.readAsDataURL(file);
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const saveCroppedPhoto = async (croppedBase64: string) => {
+    setUploadingPhoto(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const res = await fetch('/api/user/upload-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: croppedBase64 })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
+      
+      setPhotoUrl(data.photo_url);
+      
+      // Sync with local consultant state and local storage immediately
+      if (currentConsultant) {
+        const updated = { ...currentConsultant, photo_url: data.photo_url };
+        setCurrentConsultant(updated);
+        localStorage.setItem('consultant_session', JSON.stringify(updated));
+
+        // IMMEDIATELY write back to database profile so it persists on reload and doesn't disappear
+        const rateVal = parseFloat(pricePerMin) || 10.0;
+        await fetch(`/api/consultants/${currentConsultant.id}/profile`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            photo_url: data.photo_url,
+            bio: bio || '',
+            price_per_minute: rateVal
+          })
+        });
+      }
+      
+      setSuccess('Profile photo saved successfully with crop and alignment!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (uploadErr: any) {
+      setError(uploadErr.message || 'Photo upload and crop failed.');
+      throw uploadErr;
+    } finally {
       setUploadingPhoto(false);
     }
   };
@@ -1342,6 +1359,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         throw new Error(`you can set max price (₹${maxRate}/min) in this Plan.`);
       }
 
+      // Track changes before the PUT request
+      const changes: ProfileChangeItem[] = [];
+      if ((currentConsultant.photo_url || '') !== (photoUrl || '')) {
+        changes.push({ field: 'Profile Photo', oldValue: currentConsultant.photo_url || '', newValue: photoUrl || '', isImage: true });
+      }
+      if ((currentConsultant.bio || '') !== (bio || '')) {
+        changes.push({ field: 'Bio', oldValue: currentConsultant.bio || 'None', newValue: bio || 'None' });
+      }
+      const oldPrice = currentConsultant.price_per_minute !== undefined ? currentConsultant.price_per_minute : 0;
+      if (oldPrice !== priceVal) {
+        changes.push({ field: 'Rate per Minute', oldValue: `₹${oldPrice}/min`, newValue: `₹${priceVal}/min` });
+      }
+
       const res = await fetch(`/api/consultants/${currentConsultant.id}/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1371,6 +1401,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       // Force loadConsultantStatsAndStatus to re-fetch and update
       await loadConsultantStatsAndStatus(currentConsultant.id);
       
+      setProfileChangesList(changes);
+      setIsSuccessModalOpen(true);
+
       setTimeout(() => {
         setSuccess(null);
         setProfileFeedbackSuccess(null);
@@ -2759,7 +2792,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setError(null);
                       setSuccess(null);
                       if (!hasActivePlan) {
-                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Presence Settings).");
+                        setError("Please purchase a partner plan first to unlock Presence Settings.");
                         handleScrollToPlans();
                       } else {
                         setActiveTab('status');
@@ -2780,7 +2813,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setError(null);
                       setSuccess(null);
                       if (!hasActivePlan) {
-                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Profile Settings).");
+                        setError("Please purchase a partner plan first to unlock Profile Settings.");
                         handleScrollToPlans();
                       } else {
                         setActiveTab('profile');
@@ -2801,7 +2834,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setError(null);
                       setSuccess(null);
                       if (!hasActivePlan) {
-                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Availability Schedule).");
+                        setError("Please purchase a partner plan first to unlock Availability Schedule.");
                         handleScrollToPlans();
                       } else {
                         setActiveTab('schedules');
@@ -2822,7 +2855,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setError(null);
                       setSuccess(null);
                       if (!hasActivePlan) {
-                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock KYC Verification).");
+                        setError("Please purchase a partner plan first to unlock KYC Verification.");
                         handleScrollToPlans();
                       } else {
                         setActiveTab('kyc');
@@ -2849,7 +2882,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setError(null);
                       setSuccess(null);
                       if (!hasActivePlan) {
-                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Bank Details).");
+                        setError("Please purchase a partner plan first to unlock Bank Details.");
                         handleScrollToPlans();
                       } else {
                         setActiveTab('bank');
@@ -2876,7 +2909,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setError(null);
                       setSuccess(null);
                       if (!hasActivePlan) {
-                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Consultation History).");
+                        setError("Please purchase a partner plan first to unlock Consultation History.");
                         handleScrollToPlans();
                       } else {
                         setActiveTab('sessions');
@@ -2897,7 +2930,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       setError(null);
                       setSuccess(null);
                       if (!hasActivePlan) {
-                        setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to view Followers).");
+                        setError("Please purchase a partner plan first to view Followers.");
                         handleScrollToPlans();
                       } else {
                         setActiveTab('followers');
@@ -2999,7 +3032,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             ) : (
               <div 
                 onClick={() => {
-                  setError("Kripya pehle ek partner plan purchase karein shareable booking link unlock karne ke liye.");
+                  setError("Please purchase a partner plan first to unlock your shareable booking link.");
                   handleScrollToPlans();
                 }}
                 className="flex items-center justify-between bg-slate-950/60 border border-slate-850/50 rounded-xl p-3 cursor-pointer hover:border-slate-800 transition-all"
@@ -3077,7 +3110,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   ) : (
                     <div 
                       onClick={() => {
-                        setError("Kripya pehle ek partner plan purchase karein shareable booking link unlock karne ke liye.");
+                        setError("Please purchase a partner plan first to unlock your shareable booking link.");
                         handleScrollToPlans();
                       }}
                       className="flex items-center justify-between space-x-1 bg-slate-900/60 border border-slate-850/50 rounded-lg p-2 cursor-pointer hover:border-slate-800 transition-colors"
@@ -3154,7 +3187,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setError(null);
                     setSuccess(null);
                     if (!hasActivePlan) {
-                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Presence Settings).");
+                      setError("Please purchase a partner plan first to unlock Presence Settings.");
                       handleScrollToPlans();
                     } else {
                       setActiveTab('status');
@@ -3172,7 +3205,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setError(null);
                     setSuccess(null);
                     if (!hasActivePlan) {
-                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Profile Settings).");
+                      setError("Please purchase a partner plan first to unlock Profile Settings.");
                       handleScrollToPlans();
                     } else {
                       setActiveTab('profile');
@@ -3190,7 +3223,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setError(null);
                     setSuccess(null);
                     if (!hasActivePlan) {
-                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Availability Schedule).");
+                      setError("Please purchase a partner plan first to unlock Availability Schedule.");
                       handleScrollToPlans();
                     } else {
                       setActiveTab('schedules');
@@ -3208,7 +3241,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setError(null);
                     setSuccess(null);
                     if (!hasActivePlan) {
-                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock KYC Verification).");
+                      setError("Please purchase a partner plan first to unlock KYC Verification.");
                       handleScrollToPlans();
                     } else {
                       setActiveTab('kyc');
@@ -3232,7 +3265,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setError(null);
                     setSuccess(null);
                     if (!hasActivePlan) {
-                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Bank Details).");
+                      setError("Please purchase a partner plan first to unlock Bank Details.");
                       handleScrollToPlans();
                     } else {
                       setActiveTab('bank');
@@ -3256,7 +3289,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setError(null);
                     setSuccess(null);
                     if (!hasActivePlan) {
-                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to unlock Consultation History).");
+                      setError("Please purchase a partner plan first to unlock Consultation History.");
                       handleScrollToPlans();
                     } else {
                       setActiveTab('sessions');
@@ -3274,7 +3307,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     setError(null);
                     setSuccess(null);
                     if (!hasActivePlan) {
-                      setError("Kripya pehle ek partner plan purchase karein is feature ko unlock karne ke liye (Please buy a plan to view Followers).");
+                      setError("Please purchase a partner plan first to view Followers.");
                       handleScrollToPlans();
                     } else {
                       setActiveTab('followers');
@@ -3387,7 +3420,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           </motion.div>
 
                           <p className="text-sm text-slate-300 leading-relaxed">
-                            Aapka consultant account create ho chuka hai! Abhi aapka public bio link <strong className="text-emerald-400 font-mono">/u/{currentConsultant.username}</strong> inactive hai. Calls receive karne, chats answer karne aur real-time earnings start karne ke liye niche se ek suitable partner plan choose karke subscribe karein.
+                            Your consultant account has been created! Currently, your public bio link <strong className="text-emerald-400 font-mono">/u/{currentConsultant.username}</strong> is inactive. To receive calls, answer chats, and start real-time earnings, please choose and subscribe to a suitable partner plan below.
                           </p>
 
                           <div className="flex flex-wrap gap-4 pt-2">
@@ -4539,7 +4572,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 font-mono"
                         />
                         
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
                           <input
                             type="file"
                             accept="image/*"
@@ -4554,6 +4587,17 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           >
                             <span>{uploadingPhoto ? 'Uploading...' : '📁 Upload File'}</span>
                           </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditorImageBase64(undefined);
+                              setIsImageEditorOpen(true);
+                            }}
+                            className="bg-indigo-600/90 hover:bg-indigo-500 text-white border border-indigo-500/30 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shrink-0"
+                          >
+                            <Crop className="w-3.5 h-3.5" />
+                            <span>Crop & Align</span>
+                          </button>
                         </div>
                       </div>
 
@@ -5376,7 +5420,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     <div className="space-y-4">
                       <h4 className="font-bold text-xs text-emerald-400 uppercase tracking-widest">Raise a Support Ticket</h4>
                       <p className="text-xs text-slate-400">
-                        Aapko payout, chat request, ya kisi customer se related koi samasya hai? Kripya ticket raise karein. Hamari admin team ise jald se jald handle karegi.
+                        Are you experiencing issues with payouts, chat requests, or any other client issues? Please raise a support ticket, and our admin team will handle it as soon as possible.
                       </p>
 
                       <form onSubmit={async (e) => {
@@ -6096,6 +6140,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           </div>
         </div>
       )}
+
+      <ImageEditorModal
+        isOpen={isImageEditorOpen}
+        onClose={() => setIsImageEditorOpen(false)}
+        currentImage={editorImageBase64 || photoUrl}
+        initialGender={consultantGender}
+        onSave={saveCroppedPhoto}
+      />
+
+      <ProfileChangesSuccessModal
+        isOpen={isSuccessModalOpen}
+        onClose={() => setIsSuccessModalOpen(false)}
+        changes={profileChangesList}
+      />
 
     </div>
   );
