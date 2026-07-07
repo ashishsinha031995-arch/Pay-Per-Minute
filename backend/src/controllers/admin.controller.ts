@@ -78,7 +78,7 @@ export const getAdminConsultantsList = (req: Request, res: Response) => {
   try {
     const consultants = db.prepare(`
       SELECT c.*, p.name AS plan_name,
-             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + c.manual_followers_count) AS followers_count
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + COALESCE(c.manual_followers_count, 0)) AS followers_count
       FROM consultants c 
       LEFT JOIN plans p ON c.plan_id = p.id 
       ORDER BY c.id DESC
@@ -974,7 +974,7 @@ export const getConsultantFollowersLeaderboard = (req: Request, res: Response) =
     const leaderboard = db.prepare(`
       SELECT c.id, c.username, c.display_name, c.photo_url, c.category, c.manual_followers_count,
              (SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) AS organic_followers_count,
-             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + c.manual_followers_count) AS followers_count
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + COALESCE(c.manual_followers_count, 0)) AS followers_count
       FROM consultants c
       ORDER BY followers_count DESC
     `).all();

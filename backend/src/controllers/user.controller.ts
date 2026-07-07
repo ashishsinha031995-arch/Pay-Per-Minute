@@ -32,7 +32,7 @@ export const getActiveConsultants = (req: Request, res: Response) => {
 
     let queryStr = `
       SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, plan_id, manual_followers_count,
-             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + manual_followers_count) AS followers_count
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + COALESCE(manual_followers_count, 0)) AS followers_count
     `;
     let params: any[] = [];
     if (userId) {
@@ -64,7 +64,7 @@ export const getConsultantProfileByUsername = (req: Request, res: Response) => {
     
     let queryStr = `
       SELECT id, username, display_name, photo_url, bio, price_per_minute, is_online, is_busy, category, experience, languages, specializations, average_rating, manual_followers_count,
-             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + manual_followers_count) AS followers_count
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + COALESCE(manual_followers_count, 0)) AS followers_count
     `;
     let params: any[] = [];
     if (userId) {
@@ -128,7 +128,7 @@ export const getConsultantProfileById = (req: Request, res: Response) => {
     const { id } = req.params;
     const consultant = db.prepare(`
       SELECT *,
-             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + manual_followers_count) AS followers_count
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + COALESCE(manual_followers_count, 0)) AS followers_count
       FROM consultants 
       WHERE id = ?
     `).get(id);
@@ -1040,7 +1040,7 @@ export const getFollowingConsultants = (req: Request, res: Response) => {
     const { userId } = req.params;
     const following = db.prepare(`
       SELECT c.*,
-             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + c.manual_followers_count) AS followers_count,
+             ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + COALESCE(c.manual_followers_count, 0)) AS followers_count,
              1 AS is_following
       FROM consultants c
       JOIN consultant_followers f ON c.id = f.consultant_id

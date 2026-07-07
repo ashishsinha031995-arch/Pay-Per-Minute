@@ -3530,16 +3530,30 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   <h3 className="font-semibold text-slate-100 text-base leading-snug">
                     {selectedConsultant.display_name}
                   </h3>
-                  <p className="text-xs text-emerald-400 font-bold font-mono mt-0.5">
-                    {selectedConsultant.followers_count || 0} Followers
-                  </p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap text-xs">
+                    <p className="text-emerald-400 font-bold font-mono">
+                      {selectedConsultant.followers_count || 0} Followers
+                    </p>
+                    <span className="text-slate-600 text-xs">•</span>
+                    <button
+                      type="button"
+                      onClick={() => handleFollowToggle(selectedConsultant)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all border duration-200 cursor-pointer ${
+                        (selectedConsultant as any).is_following === 1
+                          ? 'bg-slate-800 border-slate-700 text-slate-300'
+                          : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 border-transparent shadow-sm active:scale-95'
+                      }`}
+                    >
+                      {(selectedConsultant as any).is_following === 1 ? 'Following' : 'Follow'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Right: Badges */}
-              <div className="flex flex-col items-end space-y-1">
-                {/* Average rating badge */}
-                <div className="bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-lg text-xs font-semibold text-amber-400 flex items-center space-x-0.5">
+              <div className="flex flex-col items-end justify-center space-y-1">
+                {/* Rating (always in one line, no box) */}
+                <div className="text-amber-400 font-semibold text-xs flex items-center gap-0.5 whitespace-nowrap">
                   <span>★</span>
                   <span>
                     {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : "5.0"} ({reviews.length})
