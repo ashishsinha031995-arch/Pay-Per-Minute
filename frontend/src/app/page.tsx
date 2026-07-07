@@ -275,7 +275,7 @@ export default function AppPage() {
       }
 
       if (usernamesToSync.length > 0) {
-        fetch('/api/user/lock-referral', {
+        fetch('/api/user/lock-consultant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUser.id, usernames: usernamesToSync })

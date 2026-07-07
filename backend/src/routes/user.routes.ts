@@ -52,6 +52,7 @@ router.post('/user/recharge', rechargeUserWallet);
 router.post('/user/recharge/create-order', createRechargeOrder);
 router.post('/user/recharge/verify', verifyRechargePayment);
 router.post('/user/lock-referral', lockUserReferral);
+router.post('/user/lock-consultant', lockUserReferral);
 router.get('/user/wallet-transactions/:userId', getUserWalletTransactions);
 router.get('/user/sessions', getUserPastSessions);
 router.get('/user/active-queued-session/:userId', getActiveQueuedSessionForUser);

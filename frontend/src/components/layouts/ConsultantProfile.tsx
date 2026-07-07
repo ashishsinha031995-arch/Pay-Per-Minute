@@ -1846,7 +1846,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       )}
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'wallet' && (
-        <div className="space-y-6">
+        <div className="space-y-6 font-jakarta">
           {/* Main Back navigation header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800">
             <div className="space-y-1 text-left">
@@ -2137,42 +2137,28 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         <div className="bg-slate-900/40 p-4 sm:p-6 rounded-3xl border border-slate-800/80 space-y-6">
           <div className="flex items-center space-x-2 pb-2 border-b border-slate-850">
             <History className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-sm text-slate-200">Past Consultation History & Chat Logs</h3>
+            <h3 className="font-bold text-sm text-slate-200">Consultation History</h3>
           </div>
 
           {!viewingPastSessionMessages ? (
             <div className="space-y-6">
               {/* Search query block */}
               <div className="space-y-2 max-w-xl text-left">
-                <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search Device Consultation Logs</label>
+                <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search By Consultant Name</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Enter display/screen name to search past history..."
+                    placeholder="Enter consultant name to search past history..."
                     value={historySearchName}
                     onChange={(e) => setHistorySearchName(e.target.value)}
                     className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
                   />
                   <button
-                    onClick={async () => {
-                      if (!historySearchName.trim()) return;
+                    onClick={() => {
                       setIsSearchingHistory(true);
-                      try {
-                        const res = await fetch(`/api/user/sessions?user_name=${encodeURIComponent(historySearchName.trim())}`);
-                        if (res.ok) {
-                          const contentType = res.headers.get('content-type');
-                          if (contentType && contentType.includes('application/json')) {
-                            const data = await res.json();
-                            setUserPastSessions(data);
-                          } else {
-                            console.warn('Received non-JSON response when searching user sessions.');
-                          }
-                        }
-                      } catch (err) {
-                        console.error(err);
-                      } finally {
+                      setTimeout(() => {
                         setIsSearchingHistory(false);
-                      }
+                      }, 200);
                     }}
                     disabled={isSearchingHistory}
                     className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 rounded-xl transition-all flex items-center justify-center min-w-[80px]"
@@ -2183,15 +2169,22 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               </div>
 
               {/* List of sessions */}
-              <div className="space-y-3 text-left">
-                <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Consultation log sessions ({userPastSessions.length})</span>
-                {userPastSessions.length === 0 ? (
-                  <p className="text-xs text-slate-500 py-16 text-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/60 font-sans leading-relaxed">
-                    No past consultations logged on this device yet.<br />Use search above with your screen name to fetch history.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {userPastSessions.map((sess) => (
+              {(() => {
+                const filteredSessions = userPastSessions.filter(sess => {
+                  if (!historySearchName.trim()) return true;
+                  return String(sess.consultant_name || '').toLowerCase().includes(historySearchName.trim().toLowerCase());
+                });
+
+                return (
+                  <div className="space-y-3 text-left">
+                    <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Consultation log sessions ({filteredSessions.length})</span>
+                    {filteredSessions.length === 0 ? (
+                      <p className="text-xs text-slate-500 py-16 text-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/60 font-sans leading-relaxed">
+                        {historySearchName.trim() ? "No sessions found matching this consultant name." : "No past consultations logged."}
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {filteredSessions.map((sess) => (
                       <div
                         key={sess.id}
                         className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
@@ -2318,6 +2311,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   </div>
                 )}
               </div>
+            );
+          })()}
             </div>
           ) : (
             /* Past Chat Messages details View */
@@ -2650,35 +2645,21 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 <>
                   {/* Search query block */}
                   <div className="space-y-2">
-                    <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search Device Consultation Logs</label>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search By Consultant Name</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        placeholder="Enter display/screen name to search past history..."
+                        placeholder="Enter consultant name to search past history..."
                         value={historySearchName}
                         onChange={(e) => setHistorySearchName(e.target.value)}
                         className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
                       />
                       <button
-                        onClick={async () => {
-                          if (!historySearchName.trim()) return;
+                        onClick={() => {
                           setIsSearchingHistory(true);
-                          try {
-                            const res = await fetch(`/api/user/sessions?user_name=${encodeURIComponent(historySearchName.trim())}`);
-                            if (res.ok) {
-                              const contentType = res.headers.get('content-type');
-                              if (contentType && contentType.includes('application/json')) {
-                                const data = await res.json();
-                                setUserPastSessions(data);
-                              } else {
-                                console.warn('Received non-JSON response when searching user sessions.');
-                              }
-                            }
-                          } catch (err) {
-                            console.error(err);
-                          } finally {
+                          setTimeout(() => {
                             setIsSearchingHistory(false);
-                          }
+                          }, 200);
                         }}
                         disabled={isSearchingHistory}
                         className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 rounded-xl transition-all flex items-center justify-center min-w-[80px]"
@@ -2689,15 +2670,22 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   </div>
 
                   {/* List of sessions */}
-                  <div className="space-y-3">
-                    <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider text-left">Consultation log sessions ({userPastSessions.length})</span>
-                    {userPastSessions.length === 0 ? (
-                      <p className="text-xs text-slate-500 py-12 text-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/60 font-sans leading-relaxed">
-                        No past consultations logged on this device yet.<br />Use search above with your screen name to fetch history.
-                      </p>
-                    ) : (
-                      <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
-                        {userPastSessions.map((sess) => (
+                  {(() => {
+                    const filteredSessions = userPastSessions.filter(sess => {
+                      if (!historySearchName.trim()) return true;
+                      return String(sess.consultant_name || '').toLowerCase().includes(historySearchName.trim().toLowerCase());
+                    });
+
+                    return (
+                      <div className="space-y-3">
+                        <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider text-left">Consultation log sessions ({filteredSessions.length})</span>
+                        {filteredSessions.length === 0 ? (
+                          <p className="text-xs text-slate-500 py-12 text-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/60 font-sans leading-relaxed">
+                            {historySearchName.trim() ? "No sessions found matching this consultant name." : "No past consultations logged."}
+                          </p>
+                        ) : (
+                          <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
+                            {filteredSessions.map((sess) => (
                           <div
                             key={sess.id}
                             className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
@@ -2825,6 +2813,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       </div>
                     )}
                   </div>
+                );
+              })()}
                 </>
               ) : (
                 /* Past Chat Messages details View */
