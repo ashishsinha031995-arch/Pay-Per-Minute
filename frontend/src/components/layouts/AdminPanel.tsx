@@ -6931,7 +6931,37 @@ export function AdminPanel() {
               </div>
             </div>
 
-            <div className="p-4 overflow-y-auto flex-1 space-y-3 bg-slate-950">
+            <div 
+              className="p-4 overflow-y-auto flex-1 space-y-4 bg-slate-950"
+              style={{
+                backgroundImage: `radial-gradient(rgba(99, 102, 241, 0.08) 1.2px, transparent 1.2px), radial-gradient(rgba(16, 185, 129, 0.04) 1.2px, transparent 1.2px)`,
+                backgroundSize: '24px 24px',
+                backgroundPosition: '0 0, 12px 12px',
+              }}
+            >
+              {viewingPastSessionInfo && (
+                <div className="flex justify-center py-1">
+                  <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800/80 rounded-full px-4 py-1.5 text-[11px] text-slate-400 font-sans tracking-wide shadow-sm flex items-center space-x-1.5 select-none">
+                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>
+                      {(() => {
+                        const isoString = viewingPastSessionInfo.started_at || viewingPastSessionInfo.created_at;
+                        if (!isoString) return '';
+                        try {
+                          const d = new Date(isoString);
+                          if (isNaN(d.getTime())) return '';
+                          const dateStr = d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+                          const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          return `Chat started on ${dateStr} at ${timeStr}`;
+                        } catch {
+                          return '';
+                        }
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {viewingPastSessionMessages.length === 0 ? (
                 <p className="text-slate-500 text-xs text-center py-12">No message logs were captured for this session.</p>
               ) : (
@@ -6939,36 +6969,53 @@ export function AdminPanel() {
                   const isConsultant = msg.sender_type === 'consultant';
                   const isVoiceNote = msg.text && msg.text.startsWith('[VOICE_NOTE]:');
                   return (
-                    <div key={msg.id} className={`flex flex-col ${isConsultant ? 'items-end' : 'items-start'}`}>
-                      <div className={`max-w-xs rounded-xl p-2.5 text-xs ${
-                        isConsultant ? 'bg-cyan-950 text-cyan-400 border border-cyan-900/30 rounded-tr-none' : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
-                      }`}>
-                        <span className="block text-[9px] text-slate-500 font-mono mb-0.5">{msg.sender_name}</span>
-                        {isVoiceNote ? (
-                          <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
-                            <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-slate-400">
-                              <span>🎙️ Voice Note</span>
-                              <a
-                                href={msg.text.substring('[VOICE_NOTE]:'.length)}
-                                download={`voice_note_${viewingPastSessionInfo?.id || 'session'}_${msg.id}.webm`}
-                                className="flex items-center space-x-1 text-emerald-400 hover:text-emerald-300 font-sans normal-case font-bold"
-                                title="Download this voice note"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Download</span>
-                              </a>
+                    <div key={msg.id} className={`flex w-full ${isConsultant ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] sm:max-w-[70%] space-y-1 flex flex-col ${isConsultant ? 'items-end' : 'items-start'}`}>
+                        {/* Clear label showing who sent the message */}
+                        <div className={`flex items-center space-x-1.5 text-[10px] font-bold tracking-wide ${isConsultant ? 'justify-end text-indigo-400' : 'justify-start text-emerald-400'}`}>
+                          <span>{msg.sender_name}</span>
+                          <span className="text-[9px] font-normal px-1 py-0.2 bg-slate-900 border border-slate-800 rounded text-slate-400 uppercase">
+                            {isConsultant ? 'Advisor' : 'User'}
+                          </span>
+                        </div>
+
+                        <div
+                          className={`relative rounded-2xl px-4 py-2.5 text-xs shadow-sm min-w-[100px] w-fit ${
+                            isConsultant
+                              ? 'bg-indigo-600/20 text-slate-100 border border-indigo-500/25 rounded-tr-none'
+                              : 'bg-slate-900 text-slate-100 border border-slate-800 rounded-tl-none'
+                          }`}
+                        >
+                          {isVoiceNote ? (
+                            <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
+                              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-indigo-300">
+                                <span>🎙️ Voice Note</span>
+                                <a
+                                  href={msg.text.substring('[VOICE_NOTE]:'.length)}
+                                  download={`voice_note_${viewingPastSessionInfo?.id || 'session'}_${msg.id}.webm`}
+                                  className="flex items-center space-x-1 text-emerald-400 hover:text-emerald-300 font-sans normal-case font-bold"
+                                  title="Download this voice note"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </a>
+                              </div>
+                              <audio
+                                controls
+                                src={msg.text.substring('[VOICE_NOTE]:'.length)}
+                                className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
+                              />
                             </div>
-                            <audio
-                              controls
-                              src={msg.text.substring('[VOICE_NOTE]:'.length)}
-                              className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
-                            />
+                          ) : (
+                            <p className="whitespace-pre-wrap leading-relaxed text-[13px] font-sans text-slate-100 break-words">{msg.text}</p>
+                          )}
+
+                          {/* Time block below the content */}
+                          <div className={`mt-1.5 flex items-center text-[9px] text-slate-400 font-mono select-none ${isConsultant ? 'justify-end' : 'justify-start'}`}>
+                            <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap text-white leading-relaxed">{msg.text}</p>
-                        )}
+                        </div>
                       </div>
-                      <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString()}</span>
                     </div>
                   );
                 })

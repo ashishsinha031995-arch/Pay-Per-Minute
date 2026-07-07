@@ -312,6 +312,19 @@ export function ChatRoom({
     }
   };
 
+  const formatChatStart = (isoString?: string | null) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return '';
+      const dateStr = d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return `Chat started on ${dateStr} at ${timeStr}`;
+    } catch {
+      return '';
+    }
+  };
+
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [isIframe, setIsIframe] = useState(false);
   const [notificationError, setNotificationError] = useState<string>('');
@@ -1392,6 +1405,11 @@ export function ChatRoom({
       <div 
         ref={messagesContainerRef}
         className={`flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto ${isReadOnly ? 'no-scrollbar' : 'thin-scrollbar'} space-y-4 min-h-0 md:min-h-[300px]`}
+        style={{
+          backgroundImage: `radial-gradient(rgba(99, 102, 241, 0.08) 1.2px, transparent 1.2px), radial-gradient(rgba(16, 185, 129, 0.04) 1.2px, transparent 1.2px)`,
+          backgroundSize: '24px 24px',
+          backgroundPosition: '0 0, 12px 12px',
+        }}
       >
         
         {/* Sleek Low Internet Banner */}
@@ -1557,80 +1575,64 @@ export function ChatRoom({
           </div>
         )}
 
+        {sessionInfo && (
+          <div className="flex justify-center py-2">
+            <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800/80 rounded-full px-4 py-1.5 text-[11px] text-slate-400 font-sans tracking-wide shadow-sm flex items-center space-x-1.5 select-none">
+              <Clock className="w-3.5 h-3.5 text-indigo-400" />
+              <span>
+                {formatChatStart(sessionInfo.started_at || sessionInfo.created_at)}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Chat loop */}
         {messages.map((msg) => {
           const isMe = msg.sender_type === role;
-          const avatarSrc = msg.sender_type === 'consultant'
-            ? (sessionInfo.consultant_photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100')
-            : (sessionInfo.user_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100');
 
           return (
             <div
               key={msg.id}
               className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`flex items-start max-w-[85%] ${isMe ? 'flex-row-reverse space-x-3 space-x-reverse' : 'space-x-3'}`}>
-                {/* Profile Pic */}
-                <button
-                  type="button"
-                  onClick={() => setLightboxImage(avatarSrc)}
-                  className="w-8 h-8 rounded-full border border-slate-800/80 overflow-hidden bg-slate-950 shrink-0 self-start mt-1 shadow cursor-pointer hover:border-emerald-500 hover:scale-105 transition-all p-0 flex items-center justify-center"
-                  title="View Photo"
+              <div className={`max-w-[80%] sm:max-w-[70%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                <div
+                  className={`relative rounded-2xl px-4 py-2.5 text-xs shadow-sm min-w-[100px] w-fit ${
+                    isMe
+                      ? 'bg-indigo-600/20 text-slate-100 border border-indigo-500/25 rounded-tr-none'
+                      : 'bg-slate-900 text-slate-100 border border-slate-800 rounded-tl-none'
+                  }`}
                 >
-                  <img
-                    src={avatarSrc}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => { (e.target as any).src = msg.sender_type === 'consultant' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
-                  />
-                </button>
-
-                {/* Message bubble column */}
-                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                  {/* Sender name */}
-                  <span className="text-[10px] font-mono text-slate-500 mb-1 px-1">
-                    {msg.sender_name}
-                  </span>
-
-                  <div
-                    className={`rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
-                      isMe
-                        ? 'bg-emerald-500 text-slate-950 rounded-tr-none font-semibold'
-                        : 'bg-slate-900 text-white rounded-tl-none border border-slate-800'
-                    }`}
-                  >
-                    {msg.text.startsWith('[VOICE_NOTE]:') ? (
-                      <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
-                        <div className="flex items-center space-x-1.5 text-[10px] font-mono text-emerald-100 uppercase tracking-wider">
-                          <span>🎙️ Voice Note</span>
-                        </div>
-                        <audio
-                          controls
-                          controlsList="nodownload"
-                          onContextMenu={(e) => e.preventDefault()}
-                          src={msg.text.substring('[VOICE_NOTE]:'.length)}
-                          className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
-                        />
+                  {msg.text.startsWith('[VOICE_NOTE]:') ? (
+                    <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
+                      <div className="flex items-center space-x-1.5 text-[10px] font-mono text-indigo-300 uppercase tracking-wider">
+                        <span>🎙️ Voice Note</span>
                       </div>
-                    ) : (
-                      <p className={`whitespace-pre-wrap leading-relaxed ${isMe ? 'text-slate-950 font-bold' : 'text-white'}`}>{msg.text}</p>
-                    )}
-                  </div>
+                      <audio
+                        controls
+                        controlsList="nodownload"
+                        onContextMenu={(e) => e.preventDefault()}
+                        src={msg.text.substring('[VOICE_NOTE]:'.length)}
+                        className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
+                      />
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed text-[13px] font-sans break-words">{msg.text}</p>
+                  )}
 
-                  <div className="flex items-center space-x-1.5 mt-1 px-1 text-[10px] text-slate-600 font-mono">
+                  {/* Time and status indicator below the content */}
+                  <div className={`mt-1.5 flex items-center space-x-1.5 text-[9px] text-slate-400 font-mono select-none ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <span>{safeFormatTime(msg.created_at)}</span>
                     {isMe && (
                       <span>
                         {msg.is_offline ? (
-                          <span className="text-amber-500/80 animate-pulse flex items-center space-x-0.5 font-sans font-semibold">
-                            <Clock className="w-2.5 h-2.5 animate-spin inline-block mr-0.5" />
-                            <span>Retry Queue...</span>
+                          <span className="text-amber-500/85 animate-pulse flex items-center">
+                            <Clock className="w-2 h-2 animate-spin" />
                           </span>
                         ) : msg.is_read === 1 ? (
-                          <CheckCheck className="w-3.5 h-3.5 text-cyan-400" />
+                          <CheckCheck className="w-3 h-3 text-cyan-400" />
                         ) : (
-                          <Check className="w-3.5 h-3.5" />
+                          <Check className="w-3 h-3" />
                         )}
                       </span>
                     )}
