@@ -567,7 +567,10 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
 
                 {/* Name & Speciality */}
                 <div className="space-y-1">
-                  <h4 className="font-extrabold text-slate-100 text-base flex items-center gap-1.5">
+                  <h4 
+                    onClick={() => onSelectConsultant(cons)}
+                    className="font-extrabold text-slate-100 text-base flex items-center gap-1.5 cursor-pointer hover:text-emerald-400 hover:underline transition-all duration-150"
+                  >
                     <span>{cons.display_name}</span>
                     <span className="text-xs">✅</span>
                   </h4>
