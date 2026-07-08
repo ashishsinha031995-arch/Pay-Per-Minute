@@ -758,9 +758,11 @@ export const uploadPhoto = (req: Request, res: Response) => {
 
     fs.writeFileSync(filepath, buffer);
 
+    // Return the persistent base64 data URL string so that it gets saved in the database columns.
+    // This makes the profile photos completely immune to local ephemeral disk storage wipes.
     res.json({
       success: true,
-      photo_url: `/uploads/${filename}`
+      photo_url: image
     });
   } catch (err: any) {
     console.error('Error uploading photo:', err);

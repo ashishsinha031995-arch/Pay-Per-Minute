@@ -280,15 +280,26 @@ export default function AppPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUser.id, usernames: usernamesToSync })
         })
-        .then(res => res.json())
+        .then(async res => {
+          if (!res.ok) {
+            throw new Error(`Server returned status ${res.status}`);
+          }
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return res.json();
+          } else {
+            throw new Error('Received non-JSON response from server');
+          }
+        })
         .then(data => {
-          if (data.success && data.user) {
+          if (data && data.success && data.user) {
             setCurrentUser(data.user);
           }
         })
         .catch(err => {
-          if (err && err.message && err.message.includes('Failed to fetch')) {
-            console.warn('Network connection starting up. Retrying lock referral shortly...');
+          const errMsg = err && err.message ? String(err.message) : '';
+          if (errMsg.includes('Failed to fetch') || errMsg.includes('JSON') || errMsg.includes('status 5')) {
+            console.warn('Network or server is starting up. Retrying lock referral shortly...', err);
           } else {
             console.error('Error locking referral:', err);
           }

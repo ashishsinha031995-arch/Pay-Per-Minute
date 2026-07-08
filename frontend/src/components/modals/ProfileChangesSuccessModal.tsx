@@ -14,13 +14,15 @@ interface ProfileChangesSuccessModalProps {
   onClose: () => void;
   changes: ProfileChangeItem[];
   title?: string;
+  onGoToHome?: () => void;
 }
 
 export const ProfileChangesSuccessModal: React.FC<ProfileChangesSuccessModalProps> = ({
   isOpen,
   onClose,
   changes,
-  title = "Your Profile Changes Done Successfully."
+  title = "Your Profile Changes Done Successfully.",
+  onGoToHome
 }) => {
   return (
     <AnimatePresence>
@@ -68,11 +70,11 @@ export const ProfileChangesSuccessModal: React.FC<ProfileChangesSuccessModalProp
             <div className="p-6 bg-slate-900/50 border-t border-slate-800/60 flex items-center justify-center">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={onGoToHome || onClose}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-600/10 flex items-center justify-center space-x-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Got it, Thank You!</span>
+                <span>Go To Homepage</span>
               </button>
             </div>
           </motion.div>

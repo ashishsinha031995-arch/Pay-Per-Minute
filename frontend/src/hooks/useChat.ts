@@ -18,7 +18,13 @@ export function useChat(sessionId: string | null) {
           setMessages(data.messages);
         }
       })
-      .catch((err) => console.error("Error loading session:", err))
+      .catch((err) => {
+        if (err && err.message && err.message.includes('Failed to fetch')) {
+          console.warn("Network connection starting up. Retrying session load...");
+        } else {
+          console.error("Error loading session:", err);
+        }
+      })
       .finally(() => setLoading(false));
   }, [sessionId]);
 

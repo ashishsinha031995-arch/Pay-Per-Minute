@@ -6153,6 +6153,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         isOpen={isSuccessModalOpen}
         onClose={() => setIsSuccessModalOpen(false)}
         changes={profileChangesList}
+        onGoToHome={() => {
+          setIsSuccessModalOpen(false);
+          setActiveTab('dashboard');
+        }}
       />
 
     </div>

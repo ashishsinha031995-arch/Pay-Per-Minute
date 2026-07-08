@@ -406,8 +406,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         const data = await res.json();
         setFollowingList(data);
       }
-    } catch (err) {
-      console.error("Error fetching following:", err);
+    } catch (err: any) {
+      if (err && err.message && err.message.includes('Failed to fetch')) {
+        console.warn('Network connection starting up. Retrying following list shortly...');
+      } else {
+        console.error("Error fetching following:", err);
+      }
     } finally {
       setFollowingLoading(false);
     }
@@ -577,11 +581,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       setUserPastSessions(combined);
     } catch (err: any) {
-      if (err && err.message && err.message.includes('Failed to fetch')) {
-        console.warn('Network connection starting up. Retrying past sessions list shortly...');
-      } else {
-        console.error('Error fetching past sessions list:', err);
-      }
+      console.warn('Network or connection startup lag: Could not load past sessions temporarily. Will retry shortly.', err);
     }
   };
 
@@ -1881,7 +1881,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               <div className="space-y-1 text-left">
                 <div className="flex items-center space-x-2">
                   <Wallet className="w-4 h-4 text-emerald-400" />
-                  <h4 className="font-bold text-sm text-slate-200">Load Wallet Credit</h4>
+                  <h4 className="font-bold text-sm text-slate-200">Wallet Balance</h4>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Enter custom amount or pick a preset below. Balances will be deducted strictly on a per-minute base only.
@@ -1981,7 +1981,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 ) : (
                   <>
                     <Wallet className="w-4 h-4 text-slate-950" />
-                    <span>Proceed To Secure Checkout</span>
+                    <span>Proceed To Pay</span>
                   </>
                 )}
               </button>
@@ -4018,6 +4018,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         isOpen={isSuccessModalOpen}
         onClose={() => setIsSuccessModalOpen(false)}
         changes={profileChangesList}
+        onGoToHome={() => {
+          setIsSuccessModalOpen(false);
+          setActiveDashboardTab('advisors');
+        }}
       />
 
     </div>
