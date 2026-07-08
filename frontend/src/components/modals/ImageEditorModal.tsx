@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Crop, Move, ZoomIn, Sliders, Check, User, ArrowLeft, RotateCw } from 'lucide-react';
+import { X, Crop, Check } from 'lucide-react';
 
 interface ImageEditorModalProps {
   isOpen: boolean;
@@ -33,12 +33,104 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
   const [offsetX, setOffsetX] = useState<number>(0);
   const [offsetY, setOffsetY] = useState<number>(0);
   const [rotation, setRotation] = useState<number>(0);
+  const [cropShape, setCropShape] = useState<'circle' | 'square'>('circle');
+
+  // Dragging and Pinch-to-zoom states
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [initialOffsets, setInitialOffsets] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const [isPinching, setIsPinching] = useState<boolean>(false);
+  const [initialPinchDistance, setInitialPinchDistance] = useState<number>(0);
+  const [initialPinchZoom, setInitialPinchZoom] = useState<number>(1.0);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewCircleRef = useRef<HTMLCanvasElement | null>(null);
   const previewSquareRef = useRef<HTMLCanvasElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
+
+  // Helper to calculate distance between two fingers
+  const getPinchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleStart = (clientX: number, clientY: number) => {
+    if (!imageLoaded) return;
+    setIsDragging(true);
+    setDragStart({ x: clientX, y: clientY });
+    setInitialOffsets({ x: offsetX, y: offsetY });
+  };
+
+  const handleMove = (clientX: number, clientY: number) => {
+    if (!isDragging || !imageLoaded) return;
+    const dx = clientX - dragStart.x;
+    const dy = clientY - dragStart.y;
+
+    // Rotate the drag delta back by rotation so dragging is intuitive
+    const rad = (rotation * Math.PI) / 180;
+    const cos = Math.cos(-rad);
+    const sin = Math.sin(-rad);
+
+    const rx = dx * cos - dy * sin;
+    const ry = dx * sin + dy * cos;
+
+    setOffsetX(initialOffsets.x + rx);
+    setOffsetY(initialOffsets.y + ry);
+  };
+
+  const handleEnd = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    handleStart(e.clientX, e.clientY);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    handleMove(e.clientX, e.clientY);
+  };
+
+  const handleMouseUpOrLeave = () => {
+    handleEnd();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsPinching(false);
+      handleStart(e.touches[0].clientX, e.touches[0].clientY);
+    } else if (e.touches.length === 2) {
+      setIsDragging(false);
+      setIsPinching(true);
+      const dist = getPinchDistance(e.touches);
+      setInitialPinchDistance(dist);
+      setInitialPinchZoom(zoom);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1 && !isPinching) {
+      // Prevent scrolling the page while dragging the image inside the crop area
+      if (e.cancelable) e.preventDefault();
+      handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    } else if (e.touches.length === 2 && isPinching) {
+      if (e.cancelable) e.preventDefault();
+      const dist = getPinchDistance(e.touches);
+      if (initialPinchDistance > 0 && dist > 0) {
+        const factor = dist / initialPinchDistance;
+        const targetZoom = Math.min(3.0, Math.max(0.5, initialPinchZoom * factor));
+        setZoom(Number(targetZoom.toFixed(2)));
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    handleEnd();
+    setIsPinching(false);
+  };
 
   // Load initial image or set default based on gender
   useEffect(() => {
@@ -246,7 +338,24 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const croppedBase64 = canvasRef.current.toDataURL('image/jpeg', 0.9);
+      let croppedBase64 = '';
+      if (cropShape === 'circle') {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 256;
+        tempCanvas.height = 256;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          tempCtx.beginPath();
+          tempCtx.arc(128, 128, 128, 0, 2 * Math.PI);
+          tempCtx.clip();
+          tempCtx.drawImage(canvasRef.current, 0, 0);
+          croppedBase64 = tempCanvas.toDataURL('image/png');
+        } else {
+          croppedBase64 = canvasRef.current.toDataURL('image/jpeg', 0.9);
+        }
+      } else {
+        croppedBase64 = canvasRef.current.toDataURL('image/jpeg', 0.9);
+      }
       await onSave(croppedBase64);
       onClose();
     } catch (err: any) {
@@ -269,8 +378,7 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
               <Crop className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-xs sm:text-sm font-bold text-slate-100 font-sans tracking-wide">Edit & Crop Profile Photo</h3>
-              <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono mt-0.5">Crop, resize & align your avatar</p>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-100 font-sans tracking-wide">Crop Section</h3>
             </div>
           </div>
           <button
@@ -290,40 +398,32 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
             </div>
           )}
 
-          {/* Gender Selector for Default Avatar if not custom uploaded */}
-          <div className="bg-slate-950/40 p-3 sm:p-4 rounded-2xl border border-slate-800/60 space-y-2.5 text-left">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
-                Default Gender Avatar
-              </label>
-              {isCustomUpload && (
-                <button
-                  type="button"
-                  onClick={() => setIsCustomUpload(false)}
-                  className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center space-x-1 justify-start"
-                >
-                  <ArrowLeft className="w-3 h-3" />
-                  <span>Reset to default gender</span>
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-              {['Male', 'Female', 'Other'].map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => setSelectedGender(g)}
-                  className={`px-2 sm:px-4 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center space-x-1 sm:space-x-2 border ${
-                    selectedGender === g
-                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                  }`}
-                >
-                  <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                  <span>{g}</span>
-                </button>
-              ))}
-            </div>
+          {/* WhatsApp-Style Shape Selection Tabs */}
+          <div className="flex items-center justify-center p-0.5 bg-slate-950/60 rounded-2xl border border-slate-800 max-w-[280px] mx-auto">
+            <button
+              type="button"
+              onClick={() => setCropShape('circle')}
+              className={`flex-1 py-1.5 px-3 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center space-x-2 ${
+                cropShape === 'circle'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full border border-current" />
+              <span>Circular Crop</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCropShape('square')}
+              className={`flex-1 py-1.5 px-3 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center space-x-2 ${
+                cropShape === 'square'
+                  ? 'bg-indigo-600 text-white shadow-md font-black'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className="w-2.5 h-2.5 border border-current" />
+              <span>Square Crop</span>
+            </button>
           </div>
 
           {/* Core Interactive Editor */}
@@ -331,20 +431,48 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
             
             {/* Visual Canvas Cropper Area */}
             <div className="flex flex-col items-center justify-center space-y-2 bg-slate-950/20 p-3 rounded-2xl border border-slate-800/30">
-              <div className="relative w-36 h-36 sm:w-44 sm:h-44 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800/80 flex items-center justify-center shadow-inner group">
+              <div 
+                className={`relative w-36 h-36 sm:w-44 sm:h-44 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800/80 flex items-center justify-center shadow-inner group select-none touch-none ${imageLoaded ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUpOrLeave}
+                onMouseLeave={handleMouseUpOrLeave}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
                 <canvas
                   ref={canvasRef}
-                  className="w-full h-full object-cover rounded-2xl"
+                  className="w-full h-full object-cover rounded-2xl pointer-events-none"
                 />
                 
-                {/* Crosshairs Overlay */}
-                <div className="absolute inset-0 pointer-events-none border border-white/5 flex items-center justify-center rounded-2xl">
-                  <div className="absolute inset-x-0 h-[1px] bg-white/10" />
-                  <div className="absolute inset-y-0 w-[1px] bg-white/10" />
-                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border border-dashed border-indigo-500/30" />
-                </div>
+                {/* Crosshairs & WhatsApp Mask Overlay */}
+                {cropShape === 'circle' ? (
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                    <div className="absolute inset-x-0 h-[1px] bg-white/10" />
+                    <div className="absolute inset-y-0 w-[1px] bg-white/10" />
+                    {/* Perfect circle boundary that matches the 100% border layout */}
+                    <div className="absolute inset-0 rounded-full border-2 border-dashed border-emerald-400 shadow-[0_0_0_9999px_rgba(15,23,42,0.65)]" />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                    <div className="absolute inset-x-0 h-[1px] bg-white/10" />
+                    <div className="absolute inset-y-0 w-[1px] bg-white/10" />
+                    {/* Perfect square boundary overlay with slight corner markers */}
+                    <div className="absolute inset-0 border-2 border-dashed border-indigo-400 shadow-[0_0_0_9999px_rgba(15,23,42,0.4)]" />
+                    <div className="absolute top-0 left-0 w-3 h-3 border-t-4 border-l-4 border-indigo-400" />
+                    <div className="absolute top-0 right-0 w-3 h-3 border-t-4 border-r-4 border-indigo-400" />
+                    <div className="absolute bottom-0 left-0 w-3 h-3 border-b-4 border-l-4 border-indigo-400" />
+                    <div className="absolute bottom-0 right-0 w-3 h-3 border-b-4 border-r-4 border-indigo-400" />
+                  </div>
+                )}
               </div>
               <span className="text-[9px] font-mono text-slate-500">Crop Area (256x256)</span>
+              {imageLoaded && (
+                <p className="text-[10px] text-emerald-400 font-sans mt-1 text-center animate-pulse">
+                  👆 Drag with 1 finger to move • Pinch with 2 fingers to Zoom!
+                </p>
+              )}
             </div>
 
             {/* Avatar Previews in Circle and Square */}
@@ -356,7 +484,7 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
                 <div className="flex items-center justify-start gap-5 sm:gap-6">
                   {/* Circular Preview */}
                   <div className="flex flex-col items-center space-y-1">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border border-indigo-500/20 overflow-hidden bg-slate-950 shadow-md">
+                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-slate-950 shadow-md transition-all ${cropShape === 'circle' ? 'border-2 border-emerald-400 scale-105' : 'border border-slate-800 opacity-60'}`}>
                       <canvas
                         ref={previewCircleRef}
                         width={256}
@@ -364,12 +492,12 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <span className="text-[9px] font-mono text-slate-400">Circular</span>
+                    <span className={`text-[9px] font-mono ${cropShape === 'circle' ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>Circular</span>
                   </div>
 
                   {/* Square Preview */}
                   <div className="flex flex-col items-center space-y-1">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl border border-indigo-500/20 overflow-hidden bg-slate-950 shadow-md">
+                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-950 shadow-md transition-all ${cropShape === 'square' ? 'border-2 border-indigo-400 scale-105' : 'border border-slate-800 opacity-60'}`}>
                       <canvas
                         ref={previewSquareRef}
                         width={256}
@@ -377,7 +505,7 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <span className="text-[9px] font-mono text-slate-400">Square</span>
+                    <span className={`text-[9px] font-mono ${cropShape === 'square' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>Square</span>
                   </div>
                 </div>
               </div>
@@ -402,174 +530,7 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
 
           </div>
 
-          {/* Slider Options */}
-          <div className="bg-slate-950/40 p-3 sm:p-4 rounded-2xl border border-slate-800/60 space-y-3.5 sm:space-y-4 text-left">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center space-x-1">
-                <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Adjustment Controls</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setZoom(1.0);
-                  setOffsetX(0);
-                  setOffsetY(0);
-                  setRotation(0);
-                }}
-                className="text-[9px] font-mono text-slate-500 hover:text-indigo-400"
-              >
-                Reset All
-              </button>
-            </div>
 
-            {/* Size / Zoom */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 text-[11px] sm:text-xs font-sans flex items-center space-x-1">
-                  <ZoomIn className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Resize / Zoom</span>
-                </span>
-                <span className="text-slate-400 font-mono text-[9px] sm:text-[10px]">{zoom.toFixed(2)}x</span>
-              </div>
-              <input
-                type="range"
-                min="0.5"
-                max="3.0"
-                step="0.05"
-                value={zoom}
-                onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-              />
-            </div>
-
-            {/* Alignment and offsets */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-              
-              {/* Horizontal offset */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 text-[11px] sm:text-xs font-sans flex items-center space-x-1">
-                    <Move className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Horizontal Shift</span>
-                  </span>
-                  <span className="text-slate-400 font-mono text-[9px] sm:text-[10px]">{offsetX}px</span>
-                </div>
-                <input
-                  type="range"
-                  min="-200"
-                  max="200"
-                  step="1"
-                  value={offsetX}
-                  onChange={(e) => setOffsetX(parseInt(e.target.value))}
-                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-              </div>
-
-              {/* Vertical offset */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 text-[11px] sm:text-xs font-sans flex items-center space-x-1">
-                    <Move className="w-3.5 h-3.5 text-indigo-400 rotate-90" />
-                    <span>Vertical Shift</span>
-                  </span>
-                  <span className="text-slate-400 font-mono text-[9px] sm:text-[10px]">{offsetY}px</span>
-                </div>
-                <input
-                  type="range"
-                  min="-200"
-                  max="200"
-                  step="1"
-                  value={offsetY}
-                  onChange={(e) => setOffsetY(parseInt(e.target.value))}
-                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-              </div>
-
-            </div>
-
-            {/* Rotation Control */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 text-[11px] sm:text-xs font-sans flex items-center space-x-1">
-                  <RotateCw className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Rotate Image</span>
-                </span>
-                <span className="text-slate-400 font-mono text-[9px] sm:text-[10px]">{rotation}°</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="360"
-                step="90"
-                value={rotation}
-                onChange={(e) => setRotation(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-              />
-            </div>
-
-            {/* Quick alignment Presets */}
-            <div className="space-y-3 pt-2.5 border-t border-slate-800/50 text-left">
-              <span className="text-[9px] font-mono text-slate-500 block uppercase tracking-wider">
-                Quick Align Presets
-              </span>
-              <div className="space-y-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                  <span className="text-[10px] font-mono text-slate-400 shrink-0">Horizontal:</span>
-                  <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => alignImage('left')}
-                      className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-bold text-slate-300 transition-colors"
-                    >
-                      Left
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => alignImage('center')}
-                      className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-bold text-slate-300 transition-colors"
-                    >
-                      Center
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => alignImage('right')}
-                      className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-bold text-slate-300 transition-colors"
-                    >
-                      Right
-                    </button>
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                  <span className="text-[10px] font-mono text-slate-400 shrink-0">Vertical:</span>
-                  <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => alignImage('top')}
-                      className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-bold text-slate-300 transition-colors"
-                    >
-                      Top
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => alignImage('middle')}
-                      className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-bold text-slate-300 transition-colors"
-                    >
-                      Center
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => alignImage('bottom')}
-                      className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-bold text-slate-300 transition-colors"
-                    >
-                      Bottom
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
 
         </div>
 

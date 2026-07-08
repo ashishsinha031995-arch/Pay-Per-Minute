@@ -6087,7 +6087,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
       {/* Real-time Toast notification */}
       {latestToast && (
-        <div className="fixed bottom-6 right-6 z-[100] max-w-sm bg-slate-900 border border-emerald-500/30 p-4 rounded-2xl shadow-2xl flex items-start space-x-3 text-left backdrop-blur-md">
+        <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-sm z-[100] bg-slate-900 border border-emerald-500/30 p-4 rounded-2xl shadow-2xl flex items-start space-x-3 text-left backdrop-blur-md">
           <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-400">
             <Bell className="w-5 h-5 animate-bounce" />
           </div>

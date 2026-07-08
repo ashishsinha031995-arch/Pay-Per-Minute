@@ -1851,37 +1851,24 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'wallet' && (
         <div className="space-y-6 font-jakarta">
-          {/* Main Back navigation header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800">
-            <div className="space-y-1 text-left">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                  <Wallet className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-slate-100">Wallet Dashboard</h3>
-                  <p className="text-xs text-slate-400 font-sans">Manage your consultation balance, load credits, and view secure statements.</p>
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveDashboardTab('advisors')}
-              className="self-start sm:self-auto text-xs font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-2 shadow-md active:scale-95 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 text-emerald-400" />
-              <span>Back to Advisors</span>
-            </button>
-          </div>
-
           {/* Second Section: Recharge & Statement */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* LEFT Panel: Modern Recharge Gateway */}
-            <div className="lg:col-span-5 bg-slate-900/40 p-6 rounded-3xl border border-slate-800 space-y-5 flex flex-col justify-between self-stretch">
+            <div className="lg:col-span-5 bg-slate-900/40 p-6 rounded-3xl border border-slate-800 space-y-5 flex flex-col justify-between lg:self-start self-stretch">
               <div className="space-y-1 text-left">
-                <div className="flex items-center space-x-2">
-                  <Wallet className="w-4 h-4 text-emerald-400" />
-                  <h4 className="font-bold text-sm text-slate-200">Wallet Balance</h4>
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/55 mb-2">
+                  <div className="flex items-center space-x-1.5 min-w-0 shrink-0">
+                    <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 shrink-0" />
+                    <h4 className="font-extrabold text-[13px] sm:text-base md:text-lg text-slate-100 truncate">Wallet Balance</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDashboardTab('advisors')}
+                    className="text-[10px] sm:text-[11px] font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-1.5 flex items-center space-x-1 sm:space-x-1.5 shadow-md active:scale-95 cursor-pointer shrink-0"
+                  >
+                    <ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+                    <span>Back to Advisors</span>
+                  </button>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Enter custom amount or pick a preset below. Balances will be deducted strictly on a per-minute base only.
@@ -1889,7 +1876,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               </div>
 
               {/* Wallet Balance Display Card */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 flex items-center justify-between text-left">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between text-left gap-3">
                 <div>
                   <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Available Balance</span>
                   <span className="text-2xl font-black text-emerald-400 font-mono tracking-tight flex items-baseline">
@@ -1897,9 +1884,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     {parseFloat(currentUser.wallet_balance || 0).toFixed(2)}
                   </span>
                 </div>
-                <div className="text-right">
-                  <span className="text-[9px] font-mono text-slate-500 uppercase block">Account status</span>
-                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-3 py-1 rounded-full text-center">Secured</span>
+                <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl self-start sm:self-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="text-[10px] sm:text-xs font-bold text-emerald-400 font-sans tracking-wide">100% Safe & Secure Payment</span>
                 </div>
               </div>
 
@@ -1947,16 +1934,16 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500/40 to-transparent"></div>
                   <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest block mb-1">Receipt Summary Estimator</span>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Add Wallet Credit:</span>
+                    <span className="text-slate-400">Recharge Amount:</span>
                     <span className="text-slate-300 font-bold">₹{parseFloat(rechargeAmount).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Government GST (18%):</span>
+                    <span className="text-slate-400">GST (18%):</span>
                     <span className="text-slate-400">₹{(parseFloat(rechargeAmount) * 0.18).toFixed(2)}</span>
                   </div>
                   <div className="border-t border-dashed border-slate-800 my-2"></div>
                   <div className="flex justify-between font-black text-emerald-400 text-sm">
-                    <span>Total Billed Price:</span>
+                    <span>Total Recharge Amount:</span>
                     <span>₹{(parseFloat(rechargeAmount) * 1.18).toFixed(2)}</span>
                   </div>
                 </div>
@@ -1987,37 +1974,41 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               </button>
             </div>
 
-            {/* RIGHT Panel: Breathtaking Transaction Ledger Statement */}
+            {/* RIGHT Panel: Transaction Ledger */}
             <div className="lg:col-span-7 bg-slate-900/40 p-6 rounded-3xl border border-slate-800 space-y-6 self-stretch">
-              <div className="border-b border-slate-850 pb-4 text-left space-y-1.5 w-full">
-                <div className="flex items-center space-x-2 w-full">
-                  <FileText className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <h4 className="font-bold text-base text-slate-100 tracking-tight leading-normal">
-                    Transaction Ledger Statement
+              <div className="border-b border-slate-850 pb-4 text-left space-y-2.5 w-full">
+                {/* Row for Icon and Title */}
+                <div className="flex items-center space-x-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
+                    <FileText className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <h4 className="font-extrabold text-base sm:text-lg text-slate-100 tracking-tight">
+                    Transaction Ledger
                   </h4>
                 </div>
-                <p className="text-xs text-slate-400 font-sans leading-relaxed">
-                  All recharge actions, consultation fee debits, and refunds logged in audit logs.
+                {/* Subtitle with professional gap and sizing */}
+                <p className="text-xs text-slate-400 font-sans leading-relaxed pl-1">
+                  All recharges, consultation debits, and refunds logged in audit logs.
                 </p>
               </div>
 
               {/* ledger statement filter pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar whitespace-nowrap">
                 {(['all', 'recharge', 'consultation', 'refund', 'admin_credit'] as const).map((type) => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => setWalletTxFilter(type)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider font-bold border transition-all shrink-0 cursor-pointer ${
+                    className={`px-3.5 py-1.5 rounded-xl text-[11px] font-sans font-semibold border transition-all shrink-0 cursor-pointer ${
                       walletTxFilter === type
                         ? 'bg-slate-100 text-slate-950 border-slate-200 shadow-sm'
                         : 'bg-slate-950/60 text-slate-400 border-slate-850 hover:text-slate-200'
                     }`}
                   >
-                    {type === 'all' ? 'All Entries' :
+                    {type === 'all' ? 'All' :
                      type === 'recharge' ? 'Recharges' :
                      type === 'consultation' ? 'Consultations' :
-                     type === 'refund' ? 'Refunds' : 'Credits'}
+                     type === 'refund' ? 'Refunds' : 'Special credits'}
                   </button>
                 ))}
               </div>
@@ -2050,85 +2041,145 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   );
                 }
 
+                // Group by date label helper
+                const getGroupLabel = (dateStr: string) => {
+                  try {
+                    const d = new Date(dateStr);
+                    if (isNaN(d.getTime())) return "Other";
+                    const today = new Date();
+                    const yesterday = new Date();
+                    yesterday.setDate(today.getDate() - 1);
+
+                    if (d.toDateString() === today.toDateString()) {
+                      return "Today";
+                    } else if (d.toDateString() === yesterday.toDateString()) {
+                      return "Yesterday";
+                    } else {
+                      return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                    }
+                  } catch (e) {
+                    return "Other";
+                  }
+                };
+
+                // Group transactions
+                const groupedTransactions: { [key: string]: typeof filteredTx } = {};
+                filteredTx.forEach(tx => {
+                  const label = getGroupLabel(tx.created_at);
+                  if (!groupedTransactions[label]) {
+                    groupedTransactions[label] = [];
+                  }
+                  groupedTransactions[label].push(tx);
+                });
+
                 return (
-                  <div className="space-y-3">
-                    {filteredTx.map((tx) => {
-                      const baseAmt = parseFloat(tx.amount || 0);
-                      const gstRateVal = tx.gst_rate || 18.0;
-                      const gstAmt = tx.gst_amount !== undefined && tx.gst_amount !== null && tx.gst_amount !== 0 ? parseFloat(tx.gst_amount) : parseFloat((baseAmt * 0.18).toFixed(2));
-                      const totalPaidVal = tx.total_paid !== undefined && tx.total_paid !== null && tx.total_paid !== 0 ? parseFloat(tx.total_paid) : parseFloat((baseAmt + gstAmt).toFixed(2));
+                  <div className="space-y-6">
+                    {Object.keys(groupedTransactions).map((groupLabel) => (
+                      <div key={groupLabel} className="space-y-2.5 text-left">
+                        {/* A small muted section label above each date group */}
+                        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider pl-1 font-sans">
+                          {groupLabel}
+                        </div>
 
-                      return (
-                        <div key={tx.id} className="bg-slate-950/80 p-4 rounded-2xl border border-slate-850/80 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-800 transition-all shadow-sm">
-                          {/* Left Details block */}
-                          <div className="flex items-start gap-3 text-left flex-1 min-w-0">
-                            {/* Type Icon Indicator */}
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                              tx.type === 'recharge' ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400' :
-                              tx.type === 'admin_credit' ? 'bg-amber-500/10 border-amber-500/25 text-amber-400' :
-                              tx.type === 'refund' ? 'bg-blue-500/10 border-blue-500/25 text-blue-400' : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
-                            }`}>
-                              {tx.type === 'recharge' && <ArrowUpRight className="w-4 h-4" />}
-                              {tx.type === 'admin_credit' && <Sparkles className="w-4 h-4" />}
-                              {tx.type === 'refund' && <RefreshCw className="w-4 h-4" />}
-                              {tx.type === 'consultation' && <ArrowDownLeft className="w-4 h-4" />}
-                            </div>
+                        <div className="space-y-3">
+                          {groupedTransactions[groupLabel].map((tx) => {
+                            const baseAmt = parseFloat(tx.amount || 0);
+                            const gstRateVal = tx.gst_rate || 18.0;
+                            const gstAmt = tx.gst_amount !== undefined && tx.gst_amount !== null && tx.gst_amount !== 0 ? parseFloat(tx.gst_amount) : parseFloat((baseAmt * 0.18).toFixed(2));
+                            const totalPaidVal = tx.total_paid !== undefined && tx.total_paid !== null && tx.total_paid !== 0 ? parseFloat(tx.total_paid) : parseFloat((baseAmt + gstAmt).toFixed(2));
 
-                            <div className="space-y-1 min-w-0 flex-1">
-                              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                                <span className={`text-[8px] font-black font-mono tracking-wider px-2 py-0.5 rounded-full ${
-                                  tx.type === 'recharge' ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/15' :
-                                  tx.type === 'admin_credit' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/15' :
-                                  tx.type === 'refund' ? 'text-blue-400 bg-blue-500/10 border border-blue-500/15' : 'text-rose-400 bg-rose-500/10 border border-rose-500/15'
-                                }`}>
-                                  {tx.type === 'admin_credit' ? 'SPECIAL CREDIT' : tx.type.toUpperCase()}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-mono font-bold">#{tx.id}</span>
-                              </div>
-                              <p className="text-xs font-medium text-slate-200 font-sans break-words whitespace-normal text-left leading-relaxed">{tx.description}</p>
-                              
-                              {/* If recharge, show GST and total breakdowns */}
-                              {tx.type === 'recharge' && (
-                                <div className="text-[9px] text-slate-400 font-mono bg-slate-900/60 p-2.5 rounded-xl border border-slate-850 mt-2 max-w-sm space-y-1">
-                                  <div className="flex justify-between">
-                                    <span>Base Recharge credit:</span>
-                                    <span className="text-slate-300">₹{baseAmt.toFixed(2)}</span>
+                            return (
+                              <div 
+                                key={tx.id} 
+                                className="bg-slate-950/45 p-4 rounded-2xl border border-slate-800/80 space-y-3 hover:border-slate-700/80 transition-all shadow-sm"
+                              >
+                                {/* Top Row: icon badge, short category pill, and tx ID aligned right */}
+                                <div className="flex items-center gap-2">
+                                  {/* Type Icon Indicator */}
+                                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border ${
+                                    tx.type === 'recharge' ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400' :
+                                    tx.type === 'admin_credit' ? 'bg-amber-500/10 border-amber-500/25 text-amber-400' :
+                                    tx.type === 'refund' ? 'bg-blue-500/10 border-blue-500/25 text-blue-400' : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
+                                  }`}>
+                                    {tx.type === 'recharge' && <ArrowUpRight className="w-3.5 h-3.5" />}
+                                    {tx.type === 'admin_credit' && <Sparkles className="w-3.5 h-3.5" />}
+                                    {tx.type === 'refund' && <RefreshCw className="w-3.5 h-3.5" />}
+                                    {tx.type === 'consultation' && <ArrowDownLeft className="w-3.5 h-3.5" />}
                                   </div>
-                                  <div className="flex justify-between">
-                                    <span>Government GST ({gstRateVal}%):</span>
-                                    <span className="text-slate-300">₹{gstAmt.toFixed(2)}</span>
+
+                                  {/* Sentence case category badge/pill */}
+                                  <span className={`text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full ${
+                                    tx.type === 'recharge' ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/15' :
+                                    tx.type === 'admin_credit' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/15' :
+                                    tx.type === 'refund' ? 'text-blue-400 bg-blue-500/10 border border-blue-500/15' : 'text-rose-400 bg-rose-500/10 border border-rose-500/15'
+                                  }`}>
+                                    {tx.type === 'recharge' ? 'Recharge' :
+                                     tx.type === 'consultation' ? 'Consultation' :
+                                     tx.type === 'refund' ? 'Refund' :
+                                     tx.type === 'admin_credit' ? 'Special credit' : 'Transaction'}
+                                  </span>
+
+                                  {/* Tx ID aligned to the right of that same row */}
+                                  <span className="ml-auto text-[10px] text-slate-500 font-mono font-bold">
+                                    #{tx.id}
+                                  </span>
+                                </div>
+
+                                {/* Middle Row: Bold one-line description of the transaction */}
+                                <p className="text-xs sm:text-sm font-bold text-slate-200 font-sans tracking-tight text-left leading-relaxed">
+                                  {tx.description}
+                                </p>
+
+                                {/* If recharge, show GST and total breakdowns */}
+                                {tx.type === 'recharge' && (
+                                  <div className="text-[9px] text-slate-400 font-mono bg-slate-900/40 p-2.5 rounded-xl border border-slate-850 space-y-1">
+                                    <div className="flex justify-between">
+                                      <span>Base Recharge credit:</span>
+                                      <span className="text-slate-300">₹{baseAmt.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>GST ({gstRateVal}%):</span>
+                                      <span className="text-slate-300">₹{gstAmt.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t border-dashed border-slate-800/80 pt-1 font-bold text-emerald-400">
+                                      <span>Total Recharge Amount:</span>
+                                      <span>₹{totalPaidVal.toFixed(2)}</span>
+                                    </div>
                                   </div>
-                                  <div className="flex justify-between border-t border-dashed border-slate-800 pt-1 font-bold text-emerald-400">
-                                    <span>Total Billed Paid:</span>
-                                    <span>₹{totalPaidVal.toFixed(2)}</span>
+                                )}
+
+                                {/* Bottom Row: timestamp on the left and amount on the right */}
+                                <div className="flex items-center justify-between gap-4 pt-2 border-t border-slate-900/60">
+                                  {/* Timestamp */}
+                                  <span className="text-[10px] text-slate-500 font-mono">
+                                    {new Date(tx.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                  </span>
+
+                                  {/* Right side controls / amounts */}
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    {tx.type === 'recharge' && (
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadInvoice(tx, currentUser)}
+                                        className="bg-slate-900 hover:bg-slate-850 text-emerald-400 hover:text-emerald-300 border border-slate-800 hover:border-slate-700 px-2.5 py-1 rounded-xl text-[9px] font-bold font-sans flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                                      >
+                                        <Download className="w-3 h-3 text-emerald-400" />
+                                        <span>Invoice</span>
+                                      </button>
+                                    )}
+                                    <div className={`font-mono text-xs sm:text-sm font-black ${
+                                      tx.type === 'consultation' ? 'text-rose-400' : 'text-emerald-400'
+                                    }`}>
+                                      {tx.type === 'consultation' ? '-' : '+'}₹{baseAmt.toFixed(2)}
+                                    </div>
                                   </div>
                                 </div>
-                              )}
-                              <span className="text-[9px] text-slate-500 font-mono block mt-1">{new Date(tx.created_at).toLocaleString()}</span>
-                            </div>
-                          </div>
-                          
-                          {/* Right amount & download billing column */}
-                          <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center gap-3 border-t md:border-t-0 border-slate-850 pt-3 md:pt-0 shrink-0 w-full md:w-auto">
-                            {tx.type === 'recharge' && (
-                              <button
-                                type="button"
-                                onClick={() => downloadInvoice(tx, currentUser)}
-                                className="bg-slate-900 hover:bg-slate-850 text-emerald-400 hover:text-emerald-300 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                              >
-                                <Download className="w-3 h-3 text-emerald-400" />
-                                <span>Tax Invoice</span>
-                              </button>
-                            )}
-                            <div className={`font-mono text-sm font-bold ${
-                              tx.type === 'consultation' ? 'text-rose-400' : 'text-emerald-400'
-                            }`}>
-                              {tx.type === 'consultation' ? '-' : '+'}₹{baseAmt.toFixed(2)}
-                            </div>
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 );
               })()}
@@ -3950,7 +4001,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-[100] max-w-sm bg-slate-900 border border-emerald-500/30 p-4 rounded-2xl shadow-2xl flex items-start space-x-3 text-left backdrop-blur-md"
+            className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-sm z-[100] bg-slate-900 border border-emerald-500/30 p-4 rounded-2xl shadow-2xl flex items-start space-x-3 text-left backdrop-blur-md"
           >
             <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-400">
               <Bell className="w-5 h-5 animate-bounce" />
