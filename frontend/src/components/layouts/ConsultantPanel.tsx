@@ -633,7 +633,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [newToTime, setNewToTime] = useState('');
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
 
-  const isSaveDisabled = (!newDate && !newDay) || !newFromTime || !newToTime;
+  const isTimeOrderInvalid = newFromTime && newToTime && newToTime <= newFromTime;
+  const isSaveDisabled = (!newDate && !newDay) || !newFromTime || !newToTime || !!isTimeOrderInvalid;
 
   const fetchSchedules = async (consultantId: number, silent = false) => {
     try {
@@ -3852,296 +3853,248 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </div>
                   ) : (
                     /* STANDARD ENHANCED DASHBOARD WHEN THEY HAVE ACTIVE PLAN */
-                    <>
-                      {/* Section 1: Professional Dashboard Header */}
-                      <div className={`border rounded-3xl p-6 relative overflow-hidden transition-all ${
-                        theme === 'light' ? 'bg-white border-slate-200 shadow-sm text-slate-900' : 'bg-slate-900 border-slate-800/80 shadow-lg text-slate-100'
-                      }`}>
-                        {/* Notification bell icon in top-right */}
-                        <div className="absolute top-6 right-6">
-                          <button className={`p-2.5 rounded-xl transition-all relative ${
-                            theme === 'light' ? 'bg-slate-50 border border-slate-250 text-slate-600 hover:bg-slate-100' : 'bg-slate-950 border border-slate-850 text-slate-400 hover:bg-slate-900'
-                          }`}>
-                            <Bell className="w-5 h-5" />
-                            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-950" />
-                          </button>
-                        </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      {/* Left Column: The high-fidelity starting cards styled exactly like the HTML snippet */}
+                      <div className="lg:col-span-5 xl:col-span-4 flex justify-center lg:justify-start w-full">
+                        <div 
+                          id="starting-cards-container"
+                          style={{
+                            background: theme === 'light' ? '#f8fafc' : '#0b1220',
+                            borderRadius: '20px',
+                            padding: '20px 18px',
+                            maxWidth: '340px',
+                            width: '100%',
+                            margin: '0 auto',
+                            border: theme === 'light' ? '1px solid #e2e8f0' : 'none',
+                            fontFamily: 'sans-serif'
+                          }}
+                        >
+                          <p style={{ margin: 0, fontSize: '20px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }}>
+                            Namaste, {currentConsultant?.display_name || 'Lakhan'}
+                          </p>
+                          <p style={{ margin: '6px 0 20px', fontSize: '13px', color: theme === 'light' ? '#475569' : '#7a8699', lineHeight: 1.6 }}>
+                            Welcome to your dashboard.
+                          </p>
 
-                        {/* Header Info with Avatar */}
-                        <div className="flex items-start space-x-4 pr-12">
-                          <div className="relative shrink-0">
-                            <img
-                              src={currentConsultant.photo_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256"}
-                              alt={currentConsultant.display_name}
-                              className={`w-14 h-14 rounded-full object-cover border-2 ${
-                                theme === 'light' ? 'border-emerald-200' : 'border-emerald-500/20'
-                              }`}
-                              referrerPolicy="no-referrer"
-                            />
-                            <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 ${
-                              theme === 'light' ? 'border-white' : 'border-slate-900'
-                            } ${isOnline ? (isBusy ? 'bg-amber-400' : 'bg-emerald-500') : 'bg-slate-400'}`} />
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest font-extrabold ${
-                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            }`}>
-                              <Sparkles className="w-3 h-3 text-emerald-500 animate-pulse" />
-                              <span>Professional Dashboard</span>
+                          {/* Rate & Mode Card */}
+                          <div style={{ 
+                            background: theme === 'light' ? '#ffffff' : '#111a29', 
+                            border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a', 
+                            borderRadius: '18px', 
+                            overflow: 'hidden', 
+                            marginBottom: '22px' 
+                          }}>
+                            {/* Part 1: Current Rate */}
+                            <div style={{ padding: '16px', borderBottom: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ 
+                                  width: '32px', 
+                                  height: '32px', 
+                                  borderRadius: '9px', 
+                                  background: theme === 'light' ? '#e6f4ea' : '#0f2a24', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center' 
+                                }}>
+                                  <TrendingUp style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', fontSize: '16px', width: '16px', height: '16px' }} />
+                                </div>
+                                <div>
+                                  <p style={{ margin: 0, fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Current rate</p>
+                                  <p style={{ margin: '3px 0 0', fontSize: '16px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }} className="font-mono">
+                                    ₹{currentConsultant?.price_per_minute || 0}/min
+                                  </p>
+                                </div>
+                              </div>
                             </div>
-                            <h2 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
-                              Namaste, <span className="text-emerald-500">{currentConsultant.display_name}!</span>
-                            </h2>
-                            <p className={`text-xs leading-relaxed ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
-                              Welcome to your financial command center.
-                            </p>
-                          </div>
-                        </div>
 
-                        {/* Highlighted Inner Row showing current per-minute rate */}
-                        <div className={`mt-6 p-4 rounded-2xl border flex items-center justify-between transition-all ${
-                          theme === 'light' ? 'bg-slate-50/50 border-slate-100 hover:bg-slate-50' : 'bg-slate-950/80 border-slate-850 hover:bg-slate-950'
-                        }`}>
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            }`}>
-                              <TrendingUp className="w-4 h-4" />
+                            {/* Part 2: Online/Offline Mode */}
+                            <div style={{ padding: '16px', borderBottom: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ 
+                                  width: '32px', 
+                                  height: '32px', 
+                                  borderRadius: '9px', 
+                                  background: isOnline 
+                                    ? (theme === 'light' ? '#e6f4ea' : '#0f2a24') 
+                                    : (theme === 'light' ? '#fce8e6' : '#221515'), 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center' 
+                                }}>
+                                  <Wifi style={{ 
+                                    color: isOnline 
+                                      ? (theme === 'light' ? '#10b981' : '#5dcaa5') 
+                                      : (theme === 'light' ? '#ef4444' : '#e08a8a'), 
+                                    width: '16px', 
+                                    height: '16px' 
+                                  }} className={isOnline ? 'animate-pulse' : ''} />
+                                </div>
+                                <div>
+                                  <p style={{ 
+                                    margin: 0, 
+                                    fontSize: '14px', 
+                                    color: isOnline 
+                                      ? (theme === 'light' ? '#10b981' : '#5dcaa5') 
+                                      : (theme === 'light' ? '#ef4444' : '#e08a8a'), 
+                                    fontWeight: 500 
+                                  }}>
+                                    {isOnline ? (isBusy ? 'Busy mode' : 'Online mode') : 'Offline mode'}
+                                  </p>
+                                  <p style={{ margin: '3px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>
+                                    Rate configured for this session
+                                  </p>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Current Rate</span>
-                              <span className="text-base font-black font-mono tracking-tight flex items-baseline leading-none">
-                                ₹{currentConsultant.price_per_minute || 0}
-                                <span className={`text-[10px] font-normal ml-0.5 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>/min</span>
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <button 
-                            onClick={() => setActiveTab('profile')}
-                            className={`inline-flex items-center space-x-1 text-xs font-bold transition-all ${
-                              theme === 'light' ? 'text-emerald-600 hover:text-emerald-700' : 'text-emerald-400 hover:text-emerald-300'
-                            }`}
-                          >
-                            <span>View</span>
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
 
-                      {/* Section 2: Operational Mode & Status Toggle */}
-                      <div className={`border rounded-3xl p-6 transition-all ${
-                        theme === 'light' ? 'bg-white border-slate-200 shadow-sm text-slate-900' : 'bg-slate-900 border-slate-800/80 shadow-lg text-slate-100'
-                      }`}>
-                        {/* Operational Mode Header Section */}
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
-                            isOnline ? (
-                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            ) : (
-                              theme === 'light' ? 'bg-slate-50 text-slate-400 border border-slate-150' : 'bg-slate-950 border border-slate-850 text-slate-500'
-                            )
-                          }`}>
-                            <Wifi className={`w-6 h-6 ${isOnline ? 'animate-pulse' : ''}`} />
-                          </div>
-                          <div>
-                            <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>OPERATIONAL MODE</span>
-                            <h3 className={`text-base font-extrabold flex items-center space-x-2 leading-none ${
-                              isOnline ? 'text-emerald-500' : (theme === 'light' ? 'text-slate-400' : 'text-slate-500')
-                            }`}>
-                              <span>{isOnline ? (isBusy ? 'BUSY MODE' : 'ONLINE / ACTIVE') : 'OFFLINE MODE'}</span>
-                            </h3>
-                            <span className={`text-[10px] font-mono block mt-1 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
-                              ₹{pricePerMin}/min rate configured
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Divider */}
-                        <div className={`my-5 border-t ${theme === 'light' ? 'border-slate-150' : 'border-slate-800/60'}`} />
-
-                        {/* Quick Status Toggle Row */}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>QUICK STATUS TOGGLE</span>
-                            <span className={`text-xs font-semibold ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
-                              {isOnline ? 'Switch to Offline' : 'Switch to Online'}
-                            </span>
-                          </div>
-
-                          <div>
-                            {!hasActivePlan ? (
-                              <button
-                                onClick={handleScrollToPlans}
-                                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-[9px] py-1.5 px-3 rounded-lg uppercase transition-all shadow-md animate-pulse"
-                              >
-                                Buy plan
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={handleToggleOnline}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                  isOnline ? 'bg-emerald-500' : (theme === 'light' ? 'bg-slate-200' : 'bg-slate-850')
-                                }`}
-                              >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isOnline ? 'translate-x-6' : 'translate-x-1'}`} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section 3: Withdrawable Balance & Monthly Sync */}
-                      <div className={`border rounded-3xl p-6 transition-all ${
-                        theme === 'light' ? 'bg-white border-slate-200 shadow-sm text-slate-900' : 'bg-slate-900 border-slate-800/80 shadow-lg text-slate-100'
-                      }`}>
-                        {/* Withdrawable Balance row */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
-                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            }`}>
-                              <Wallet className="w-6 h-6" />
-                            </div>
-                            <div>
-                              <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>WITHDRAWABLE</span>
-                              <div className="flex items-baseline space-x-1.5 mt-0.5 leading-none">
-                                <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight">₹{wallet.wallet_monthly.toFixed(2)}</span>
-                                <span className={`text-[10px] font-mono uppercase font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>INR</span>
+                            {/* Part 3: Toggle Button */}
+                            <div 
+                              onClick={handleToggleOnline}
+                              className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'}`}
+                              style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            >
+                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Toggle button</span>
+                              <div style={{ 
+                                width: '36px', 
+                                height: '21px', 
+                                borderRadius: '11px', 
+                                backgroundColor: isOnline ? (theme === 'light' ? '#10b981' : '#1d9e75') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
+                                position: 'relative',
+                                transition: 'all 0.2s ease'
+                              }}>
+                                <div style={{ 
+                                  width: '15px', 
+                                  height: '15px', 
+                                  borderRadius: '50%', 
+                                  backgroundColor: '#fff', 
+                                  position: 'absolute', 
+                                  top: '3px', 
+                                  left: isOnline ? 'auto' : '3px',
+                                  right: isOnline ? '3px' : 'auto',
+                                  transition: 'all 0.2s ease'
+                                }}></div>
                               </div>
                             </div>
                           </div>
 
-                          <button 
-                            onClick={() => {
-                              if (currentConsultant) {
-                                loadConsultantStatsAndStatus(currentConsultant.id);
-                              }
-                            }}
-                            className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                              theme === 'light' 
-                                ? 'bg-slate-50 hover:bg-slate-100 text-emerald-600 border border-slate-255 hover:border-slate-300' 
-                                : 'bg-slate-950 hover:bg-slate-850 text-emerald-400 border border-slate-850 hover:border-slate-800'
-                            }`}
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            <span>SYNC</span>
-                          </button>
-                        </div>
+                          {/* Your Wallet & Rolling Monthly Earnings Card */}
+                          <div style={{ 
+                            background: theme === 'light' ? '#ffffff' : '#111a29', 
+                            border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a', 
+                            borderRadius: '16px', 
+                            padding: '16px', 
+                            marginBottom: '16px' 
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div>
+                                <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Your wallet</p>
+                                <p style={{ margin: 0, fontSize: '22px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }} className="font-mono">
+                                  ₹{wallet?.wallet_monthly ? wallet.wallet_monthly.toFixed(2) : '0.00'}
+                                </p>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  if (currentConsultant) {
+                                    loadConsultantStatsAndStatus(currentConsultant.id);
+                                  }
+                                }}
+                                className="hover:scale-105 active:scale-95 transition-transform border-none outline-none"
+                                style={{ 
+                                  width: '30px', 
+                                  height: '30px', 
+                                  borderRadius: '8px', 
+                                  background: theme === 'light' ? '#e6f4ea' : '#0f2a24', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center', 
+                                  cursor: 'pointer' 
+                                }}
+                              >
+                                <RefreshCw style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', width: '14px', height: '14px' }} />
+                              </button>
+                            </div>
+                            <div style={{ borderTop: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a', marginTop: '12px', paddingTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <ShieldCheck style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', width: '15px', height: '15px' }} />
+                              <div>
+                                <p style={{ margin: 0, fontSize: '12px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }}>
+                                  This month ({new Date().toLocaleString('default', { month: 'long' })})
+                                </p>
+                                <p style={{ margin: '1px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>
+                                  Unbilled rolling earnings: ₹{salaryInfo?.currentCycleEarnings ? salaryInfo.currentCycleEarnings.toFixed(2) : '0.00'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
 
-                        {/* Nested Row summarizing this month's earnings */}
-                        <div className={`mt-5 p-4 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-                          theme === 'light' ? 'bg-slate-50/50 border-slate-100 hover:bg-slate-50' : 'bg-slate-950/85 border-slate-850/80 hover:bg-slate-950'
+                          {/* Earnings Overview */}
+                          <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px' }}>Earnings overview</p>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                            <div style={{ 
+                              background: theme === 'light' ? '#ffffff' : '#111a29', 
+                              borderRadius: '14px', 
+                              padding: '14px', 
+                              border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
+                            }}>
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Today's earnings</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#10b981' : '#5dcaa5', fontWeight: 500 }} className="font-mono">
+                                ₹{wallet?.wallet_today ? wallet.wallet_today.toFixed(2) : '0.00'}
+                              </p>
+                            </div>
+                            <div style={{ 
+                              background: theme === 'light' ? '#ffffff' : '#111a29', 
+                              borderRadius: '14px', 
+                              padding: '14px', 
+                              border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
+                            }}>
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Life time earnings</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#2563eb' : '#7f9be0', fontWeight: 500 }} className="font-mono">
+                                ₹{wallet?.wallet_total ? wallet.wallet_total.toFixed(2) : '0.00'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Activity Summary */}
+                          <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px' }}>Activity summary</p>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <div style={{ 
+                              background: theme === 'light' ? '#ffffff' : '#111a29', 
+                              borderRadius: '14px', 
+                              padding: '14px', 
+                              border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
+                            }}>
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Consultations</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }} className="font-mono">
+                                {sessions.filter((s: any) => s.status === 'completed').length}
+                              </p>
+                            </div>
+                            <div style={{ 
+                              background: theme === 'light' ? '#ffffff' : '#111a29', 
+                              borderRadius: '14px', 
+                              padding: '14px', 
+                              border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
+                            }}>
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Total refunded</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#ef4444' : '#e08a8a', fontWeight: 500 }} className="font-mono">
+                                ₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Earning Performance, Chart, and subsequent sections, aligned beautifully next to the mobile panel */}
+                      <div className="lg:col-span-7 xl:col-span-8 space-y-6 w-full">
+                        <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-4 ${
+                          theme === 'light' ? 'border-slate-200' : 'border-slate-800'
                         }`}>
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                              theme === 'light' ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-500/10 text-emerald-400'
-                            }`}>
-                              <ShieldCheck className="w-4.5 h-4.5" />
-                            </div>
-                            <div>
-                              <span className={`text-xs font-bold block ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>
-                                This month ({new Date().toLocaleString('default', { month: 'long' })})
-                              </span>
-                              <span className="text-[9px] block mt-0.5 text-slate-500 font-sans">
-                                Unbilled rolling earnings: ₹{salaryInfo.currentCycleEarnings.toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                          <ChevronRight className={`w-4 h-4 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`} />
-                        </div>
-                      </div>
-
-                      {/* Section 4: 2x2 Statistics Grid */}
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Today's Earnings */}
-                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
-                          <div className="flex justify-between items-start">
-                            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                              <TrendingUp className="w-4 h-4" />
-                            </div>
-                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
-                              Live
-                            </span>
-                          </div>
-                          <div className="mt-4">
-                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Today's Earnings</span>
-                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
-                              ₹{wallet.wallet_today.toFixed(2)}
-                            </span>
-                          </div>
-                          <span className="text-[9px] text-emerald-400 font-semibold block mt-3">● Active</span>
-                        </div>
-
-                        {/* Lifetime Total */}
-                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
-                          <div className="flex justify-between items-start">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                              <Coins className="w-4 h-4" />
-                            </div>
-                            <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
-                              All Time
-                            </span>
-                          </div>
-                          <div className="mt-4">
-                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Lifetime Total</span>
-                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
-                              ₹{wallet.wallet_total.toFixed(2)}
-                            </span>
-                          </div>
-                          <span className="text-[9px] text-indigo-400 font-semibold block mt-3">● Cumulative</span>
-                        </div>
-
-                        {/* Consultations */}
-                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
-                          <div className="flex justify-between items-start">
-                            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                              <UserCheck className="w-4 h-4" />
-                            </div>
-                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
-                              Chats
-                            </span>
-                          </div>
-                          <div className="mt-4">
-                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Consultations</span>
-                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
-                              {sessions.filter((s: any) => s.status === 'completed').length}
-                            </span>
-                          </div>
-                          <span className="text-[9px] text-emerald-400 font-semibold block mt-3">● Completed</span>
-                        </div>
-
-                        {/* Total Refunded */}
-                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
-                          <div className="flex justify-between items-start">
-                            <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-                              <RefreshCw className="w-4 h-4" />
-                            </div>
-                            <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
-                              Refunds
-                            </span>
-                          </div>
-                          <div className="mt-4">
-                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Total Refunded</span>
-                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
-                              ₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}
-                            </span>
-                          </div>
-                          <span className="text-[9px] text-rose-400 font-semibold block mt-3">● Refunded</span>
-                        </div>
-                      </div>
-
-                      {/* Section 5: Earning Performance */}
-                      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                           <div className="flex flex-col gap-1.5 text-left w-full sm:w-auto">
                             <div className="flex items-center space-x-3">
                               <div className="bg-emerald-500/10 p-2.5 rounded-xl text-emerald-400 shrink-0">
                                 <Gauge className="w-5 h-5 animate-pulse" />
                               </div>
-                              <h3 className="font-extrabold text-base text-slate-100 flex items-center gap-2">
+                              <h3 className={`font-extrabold text-base flex items-center gap-2 ${
+                                theme === 'light' ? 'text-slate-800' : 'text-slate-100'
+                              }`}>
                                 Earning Performance
                                 <span className="relative flex h-2 w-2">
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -4149,9 +4102,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 </span>
                               </h3>
                             </div>
-                            <p className="text-xs text-slate-400 pl-1 mt-0.5">Peak call/consultation frequency and earnings potential indicators</p>
+                            <p className={`text-xs pl-1 mt-0.5 ${
+                              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                            }`}>Peak call/consultation frequency and earnings potential indicators</p>
                           </div>
-                          <div className="text-[11px] font-mono text-emerald-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-850">
+                          <div className={`text-[11px] font-mono px-3 py-1.5 rounded-lg border ${
+                            theme === 'light'
+                              ? 'text-emerald-600 bg-slate-50 border-slate-200'
+                              : 'text-emerald-400 bg-slate-950 border-slate-850'
+                          }`}>
                             Active Rate Cap: ₹{plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25}/min
                           </div>
                         </div>
@@ -4159,19 +4118,27 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch pt-2 text-left">
                           {/* Left: Dynamic Weekly/Monthly Earnings Performance Chart */}
                           <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
-                            <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-850/85 relative flex flex-col justify-between h-full min-h-[220px]">
+                            <div className={`p-5 rounded-2xl border relative flex flex-col justify-between h-full min-h-[220px] ${
+                              theme === 'light'
+                                ? 'bg-white border-slate-200 shadow-sm text-slate-800'
+                                : 'bg-slate-950/60 border-slate-850/85 text-slate-100'
+                            }`}>
                               <div className="flex items-center justify-between mb-4">
-                                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                                <span className={`text-xs font-bold uppercase tracking-wider ${
+                                  theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                                }`}>
                                   {performanceTab === 'weekly' ? 'Weekly Performance' : 'Monthly Performance'}
                                 </span>
-                                <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5">
+                                <div className={`flex rounded-lg p-0.5 border ${
+                                  theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-slate-900/90 border-slate-800'
+                                }`}>
                                   <button
                                     type="button"
                                     onClick={() => setPerformanceTab('weekly')}
                                     className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
                                       performanceTab === 'weekly'
                                         ? 'bg-emerald-500 text-white shadow-sm font-extrabold'
-                                        : 'text-slate-400 hover:text-slate-200'
+                                        : (theme === 'light' ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200')
                                     }`}
                                   >
                                     Weekly
@@ -4182,7 +4149,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
                                       performanceTab === 'monthly'
                                         ? 'bg-emerald-500 text-white shadow-sm font-extrabold'
-                                        : 'text-slate-400 hover:text-slate-200'
+                                        : (theme === 'light' ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200')
                                     }`}
                                   >
                                     Monthly
@@ -4193,12 +4160,16 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               {performanceTab === 'weekly' ? (
                                 <>
                                   {/* Week-wise and Day-wise Filters */}
-                                  <div className="flex flex-col gap-3 mb-5 border-b border-slate-900 pb-4">
+                                  <div className={`flex flex-col gap-3 mb-5 border-b pb-4 ${
+                                    theme === 'light' ? 'border-slate-100' : 'border-slate-900'
+                                  }`}>
                                     {/* Week-wise Slider and Selector */}
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-850">
+                                    <div className={`flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border ${
+                                      theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/50 border-slate-850'
+                                    }`}>
                                       <div className="flex flex-col text-left">
                                         <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-extrabold">Performance Week</span>
-                                        <span className="text-xs font-bold text-emerald-400 mt-0.5">{getWeekRangeString(performanceWeekOffset)}</span>
+                                        <span className={`text-xs font-bold mt-0.5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>{getWeekRangeString(performanceWeekOffset)}</span>
                                       </div>
                                       
                                       <div className="flex items-center space-x-2">
@@ -4208,12 +4179,16 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                           max="3" 
                                           value={performanceWeekOffset} 
                                           onChange={(e) => setPerformanceWeekOffset(parseInt(e.target.value))}
-                                          className="w-28 sm:w-32 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                          className={`w-28 sm:w-32 h-1 rounded-lg appearance-none cursor-pointer accent-emerald-500 ${
+                                            theme === 'light' ? 'bg-slate-200' : 'bg-slate-800'
+                                          }`}
                                         />
                                         <select
                                           value={performanceWeekOffset}
                                           onChange={(e) => setPerformanceWeekOffset(parseInt(e.target.value))}
-                                          className="bg-slate-950 border border-slate-800 rounded-lg text-[11px] font-mono font-bold text-slate-300 px-2 py-1 focus:border-emerald-500 outline-none"
+                                          className={`border rounded-lg text-[11px] font-mono font-bold px-2 py-1 focus:border-emerald-500 outline-none ${
+                                            theme === 'light' ? 'bg-white border-slate-200 text-slate-700' : 'bg-slate-950 border-slate-800 text-slate-300'
+                                          }`}
                                         >
                                           <option value="0">This Week</option>
                                           <option value="1">1 Week Ago</option>
@@ -4226,7 +4201,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     {/* Day-wise Filter segmented buttons */}
                                     <div className="flex flex-col text-left">
                                       <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-extrabold mb-1.5">Filter by Specific Day</span>
-                                      <div className="flex flex-wrap gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850">
+                                      <div className={`flex flex-wrap gap-1 p-1 rounded-xl border ${
+                                        theme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-950 border-slate-850'
+                                      }`}>
                                         {['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
                                           <button
                                             key={day}
@@ -4234,8 +4211,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                             onClick={() => setSelectedDayFilter(day)}
                                             className={`flex-1 min-w-[38px] py-1 text-[10px] font-mono font-bold rounded-lg transition-all ${
                                               selectedDayFilter === day
-                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-extrabold'
-                                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
+                                                ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 font-extrabold'
+                                                : (theme === 'light' 
+                                                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent' 
+                                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent')
                                             }`}
                                           >
                                             {day}
@@ -4247,9 +4226,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                                   <div className="h-44 flex items-end justify-between gap-3 relative px-1 pb-1">
                                     {/* Y axis lines */}
-                                    <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
-                                    <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
-                                    <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
+                                    <div className={`absolute inset-x-0 top-1/4 border-t pointer-events-none ${theme === 'light' ? 'border-slate-100' : 'border-slate-900/40'}`} />
+                                    <div className={`absolute inset-x-0 top-2/4 border-t pointer-events-none ${theme === 'light' ? 'border-slate-100' : 'border-slate-900/40'}`} />
+                                    <div className={`absolute inset-x-0 top-3/4 border-t pointer-events-none ${theme === 'light' ? 'border-slate-100' : 'border-slate-900/40'}`} />
                                     
                                     {/* Animated Bars */}
                                     {getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute, performanceWeekOffset).map((bar, i) => {
@@ -4273,14 +4252,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                           onClick={() => setSelectedDayFilter(isSelectedDay ? 'All' : bar.label)}
                                         >
                                           {/* Hover/Touch tooltip */}
-                                          <span className={`text-[9px] font-mono text-emerald-400 transition-opacity absolute -top-10 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
+                                          <span className={`text-[9px] font-mono transition-opacity absolute -top-10 px-2 py-1 rounded-lg border text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
+                                            theme === 'light' ? 'bg-white border-slate-200 text-emerald-600' : 'bg-slate-950 border-slate-800 text-emerald-400'
+                                          } ${
                                             activeBarIndex === i || isSelectedDay ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                                           }`}>
                                             {bar.earnings}
                                           </span>
                                           
-                                          <div className={`w-full bg-slate-900/40 h-32 rounded-lg flex items-end justify-center overflow-hidden transition-all border ${
-                                            isSelectedDay ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-transparent'
+                                          <div className={`w-full h-32 rounded-lg flex items-end justify-center overflow-hidden transition-all border ${
+                                            theme === 'light' 
+                                              ? (isSelectedDay ? 'border-emerald-500 bg-emerald-50/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-slate-100 bg-slate-50') 
+                                              : (isSelectedDay ? 'border-emerald-500/50 bg-slate-900/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-transparent bg-slate-900/40')
                                           }`}>
                                             <motion.div
                                               initial={{ height: 0 }}
@@ -4488,13 +4471,25 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               const needleRotation = (repeatUserPct / 100) * 180 - 90;
                               
                               return (
-                                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 flex flex-col justify-between h-full shadow-lg text-center space-y-4">
-                                  <div className="flex items-center justify-between border-b border-slate-900 pb-2 flex-wrap gap-2">
-                                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                                <div className={`p-5 rounded-2xl border flex flex-col justify-between h-full shadow-lg text-center space-y-4 ${
+                                  theme === 'light'
+                                    ? 'bg-white border-slate-200 text-slate-800'
+                                    : 'bg-slate-950 border-slate-850 text-slate-100'
+                                }`}>
+                                  <div className={`flex items-center justify-between border-b pb-2 flex-wrap gap-2 ${
+                                    theme === 'light' ? 'border-slate-100' : 'border-slate-900'
+                                  }`}>
+                                    <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                                      theme === 'light' ? 'text-slate-800' : 'text-slate-200'
+                                    }`}>
                                       ⚡ Repeat User %
                                     </h4>
-                                    <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 px-2 py-0.5 rounded-md uppercase font-mono font-bold flex items-center gap-1 shrink-0">
-                                      <span className="w-1 h-1 rounded-full bg-indigo-400 animate-pulse"></span>
+                                    <span className={`text-[9px] border px-2 py-0.5 rounded-md uppercase font-mono font-bold flex items-center gap-1 shrink-0 ${
+                                      theme === 'light'
+                                        ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                        : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/15'
+                                    }`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${theme === 'light' ? 'bg-indigo-600' : 'bg-indigo-400'}`}></span>
                                       LIVE REPEAT %
                                     </span>
                                   </div>
@@ -4518,7 +4513,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                       <path
                                         d="M 25 100 A 75 75 0 0 1 175 100"
                                         fill="none"
-                                        stroke="#1e293b"
+                                        stroke={theme === 'light' ? '#e2e8f0' : '#1e293b'}
                                         strokeWidth="11"
                                         strokeLinecap="round"
                                       />
@@ -4564,26 +4559,28 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                       </g>
 
                                       {/* Center cap core styled elegantly as a clean dot */}
-                                      <circle cx="100" cy="100" r="5" fill="#020617" stroke="#6366f1" strokeWidth="1.5" />
+                                      <circle cx="100" cy="100" r="5" fill={theme === 'light' ? '#ffffff' : '#020617'} stroke="#6366f1" strokeWidth="1.5" />
                                       <circle cx="100" cy="100" r="2" fill="#6366f1" />
 
                                       {/* Text Display */}
-                                      <text x="100" y="92" textAnchor="middle" className="fill-slate-100 text-xl font-black font-sans tracking-tight">
+                                      <text x="100" y="92" textAnchor="middle" className={`text-xl font-black font-sans tracking-tight ${theme === 'light' ? 'fill-slate-800' : 'fill-slate-100'}`}>
                                         {repeatUserPct}%
                                       </text>
 
                                       {/* High precision SVG-aligned speedometer labels */}
-                                      <text x="25" y="112" textAnchor="middle" className="fill-slate-500 text-[9px] font-bold font-sans">0%</text>
-                                      <text x="100" y="112" textAnchor="middle" className="fill-indigo-400 text-[9px] font-bold font-sans uppercase tracking-wider">Repeat User %</text>
-                                      <text x="175" y="112" textAnchor="middle" className="fill-slate-500 text-[9px] font-bold font-sans">100%</text>
+                                      <text x="25" y="112" textAnchor="middle" className={`${theme === 'light' ? 'fill-slate-600' : 'fill-slate-500'} text-[9px] font-bold font-sans`}>0%</text>
+                                      <text x="100" y="112" textAnchor="middle" className={`${theme === 'light' ? 'fill-indigo-600' : 'fill-indigo-400'} text-[9px] font-bold font-sans uppercase tracking-wider`}>Repeat User %</text>
+                                      <text x="175" y="112" textAnchor="middle" className={`${theme === 'light' ? 'fill-slate-600' : 'fill-slate-500'} text-[9px] font-bold font-sans`}>100%</text>
                                     </svg>
                                   </div>
 
                                   {/* Only Repeat User Indicator */}
-                                  <div className="flex justify-center items-center pt-2 border-t border-slate-900">
-                                    <div className="bg-slate-900/60 py-2 px-6 rounded-xl border border-slate-850 text-center">
-                                      <span className="text-[10px] text-slate-400 uppercase font-sans tracking-wider block">Target Repeat Rate</span>
-                                      <strong className="text-xs text-indigo-400 font-mono block mt-0.5">
+                                  <div className={`flex justify-center items-center pt-2 border-t ${theme === 'light' ? 'border-slate-100' : 'border-slate-900'}`}>
+                                    <div className={`py-2 px-6 rounded-xl border text-center ${
+                                      theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/60 border-slate-850'
+                                    }`}>
+                                      <span className={`text-[10px] uppercase font-sans tracking-wider block ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Target Repeat Rate</span>
+                                      <strong className={`text-xs font-mono block mt-0.5 ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
                                         40%+ Preferred
                                       </strong>
                                     </div>
@@ -4597,39 +4594,56 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             })()}
                           </div>
                         </div>
-                      </div>
 
                       {/* Section 6: Payout cycle preview */}
                       {salaryInfo && (
-                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 text-left">
-                          <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                        <div className={`rounded-3xl p-6 shadow-sm space-y-4 text-left border ${
+                          theme === 'light'
+                            ? 'bg-white border-slate-200 text-slate-800'
+                            : 'bg-slate-900 border-slate-800 text-slate-100'
+                        }`}>
+                          <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${
+                            theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                          }`}>
                             <div className="flex items-center gap-2.5 text-left">
-                              <Calendar className="w-5.5 h-5.5 text-emerald-400 shrink-0" />
-                              <span className="text-xs font-sans font-bold uppercase tracking-wider text-slate-300">
+                              <Calendar className={`w-5.5 h-5.5 shrink-0 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
+                              <span className={`text-xs font-sans font-bold uppercase tracking-wider ${
+                                theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                              }`}>
                                 Monthly Salary Cutoff Date
                               </span>
                             </div>
-                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 px-2 py-0.5 rounded uppercase font-mono font-bold">
+                            <span className={`text-[9px] border px-2 py-0.5 rounded uppercase font-mono font-bold ${
+                              theme === 'light'
+                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
+                            }`}>
                               Next Cutoff: {salaryInfo.cutoffDay}th
                             </span>
                           </div>
                           
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                            <div className={`p-4 rounded-xl border ${
+                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                            }`}>
                               <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Estimated Salary Payout</span>
-                              <strong className="text-emerald-400 text-lg font-mono block mt-1">₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
+                              <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
                               <span className="text-[9px] text-slate-500 block mt-1">Earned up to {salaryInfo.cutoffDay}th</span>
                             </div>
 
-                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                            <div className={`p-4 rounded-xl border ${
+                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                            }`}>
                               <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Credit Target Date</span>
-                              <strong className="text-amber-400 text-lg font-mono block mt-1">By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
+                              <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
                               <span className="text-[9px] text-slate-500 block mt-1">Direct bank clearance</span>
                             </div>
 
-                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                            <div className={`p-4 rounded-xl border ${
+                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                            }`}>
                               <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Accumulating Unbilled</span>
-                              <strong className="text-slate-200 text-lg font-mono block mt-1">₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
+                              <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
                               <span className="text-[9px] text-slate-500 block mt-1">For next month's payoff</span>
                             </div>
                           </div>
@@ -4637,12 +4651,22 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       )}
 
                       {/* Section 7: Recent Chats Quick List */}
-                      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 text-left">
-                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                          <h3 className="font-extrabold text-sm uppercase tracking-wider text-slate-100">Recent Chats</h3>
+                      <div className={`border rounded-3xl p-6 shadow-sm space-y-4 text-left ${
+                        theme === 'light'
+                          ? 'bg-white border-slate-200 text-slate-800'
+                          : 'bg-slate-900 border-slate-800 text-slate-100'
+                      }`}>
+                        <div className={`flex items-center justify-between border-b pb-3 ${
+                          theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                        }`}>
+                          <h3 className={`font-extrabold text-sm uppercase tracking-wider ${
+                            theme === 'light' ? 'text-slate-800' : 'text-slate-100'
+                          }`}>Recent Chats</h3>
                           <button
                             onClick={() => setActiveTab('sessions')}
-                            className="text-xs text-emerald-400 hover:underline hover:text-emerald-300 font-bold"
+                            className={`text-xs font-bold hover:underline ${
+                              theme === 'light' ? 'text-emerald-600 hover:text-emerald-700' : 'text-emerald-400 hover:text-emerald-300'
+                            }`}
                           >
                             See All ({sessions.length})
                           </button>
@@ -4653,13 +4677,17 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             <p className="text-xs text-slate-500 py-4 text-center">No consultations registered yet.</p>
                           ) : (
                             sessions.slice(0, 3).map((sess) => (
-                              <div key={sess.id} className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex items-center justify-between text-xs hover:border-slate-800 transition-colors">
+                              <div key={sess.id} className={`p-4 rounded-2xl flex items-center justify-between text-xs transition-colors border ${
+                                theme === 'light'
+                                  ? 'bg-slate-50 border-slate-100 hover:border-slate-200'
+                                  : 'bg-slate-950 border-slate-850 hover:border-slate-800'
+                              }`}>
                                 <div className="space-y-1">
                                   <div className="flex items-center space-x-2">
-                                    <span className="font-bold text-slate-200">{sess.user_name}</span>
+                                    <span className={`font-bold ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>{sess.user_name}</span>
                                     <span className="text-[9px] font-sans text-slate-500">ID: #{sess.id}</span>
                                   </div>
-                                  <p className="text-slate-400 font-sans text-[11px]">
+                                  <p className={`font-sans text-[11px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                                     {sess.duration_minutes} Mins @ ₹{sess.price_per_minute}/min
                                   </p>
                                   {sess.rating && (
@@ -4673,7 +4701,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                         ))}
                                       </div>
                                       {sess.review_text && (
-                                        <span className="text-[10px] text-slate-400 italic font-sans truncate max-w-[150px]" title={sess.review_text}>
+                                        <span className={`text-[10px] italic font-sans truncate max-w-[150px] ${
+                                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                                        }`} title={sess.review_text}>
                                           "{sess.review_text}"
                                         </span>
                                       )}
@@ -4682,10 +4712,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 </div>
                                 <div className="flex items-center space-x-4">
                                   <div className="text-right">
-                                    <span className="text-emerald-400 font-mono font-bold text-sm">₹{sess.consultant_earnings.toFixed(2)}</span>
+                                    <span className={`font-mono font-bold text-sm ${
+                                      theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
+                                    }`}>₹{sess.consultant_earnings.toFixed(2)}</span>
                                     <span className="text-[9px] text-slate-500 block">Net Earning</span>
                                   </div>
-                                  <button className="text-slate-500 hover:text-slate-300 p-1 rounded-md">
+                                  <button className={`p-1 rounded-md ${
+                                    theme === 'light' ? 'text-slate-400 hover:text-slate-600' : 'text-slate-500 hover:text-slate-300'
+                                  }`}>
                                     <MoreVertical className="w-4 h-4" />
                                   </button>
                                 </div>
@@ -4697,38 +4731,61 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                       {/* Section 8: Special Admin Wallet Additions */}
                       {manualAdjustments && manualAdjustments.length > 0 && (
-                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 text-left">
-                          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className={`border rounded-3xl p-6 shadow-sm space-y-4 text-left ${
+                          theme === 'light'
+                            ? 'bg-white border-slate-200 text-slate-800'
+                            : 'bg-slate-900 border-slate-800 text-slate-100'
+                        }`}>
+                          <div className={`flex items-center justify-between border-b pb-3 ${
+                            theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                          }`}>
                             <div className="flex items-center space-x-2">
-                              <Coins className="w-5 h-5 text-amber-400" />
-                              <h3 className="font-bold text-sm uppercase tracking-wider text-slate-100">🎁 Special Admin Credits</h3>
+                              <Coins className={`w-5 h-5 ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`} />
+                              <h3 className={`font-bold text-sm uppercase tracking-wider ${
+                                theme === 'light' ? 'text-slate-800' : 'text-slate-100'
+                              }`}>🎁 Special Admin Credits</h3>
                             </div>
-                            <span className="text-xs text-amber-400 font-mono font-bold">
+                            <span className={`text-xs font-mono font-bold ${
+                              theme === 'light' ? 'text-amber-600' : 'text-amber-400'
+                            }`}>
                               Total: ₹{manualAdjustments.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0).toFixed(2)}
                             </span>
                           </div>
 
                           <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
                             {manualAdjustments.map((adj) => (
-                              <div key={adj.id} className="bg-slate-950 border border-slate-850 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:border-slate-800 transition-colors">
+                              <div key={adj.id} className={`p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors border ${
+                                theme === 'light'
+                                  ? 'bg-slate-50 border-slate-100 hover:border-slate-200'
+                                  : 'bg-slate-950 border-slate-850 hover:border-slate-800'
+                              }`}>
                                 <div className="space-y-1">
                                   <div className="flex items-center space-x-2">
-                                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-bold font-mono">
+                                    <span className={`border px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
+                                      theme === 'light'
+                                        ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                    }`}>
                                       CREDITED BY SUPER ADMIN
                                     </span>
                                     <span className="text-[9px] font-sans text-slate-500">{new Date(adj.created_at).toLocaleString()}</span>
                                   </div>
-                                  <p className="text-slate-200 font-semibold text-xs mt-1.5">{adj.reason}</p>
+                                  <p className={`font-semibold text-xs mt-1.5 ${
+                                    theme === 'light' ? 'text-slate-800' : 'text-slate-200'
+                                  }`}>{adj.reason}</p>
                                 </div>
                                 <div className="text-right sm:self-center shrink-0">
-                                  <span className="text-emerald-400 font-mono text-base font-black">+₹{adj.amount.toFixed(2)}</span>
+                                  <span className={`font-mono text-base font-black ${
+                                    theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
+                                  }`}>+₹{adj.amount.toFixed(2)}</span>
                                 </div>
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
-                    </>
+                    </div>
+                  </div>
                   )}
                 </motion.div>
               )}
@@ -5457,26 +5514,38 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         ) : null}
 
                         {aadhaarPhotoUrl && (
-                          <div className="mt-2 p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between gap-3" id="aadhaar-photo-preview">
-                            <div className="flex items-center space-x-3">
+                          <div className={`mt-2 p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                            theme === 'light'
+                              ? 'bg-slate-50 border-slate-200'
+                              : 'bg-slate-900 border-slate-800'
+                          }`} id="aadhaar-photo-preview">
+                            <div className="flex items-center space-x-3 w-full sm:w-auto">
                               <img 
                                 src={aadhaarPhotoUrl} 
                                 alt="Aadhaar Preview" 
                                 onClick={() => setPreviewImageUrl(aadhaarPhotoUrl)}
-                                className="w-12 h-12 rounded-lg object-cover border border-slate-800 cursor-pointer hover:opacity-80 transition-opacity"
+                                className={`w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 transition-opacity border ${
+                                  theme === 'light' ? 'border-slate-200' : 'border-slate-800'
+                                }`}
                                 referrerPolicy="no-referrer"
                                 title="Click to preview full image"
                               />
                               <div className="text-left">
-                                <span className="text-[10px] text-slate-400 font-bold block">Aadhaar Card Attachment Verified</span>
-                                <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[120px] sm:max-w-[220px]">{aadhaarPhotoUrl}</span>
+                                <span className={`text-[10px] font-bold block ${theme === 'light' ? 'text-slate-700' : 'text-slate-400'}`}>Aadhaar Card Attachment Verified</span>
+                                <span className={`text-[9px] font-mono block truncate max-w-[120px] sm:max-w-[220px] ${
+                                  theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
+                                }`}>{aadhaarPhotoUrl}</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800/10">
                               <button
                                 type="button"
                                 onClick={() => setPreviewImageUrl(aadhaarPhotoUrl)}
-                                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
+                                className={`text-xs font-bold transition-all font-sans px-2.5 py-1 rounded-lg border cursor-pointer ${
+                                  theme === 'light'
+                                    ? 'text-emerald-600 hover:text-emerald-700 bg-white hover:bg-slate-50 border-slate-200 shadow-sm'
+                                    : 'text-emerald-400 hover:text-emerald-300 bg-slate-850 hover:bg-slate-800 border-slate-750'
+                                }`}
                               >
                                 Preview
                               </button>
@@ -5484,7 +5553,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 <button
                                   type="button"
                                   onClick={() => setAadhaarPhotoUrl('')}
-                                  className="text-xs font-bold text-rose-400 hover:text-rose-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
+                                  className={`text-xs font-bold transition-all font-sans px-2.5 py-1 rounded-lg border cursor-pointer ${
+                                    theme === 'light'
+                                      ? 'text-rose-600 hover:text-rose-700 bg-white hover:bg-slate-50 border-slate-200 shadow-sm'
+                                      : 'text-rose-400 hover:text-rose-300 bg-slate-850 hover:bg-slate-800 border-slate-750'
+                                  }`}
                                 >
                                   Clear
                                 </button>
@@ -5546,26 +5619,38 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         ) : null}
 
                         {panPhotoUrl && (
-                          <div className="mt-2 p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between gap-3" id="pan-photo-preview">
-                            <div className="flex items-center space-x-3">
+                          <div className={`mt-2 p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                            theme === 'light'
+                              ? 'bg-slate-50 border-slate-200'
+                              : 'bg-slate-900 border-slate-800'
+                          }`} id="pan-photo-preview">
+                            <div className="flex items-center space-x-3 w-full sm:w-auto">
                               <img 
                                 src={panPhotoUrl} 
                                 alt="PAN Preview" 
                                 onClick={() => setPreviewImageUrl(panPhotoUrl)}
-                                className="w-12 h-12 rounded-lg object-cover border border-slate-800 cursor-pointer hover:opacity-80 transition-opacity"
+                                className={`w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80 transition-opacity border ${
+                                  theme === 'light' ? 'border-slate-200' : 'border-slate-800'
+                                }`}
                                 referrerPolicy="no-referrer"
                                 title="Click to preview full image"
                               />
                               <div className="text-left">
-                                <span className="text-[10px] text-slate-400 font-bold block">PAN Card Attachment Verified</span>
-                                <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[120px] sm:max-w-[220px]">{panPhotoUrl}</span>
+                                <span className={`text-[10px] font-bold block ${theme === 'light' ? 'text-slate-700' : 'text-slate-400'}`}>PAN Card Attachment Verified</span>
+                                <span className={`text-[9px] font-mono block truncate max-w-[120px] sm:max-w-[220px] ${
+                                  theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
+                                }`}>{panPhotoUrl}</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800/10">
                               <button
                                 type="button"
                                 onClick={() => setPreviewImageUrl(panPhotoUrl)}
-                                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
+                                className={`text-xs font-bold transition-all font-sans px-2.5 py-1 rounded-lg border cursor-pointer ${
+                                  theme === 'light'
+                                    ? 'text-emerald-600 hover:text-emerald-700 bg-white hover:bg-slate-50 border-slate-200 shadow-sm'
+                                    : 'text-emerald-400 hover:text-emerald-300 bg-slate-850 hover:bg-slate-800 border-slate-750'
+                                }`}
                               >
                                 Preview
                               </button>
@@ -5573,7 +5658,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 <button
                                   type="button"
                                   onClick={() => setPanPhotoUrl('')}
-                                  className="text-xs font-bold text-rose-400 hover:text-rose-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
+                                  className={`text-xs font-bold transition-all font-sans px-2.5 py-1 rounded-lg border cursor-pointer ${
+                                    theme === 'light'
+                                      ? 'text-rose-600 hover:text-rose-700 bg-white hover:bg-slate-50 border-slate-200 shadow-sm'
+                                      : 'text-rose-400 hover:text-rose-300 bg-slate-850 hover:bg-slate-800 border-slate-750'
+                                  }`}
                                 >
                                   Clear
                                 </button>
@@ -5679,6 +5768,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           onChange={(e) => setNewFromTime(e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         />
+                        {newFromTime && (
+                          <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
+                            Selected: {formatTimeTo12Hour(newFromTime)}
+                          </span>
+                        )}
                       </div>
 
                       <div>
@@ -5690,6 +5784,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           onChange={(e) => setNewToTime(e.target.value)}
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         />
+                        {newToTime && (
+                          <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
+                            Selected: {formatTimeTo12Hour(newToTime)}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -5792,14 +5891,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
                     <div className="flex items-center space-x-2">
                       <Wallet className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Bank Details for Payout Disbursements</h3>
+                      <h3 className="font-bold text-slate-100 font-sans">Bank Details For Payout</h3>
                     </div>
                     <button
                       onClick={() => setActiveTab('dashboard')}
                       className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Dashboard</span>
+                      <span>Back to Home</span>
                     </button>
                   </div>
 
@@ -5910,7 +6009,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         id="bank-submit-button"
                         className="bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 py-3 rounded-xl text-xs font-extrabold w-full transition-all uppercase tracking-wider shadow-lg hover:shadow-emerald-500/5 mt-4"
                       >
-                        Submit Bank Details for Payout Approval
+                        Submit For Payout Approval
                       </button>
                     )}
 

@@ -11,6 +11,9 @@ export function startChatExpiryJob(io: Server) {
     try {
       const now = new Date();
 
+      // Ensure monthly wallets are reset immediately when midnight of next day of cutoff starts
+      checkAndResetMonthlyWallets();
+
       // Check for missed pending sessions (older than 60 seconds)
       const pendingSessions = db.prepare("SELECT * FROM sessions WHERE status = 'pending'").all() as any[];
       for (const sess of pendingSessions) {

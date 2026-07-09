@@ -394,6 +394,12 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
       ? photo_url.trim()
       : (existingUser.photo_url || null);
 
+    const finalDob = (dob !== undefined && dob !== null && dob !== '') ? dob.trim() : (existingUser.dob || null);
+    const finalGender = (gender !== undefined && gender !== null && gender !== '') ? gender.trim() : (existingUser.gender || 'Male');
+    const finalLocation = (location !== undefined && location !== null && location !== '') ? location.trim() : (existingUser.location || null);
+    const finalLanguages = (languages !== undefined && languages !== null && languages !== '') ? languages.trim() : (existingUser.languages || null);
+    const finalPhone = (phone !== undefined && phone !== null && phone !== '') ? phone.trim() : (existingUser.phone || null);
+
     db.prepare(`
       UPDATE users 
       SET display_name = ?, email = ?, photo_url = ?, dob = ?, gender = ?, wallet_balance = ?,
@@ -403,15 +409,15 @@ export const updateUserBySuperAdmin = (req: Request, res: Response) => {
       cleanDisplayName,
       email || null,
       finalPhotoUrl,
-      dob || null,
-      gender || null,
+      finalDob,
+      finalGender,
       parseFloat(wallet_balance) || 0,
       (locked_consultant_id !== undefined && locked_consultant_id !== '' && locked_consultant_id !== null) ? String(locked_consultant_id) : null,
       admin_allow_others !== undefined ? parseInt(admin_allow_others) : 0,
       category || 'General',
-      location || null,
-      languages || null,
-      phone || null,
+      finalLocation,
+      finalLanguages,
+      finalPhone,
       id
     );
 
@@ -1106,6 +1112,47 @@ export const updateClassicAvatarsByAdmin = (req: Request, res: Response) => {
     const cleanAvatars = avatars.map(url => String(url).trim()).filter(url => url.length > 0);
     db.prepare('INSERT OR REPLACE INTO admin_settings (key, value) VALUES (?, ?)').run('classic_avatars', JSON.stringify(cleanAvatars));
     res.json({ success: true, avatars: cleanAvatars });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Disburse consultant payout and deduct from wallet_withdrawable
+export const disburseConsultantPayout = (req: Request, res: Response) => {
+  try {
+    const { consultant_id, amount, cycle_ref_date } = req.body;
+    if (!consultant_id || amount === undefined) {
+      return res.status(400).json({ error: 'Consultant ID and amount are required' });
+    }
+
+    const consultant = db.prepare('SELECT * FROM consultants WHERE id = ?').get(consultant_id) as any;
+    if (!consultant) {
+      return res.status(404).json({ error: 'Consultant not found' });
+    }
+
+    const payoutAmount = parseFloat(amount);
+    if (isNaN(payoutAmount) || payoutAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid payout amount' });
+    }
+
+    if (consultant.wallet_withdrawable < payoutAmount) {
+      return res.status(400).json({ error: 'Insufficient withdrawable balance' });
+    }
+
+    // Deduct from wallet_withdrawable
+    db.prepare('UPDATE consultants SET wallet_withdrawable = wallet_withdrawable - ? WHERE id = ?').run(payoutAmount, consultant_id);
+
+    // Write audit log
+    const logId = 'AUD-' + Math.floor(100000 + Math.random() * 900000);
+    const timestamp = new Date().toISOString();
+    const details = `Disbursed payout of ₹${payoutAmount.toFixed(2)} to ${consultant.display_name} (#${consultant_id}) for cycle reference ${cycle_ref_date || 'default'}`;
+    
+    db.prepare(`
+      INSERT INTO audit_logs (id, timestamp, actor, role, action, details, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(logId, timestamp, 'Super Admin', 'Admin', 'Salary Disbursed', details, 'Success');
+
+    res.json({ success: true, message: `Salary of ₹${payoutAmount.toFixed(2)} disbursed successfully!` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

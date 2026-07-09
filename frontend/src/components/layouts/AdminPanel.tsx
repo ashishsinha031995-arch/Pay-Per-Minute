@@ -97,7 +97,8 @@ export function AdminPanel() {
     }
   };
 
-  const adminIsSaveDisabled = (!adminNewDate && !adminNewDay) || !adminNewFromTime || !adminNewToTime;
+  const adminIsTimeOrderInvalid = adminNewFromTime && adminNewToTime && adminNewToTime <= adminNewFromTime;
+  const adminIsSaveDisabled = (!adminNewDate && !adminNewDay) || !adminNewFromTime || !adminNewToTime || !!adminIsTimeOrderInvalid;
 
   const getPayoutMonthOptions = () => {
     const options = [];
@@ -416,6 +417,36 @@ export function AdminPanel() {
   const [userSpendsMonthFilter, setUserSpendsMonthFilter] = useState<string>('all');
   const [userSpendsAvailableMonths, setUserSpendsAvailableMonths] = useState<string[]>([]);
   const [loadingUserSpendsLeaderboard, setLoadingUserSpendsLeaderboard] = useState(false);
+
+  const [selectedPayoutDetails, setSelectedPayoutDetails] = useState<{ consultantName: string, consultantId: number, sInfo: any } | null>(null);
+
+  const handleDisbursePayout = async (consultantId: number, amount: number, cycleRefDate: string) => {
+    try {
+      const res = await fetch('/api/admin/consultants/disburse-payout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          consultant_id: consultantId,
+          amount,
+          cycle_ref_date: cycleRefDate
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMsg(data.message || 'Payout disbursed successfully!');
+        setTimeout(() => setSuccessMsg(null), 3500);
+        await loadAdminData(true);
+      } else {
+        setError(data.error || 'Failed to disburse payout');
+        setTimeout(() => setError(null), 3500);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to disburse payout');
+      setTimeout(() => setError(null), 3500);
+    }
+  };
 
   const fetchRevenueLeaderboard = async (category = 'all') => {
     try {
@@ -5666,21 +5697,26 @@ export function AdminPanel() {
 
                             {/* Actions / Clearance */}
                             <td className="py-4 px-4 text-center">
-                              {sInfo.prevCycleEarnings > 0 ? (
+                              <div className="flex flex-col lg:flex-row items-center justify-center gap-2">
                                 <button
-                                  onClick={() => {
-                                    setSuccessMsg(`Salary of ₹${sInfo.prevCycleEarnings.toFixed(2)} cleared successfully for ${c.display_name}!`);
-                                    setTimeout(() => setSuccessMsg(null), 3500);
-                                  }}
-                                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all"
+                                  onClick={() => setSelectedPayoutDetails({ consultantName: c.display_name, consultantId: c.id, sInfo })}
+                                  className="bg-slate-850 hover:bg-slate-750 text-slate-300 text-[10px] font-medium px-2 py-1.5 rounded-lg border border-slate-800 transition-all cursor-pointer"
                                 >
-                                  Disburse Payout
+                                  View Sessions
                                 </button>
-                              ) : (
-                                <span className="text-[10px] text-slate-500 bg-slate-900 border border-slate-850 px-2 py-1 rounded font-mono">
-                                  No Payout Due
-                                </span>
-                              )}
+                                {sInfo.prevCycleEarnings > 0 ? (
+                                  <button
+                                    onClick={() => handleDisbursePayout(c.id, sInfo.prevCycleEarnings, selectedPayoutCycleRefDate)}
+                                    className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-bold px-2 py-1.5 rounded-lg transition-all cursor-pointer"
+                                  >
+                                    Disburse Payout
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 bg-slate-900/50 border border-slate-850 px-2 py-1 rounded font-mono">
+                                    No Payout Due
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -5702,6 +5738,106 @@ export function AdminPanel() {
                   3. <strong>Ongoing Cycle:</strong> Any sessions completed after the {stats.salaryCutoffDay || 25}th of the current month are automatically catalogued for the next month's payoff cycle.
                 </p>
               </div>
+
+              {/* Detailed Cycle Sessions Modal */}
+              {selectedPayoutDetails && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+                    <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+                      <div>
+                        <h4 className="text-base font-bold text-slate-100">
+                          Sessions for {selectedPayoutDetails.consultantName}
+                        </h4>
+                        <p className="text-xs font-mono text-slate-400 mt-0.5">
+                          Showing completed sessions in the selected cycle
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedPayoutDetails(null)}
+                        className="text-slate-400 hover:text-slate-200 transition-colors font-bold text-sm bg-slate-800 px-3 py-1.5 rounded-lg cursor-pointer"
+                      >
+                        ✕ Close
+                      </button>
+                    </div>
+
+                    <div className="p-6 overflow-y-auto space-y-4">
+                      {/* Cycle dates summary cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-850">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase block">Previous Cycle Range</span>
+                          <span className="text-xs font-mono font-bold text-slate-300">
+                            {new Date(selectedPayoutDetails.sInfo.prevCycleStart).toLocaleDateString()} - {new Date(selectedPayoutDetails.sInfo.prevCycleEnd).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-850">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase block">Earnings (Prev Cycle)</span>
+                          <span className="text-sm font-mono font-extrabold text-emerald-400">
+                            ₹{selectedPayoutDetails.sInfo.prevCycleEarnings.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-850">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase block">Ongoing Cycle Earnings</span>
+                          <span className="text-sm font-mono font-bold text-slate-400">
+                            ₹{selectedPayoutDetails.sInfo.currentCycleEarnings.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Sessions spreadsheet table */}
+                      <div className="overflow-x-auto bg-slate-950 rounded-xl border border-slate-850 max-h-[40vh]">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-850 text-[10px] font-mono text-slate-400 bg-slate-900 uppercase">
+                              <th className="py-2.5 px-3">Session ID</th>
+                              <th className="py-2.5 px-3">User</th>
+                              <th className="py-2.5 px-3 text-right">Duration</th>
+                              <th className="py-2.5 px-3 text-right">Total Paid</th>
+                              <th className="py-2.5 px-3 text-right">Comm. Rate</th>
+                              <th className="py-2.5 px-3 text-right text-emerald-400">Earnings (₹)</th>
+                              <th className="py-2.5 px-3">Completed At</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-850">
+                            {(() => {
+                              const pStart = new Date(selectedPayoutDetails.sInfo.prevCycleStart);
+                              const pEnd = new Date(selectedPayoutDetails.sInfo.prevCycleEnd);
+                              const filtered = sessions.filter((s: any) => {
+                                if (s.consultant_id !== selectedPayoutDetails.consultantId || s.status !== 'completed') return false;
+                                const sDate = new Date(s.created_at);
+                                return sDate >= pStart && sDate <= pEnd;
+                              });
+
+                              if (filtered.length === 0) {
+                                return (
+                                  <tr>
+                                    <td colSpan={7} className="py-6 text-center text-slate-500 italic font-mono text-[11px]">
+                                      No completed sessions found in this cycle date range.
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              return filtered.map((s: any) => (
+                                <tr key={s.id} className="hover:bg-slate-900/40">
+                                  <td className="py-2.5 px-3 font-mono text-slate-400">{s.id}</td>
+                                  <td className="py-2.5 px-3 font-semibold text-slate-300">{s.user_name}</td>
+                                  <td className="py-2.5 px-3 text-right font-mono">{s.duration_minutes}m</td>
+                                  <td className="py-2.5 px-3 text-right font-mono">₹{parseFloat(s.total_paid).toFixed(2)}</td>
+                                  <td className="py-2.5 px-3 text-right font-mono">{s.commission_rate}%</td>
+                                  <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-400">₹{parseFloat(s.consultant_earnings).toFixed(2)}</td>
+                                  <td className="py-2.5 px-3 font-mono text-slate-500">
+                                    {new Date(s.created_at).toLocaleString()}
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -6274,6 +6410,11 @@ export function AdminPanel() {
                     onChange={(e) => setAdminNewFromTime(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
+                  {adminNewFromTime && (
+                    <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
+                      Selected: {formatTimeTo12Hour(adminNewFromTime)}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -6285,6 +6426,11 @@ export function AdminPanel() {
                     onChange={(e) => setAdminNewToTime(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
+                  {adminNewToTime && (
+                    <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
+                      Selected: {formatTimeTo12Hour(adminNewToTime)}
+                    </span>
+                  )}
                 </div>
               </div>
 

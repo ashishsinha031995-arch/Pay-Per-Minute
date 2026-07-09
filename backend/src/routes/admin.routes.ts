@@ -31,7 +31,8 @@ import {
   updateConsultantManualFollowers,
   getConsultantFollowersLeaderboard,
   getConsultantRevenueLeaderboard,
-  getUserSpendsLeaderboard
+  getUserSpendsLeaderboard,
+  disburseConsultantPayout
 } from '../controllers/admin.controller.js';
 import {
   getAdminNotifications,
@@ -50,6 +51,7 @@ router.put('/settings/avatars', updateClassicAvatarsByAdmin);
 router.get('/emails', getSentEmailsLog);
 router.get('/audit-logs', getAdminAuditLogs);
 router.get('/consultants', getAdminConsultantsList);
+router.post('/consultants/disburse-payout', disburseConsultantPayout);
 router.get('/consultants/followers-leaderboard', getConsultantFollowersLeaderboard);
 router.get('/consultants/revenue-leaderboard', getConsultantRevenueLeaderboard);
 router.get('/users/spends-leaderboard', getUserSpendsLeaderboard);

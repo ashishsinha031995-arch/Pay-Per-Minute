@@ -759,8 +759,8 @@ export function initDb() {
       'Starter Launchpad (30 Days Free Trial)', 
       0.0, 
       30, 
-      'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹10000/min. 30% platform commission.',
-      10000.0,
+      'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹25/min. 30% platform commission.',
+      25.0,
       '72 Hours',
       30.0
     );
@@ -768,8 +768,8 @@ export function initDb() {
       'Professional Growth Booster', 
       4999.0, 
       30, 
-      'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹10000/min. 25% platform commission.',
-      10000.0,
+      'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹100/min. 25% platform commission.',
+      100.0,
       '48 Hours',
       25.0
     );
@@ -777,11 +777,35 @@ export function initDb() {
       'Elite Mastermind Hub', 
       9999.0, 
       30, 
-      'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹10000/min. 20% platform commission.',
-      10000.0,
+      'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹500/min. 20% platform commission.',
+      500.0,
       '24 Hours',
       20.0
     );
+  } else {
+    // Unconditionally update existing plans to correct values
+    try {
+      db.prepare(`
+        UPDATE plans 
+        SET max_consultant_rate = 25.0, 
+            description = 'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹25/min. 30% platform commission.'
+        WHERE name LIKE '%Starter%' OR name LIKE '%Launchpad%'
+      `).run();
+      db.prepare(`
+        UPDATE plans 
+        SET max_consultant_rate = 100.0, 
+            description = 'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹100/min. 25% platform commission.'
+        WHERE name LIKE '%Professional%'
+      `).run();
+      db.prepare(`
+        UPDATE plans 
+        SET max_consultant_rate = 500.0, 
+            description = 'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹500/min. 20% platform commission.'
+        WHERE name LIKE '%Elite%'
+      `).run();
+    } catch (e) {
+      console.error('Failed to update plans schema in DB initialization:', e);
+    }
   }
 
   // Seed default Consultants
@@ -985,88 +1009,116 @@ export function initDb() {
     console.error('Error auto-assigning plans:', err);
   }
 
-  // Migrate existing IDs to be at least 5 digits with completely separate ranges to prevent any ID collisions (users: 10000+, consultants: 20000+)
-  try {
-    // Turn foreign keys OFF outside transaction
-    db.pragma('foreign_keys = OFF');
+  // Extract the ID migration and Giphy photo cleanup to be run safely after MongoDB sync
+  const migrateAndCleanDatabase = () => {
+    try {
+      originalDb.pragma('foreign_keys = OFF');
 
-    db.transaction(() => {
-      // Migrate consultants to >= 20000
-      const lowCons = db.prepare('SELECT id FROM consultants WHERE id < 20000 ORDER BY id DESC').all() as { id: number }[];
-      for (const cons of lowCons) {
-        const oldId = cons.id;
-        const newId = oldId < 10000 ? oldId + 20000 : oldId + 10000;
-        let targetId = newId;
-        const exists = db.prepare('SELECT id FROM consultants WHERE id = ?').get(targetId);
-        if (exists) {
-          const maxIdRow = db.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
-          targetId = Math.max(20000, maxIdRow?.maxId || 20000) + 1;
-        }
-        
-        db.prepare('UPDATE sessions SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
-        db.prepare('UPDATE reviews SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
-        db.prepare('UPDATE blocked_users SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
-        db.prepare('UPDATE users SET locked_consultant_id = ? WHERE locked_consultant_id = ?').run(targetId, oldId);
-        db.prepare('UPDATE consultants SET id = ? WHERE id = ?').run(targetId, oldId);
-      }
-
-      // Migrate users to >= 10000
-      const lowUsers = db.prepare('SELECT id FROM users WHERE id < 10000 ORDER BY id DESC').all() as { id: number }[];
-      for (const usr of lowUsers) {
-        const oldId = usr.id;
-        const newId = oldId + 10000;
-        let targetId = newId;
-        const exists = db.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
-        if (exists) {
-          const maxIdRow = db.prepare('SELECT MAX(id) as maxId FROM users').get() as { maxId: number | null };
-          targetId = Math.max(10000, maxIdRow?.maxId || 10000) + 1;
+      originalDb.transaction(() => {
+        // Migrate consultants to >= 20000
+        const lowCons = originalDb.prepare('SELECT id FROM consultants WHERE id < 20000 ORDER BY id DESC').all() as { id: number }[];
+        for (const cons of lowCons) {
+          const oldId = cons.id;
+          const newId = oldId < 10000 ? oldId + 20000 : oldId + 10000;
+          let targetId = newId;
+          const exists = originalDb.prepare('SELECT id FROM consultants WHERE id = ?').get(targetId);
+          if (exists) {
+            const maxIdRow = originalDb.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
+            targetId = Math.max(20000, maxIdRow?.maxId || 20000) + 1;
+          }
+          
+          originalDb.prepare('UPDATE sessions SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
+          originalDb.prepare('UPDATE reviews SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
+          originalDb.prepare('UPDATE blocked_users SET consultant_id = ? WHERE consultant_id = ?').run(targetId, oldId);
+          originalDb.prepare('UPDATE users SET locked_consultant_id = ? WHERE locked_consultant_id = ?').run(targetId, oldId);
+          originalDb.prepare('UPDATE consultants SET id = ? WHERE id = ?').run(targetId, oldId);
         }
 
-        db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(targetId, oldId);
-        db.prepare('UPDATE wallet_transactions SET user_id = ? WHERE user_id = ?').run(targetId, oldId);
-        db.prepare('UPDATE users SET id = ? WHERE id = ?').run(targetId, oldId);
+        // Migrate users to >= 10000
+        const lowUsers = originalDb.prepare('SELECT id FROM users WHERE id < 10000 ORDER BY id DESC').all() as { id: number }[];
+        for (const usr of lowUsers) {
+          const oldId = usr.id;
+          const newId = oldId + 10000;
+          let targetId = newId;
+          const exists = originalDb.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+          if (exists) {
+            const maxIdRow = originalDb.prepare('SELECT MAX(id) as maxId FROM users').get() as { maxId: number | null };
+            targetId = Math.max(10000, maxIdRow?.maxId || 10000) + 1;
+          }
+
+          originalDb.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(targetId, oldId);
+          originalDb.prepare('UPDATE wallet_transactions SET user_id = ? WHERE user_id = ?').run(targetId, oldId);
+          originalDb.prepare('UPDATE users SET id = ? WHERE id = ?').run(targetId, oldId);
+        }
+
+        // Update auto-increment sequence tables
+        const maxUser = originalDb.prepare('SELECT MAX(id) as maxId FROM users').get() as { maxId: number | null };
+        const maxUserId = maxUser?.maxId || 10000;
+
+        const maxCons = originalDb.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
+        const maxConsId = maxCons?.maxId || 20000;
+
+        originalDb.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('users', 10000)").run();
+        originalDb.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'users'").run(Math.max(10000, maxUserId));
+
+        originalDb.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('consultants', 20000)").run();
+        originalDb.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'consultants'").run(Math.max(20000, maxConsId));
+      })();
+
+      originalDb.pragma('foreign_keys = ON');
+      console.log('Database IDs migrated to 5-digit format successfully');
+    } catch (err) {
+      try { originalDb.pragma('foreign_keys = ON'); } catch (_) {}
+      console.error('Error migrating IDs to 5-digit format:', err);
+    }
+
+    // Fix any corrupted or Giphy URLs for existing users
+    try {
+      const maleReplacement = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
+      const femaleReplacement = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150';
+      originalDb.prepare("UPDATE users SET photo_url = ? WHERE LOWER(gender) = 'female' AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(femaleReplacement);
+      originalDb.prepare("UPDATE users SET photo_url = ? WHERE (LOWER(gender) != 'female' OR gender IS NULL) AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(maleReplacement);
+      console.log('[Database] Corrected existing users with broken Giphy profile photos.');
+    } catch (err) {
+      console.error('Error correcting existing users with Giphy photos:', err);
+    }
+
+    // Enforce correct subscription plan calling rate limits
+    try {
+      originalDb.prepare("UPDATE plans SET max_consultant_rate = 25.0, description = 'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹25/min. 30% platform commission.' WHERE name LIKE '%Starter%' OR name LIKE '%Launchpad%'").run();
+      originalDb.prepare("UPDATE plans SET max_consultant_rate = 100.0, description = 'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹100/min. 25% platform commission.' WHERE name LIKE '%Professional%'").run();
+      originalDb.prepare("UPDATE plans SET max_consultant_rate = 500.0, description = 'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹500/min. 20% platform commission.' WHERE name LIKE '%Elite%'").run();
+      console.log('[Database] Enforced correct plan rate limits: Starter (25), Professional (100), Elite (500).');
+    } catch (err) {
+      console.error('Error enforcing subscription plan limits:', err);
+    }
+
+    // Cap existing consultants' rates to their assigned plans' max rate
+    try {
+      const consultants = originalDb.prepare('SELECT id, plan_id, price_per_minute, display_name FROM consultants').all() as any[];
+      const plans = originalDb.prepare('SELECT id, max_consultant_rate FROM plans').all() as any[];
+      const planMap = new Map<number, number>();
+      for (const p of plans) {
+        planMap.set(p.id, p.max_consultant_rate);
       }
+      for (const cons of consultants) {
+        let maxRate = 25.0; // default to 25 if no plan or default plan is Starter
+        if (cons.plan_id && planMap.has(cons.plan_id)) {
+          maxRate = planMap.get(cons.plan_id)!;
+        }
+        if (cons.price_per_minute > maxRate) {
+          console.log(`[Database] Capping consultant ${cons.display_name} (#${cons.id}) rate from ₹${cons.price_per_minute}/min to plan max ₹${maxRate}/min`);
+          originalDb.prepare('UPDATE consultants SET price_per_minute = ? WHERE id = ?').run(maxRate, cons.id);
+        }
+      }
+      console.log('[Database] Consultant rates verified and capped under active plan limits successfully.');
+    } catch (err) {
+      console.error('Error capping consultant rates:', err);
+    }
+  };
 
-      // Update auto-increment sequence tables
-      const maxUser = db.prepare('SELECT MAX(id) as maxId FROM users').get() as { maxId: number | null };
-      const maxUserId = maxUser?.maxId || 10000;
-
-      const maxCons = db.prepare('SELECT MAX(id) as maxId FROM consultants').get() as { maxId: number | null };
-      const maxConsId = maxCons?.maxId || 20000;
-
-      db.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('users', 10000)").run();
-      db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'users'").run(Math.max(10000, maxUserId));
-
-      db.prepare("INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('consultants', 20000)").run();
-      db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'consultants'").run(Math.max(20000, maxConsId));
-    })();
-
-    // Turn foreign keys ON outside transaction
-    originalDb.pragma('foreign_keys = ON');
-    console.log('Database IDs migrated to 5-digit format successfully');
-  } catch (err) {
-    try { originalDb.pragma('foreign_keys = ON'); } catch (_) {}
-    console.error('Error migrating IDs to 5-digit format:', err);
-  }
-
-  // Fix any corrupted or Giphy URLs for existing users
-  try {
-    const maleReplacement = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
-    const femaleReplacement = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150';
-    db.prepare("UPDATE users SET photo_url = ? WHERE LOWER(gender) = 'female' AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(femaleReplacement);
-    db.prepare("UPDATE users SET photo_url = ? WHERE (LOWER(gender) != 'female' OR gender IS NULL) AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(maleReplacement);
-    console.log('[Database] Corrected existing users with broken Giphy profile photos.');
-  } catch (err) {
-    console.error('Error correcting existing users with Giphy photos:', err);
-  }
-
-  // Self-heal and relax subscription plan calling rate limits to prevent "Rate Exceeded" errors for developers/testers
-  try {
-    db.prepare("UPDATE plans SET max_consultant_rate = 10000.0").run();
-    console.log('[Database] Self-healed existing subscription plans rate limits to ₹10000.0 successfully.');
-  } catch (err) {
-    console.error('Error relaxing existing subscription plan limits:', err);
-  }
+  // Run the migration initially for local SQLite
+  migrateAndCleanDatabase();
 
   // Connect to MongoDB asynchronously so it doesn't block server startup
   const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -1090,7 +1142,12 @@ export function initDb() {
         }
 
         if (hasMongoData) {
+          // Sync existing MongoDB data to local SQLite
           await syncFromMongoToSQLite();
+          // Immediately run ID migration and URL cleanups on the synced data to keep them safe and 5-digit formatted
+          migrateAndCleanDatabase();
+          // Write back the clean, migrated 5-digit formatted data to MongoDB, wiping any old IDs
+          await syncFromSQLiteToMongo();
         } else {
           await syncFromSQLiteToMongo();
         }

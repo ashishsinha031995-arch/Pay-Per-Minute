@@ -481,11 +481,17 @@ export const updateUserProfile = (req: Request, res: Response) => {
       ? photo_url.trim()
       : (existingUser.photo_url || null);
 
+    const finalDob = (dob !== undefined && dob !== null && dob !== '') ? dob.trim() : (existingUser.dob || null);
+    const finalGender = (gender !== undefined && gender !== null && gender !== '') ? gender.trim() : (existingUser.gender || 'Male');
+    const finalLocation = (location !== undefined && location !== null && location !== '') ? location.trim() : (existingUser.location || null);
+    const finalLanguages = (languages !== undefined && languages !== null && languages !== '') ? languages.trim() : (existingUser.languages || null);
+    const finalPhone = (phone !== undefined && phone !== null && phone !== '') ? phone.trim() : (existingUser.phone || null);
+
     db.prepare(`
       UPDATE users 
       SET display_name = ?, photo_url = ?, dob = ?, gender = ?, location = ?, languages = ?, phone = ?
       WHERE id = ?
-    `).run(cleanDisplayName, finalPhotoUrl, dob || null, gender || null, location || null, languages || null, phone || null, id);
+    `).run(cleanDisplayName, finalPhotoUrl, finalDob, finalGender, finalLocation, finalLanguages, finalPhone, id);
 
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     res.json({ success: true, user: updatedUser });
