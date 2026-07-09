@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { db, logWalletTransaction } from '../config/database.js';
 import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
 import { ChatMemoryService } from '../services/chatMemory.js';
+import { checkAndResetMonthlyWallets } from '../utils/salary.js';
 
 export function getMicrosecondISO(): string {
   const now = new Date();
@@ -462,6 +463,10 @@ export const endSessionManually = (req: Request, res: Response) => {
 
     const cid = sess.consultant_id;
     const isCompletedVal = finalStatus === 'completed' ? 1 : 0;
+    
+    // Check and trigger monthly wallet reset if crossed cutoff day before adding new monthly earnings
+    checkAndResetMonthlyWallets();
+
     db.prepare(`
       UPDATE consultants 
       SET wallet_today = wallet_today + ?, 

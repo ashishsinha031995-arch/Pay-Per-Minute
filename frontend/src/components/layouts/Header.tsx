@@ -1,32 +1,45 @@
 import React from 'react';
-import { Shield, Sparkles, User, MessageSquare, Database, Radio, CreditCard, LogOut, Menu, Sun, Moon } from 'lucide-react';
+import { Shield, Sparkles, User, MessageSquare, Database, Radio, CreditCard, LogOut, Menu, Sun, Moon, Check, Copy, Globe, ArrowLeft } from 'lucide-react';
 
 interface HeaderProps {
   currentRole: 'user' | 'consultant' | 'admin';
   onChangeRole: (role: 'user' | 'consultant' | 'admin') => void;
   socketConnected: boolean;
   currentUser: any;
+  currentConsultant?: any;
   onLogout: () => void;
   onOpenAuth: () => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+  onNavigateToUserView?: (username: string) => void;
 }
 
-export function Header({ currentRole, onChangeRole, socketConnected, currentUser, onLogout, onOpenAuth, theme, onToggleTheme }: HeaderProps) {
+export function Header({ currentRole, onChangeRole, socketConnected, currentUser, currentConsultant, onLogout, onOpenAuth, theme, onToggleTheme, onNavigateToUserView }: HeaderProps) {
+  const [copiedConsultantUrl, setCopiedConsultantUrl] = React.useState(false);
+
+  const handleCopyConsultantLink = () => {
+    if (!currentConsultant) return;
+    const bookingUrl = `${window.location.origin}/u/${currentConsultant.username}`;
+    navigator.clipboard.writeText(bookingUrl);
+    setCopiedConsultantUrl(true);
+    setTimeout(() => setCopiedConsultantUrl(false), 2000);
+  };
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
       <div className="max-w-7xl mx-auto px-3 py-2 w-full">
         <div className="flex justify-between items-center w-full">
           
-          {/* Left Side (Logo) */}
+          {/* Left Side (Logo CallMint) */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="bg-gradient-to-tr from-emerald-500 to-teal-400 p-2 rounded-xl text-slate-900 shadow-md">
-              <MessageSquare className="w-6 h-6 font-bold" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-                CallMint
-              </h1>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="bg-gradient-to-tr from-emerald-500 to-teal-400 p-2 rounded-xl text-slate-900 shadow-md">
+                <MessageSquare className="w-6 h-6 font-bold" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                  CallMint
+                </h1>
+              </div>
             </div>
           </div>
 
@@ -166,7 +179,79 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
 
             {/* Mobile Actions Container (hidden on desktop, flex-centered elements) */}
             <div className="lg:hidden flex items-center justify-end gap-x-2.5 pr-1.5">
-              {currentUser && currentRole === 'user' ? (
+              {currentRole === 'consultant' && currentConsultant ? (
+                <>
+                  {/* Profile Link Copy & Web options (to the left of the photo) */}
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      onClick={handleCopyConsultantLink}
+                      className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center relative active:scale-95 shrink-0"
+                      title="Copy Profile URL"
+                    >
+                      {copiedConsultantUrl ? (
+                        <Check className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                      <span className="sr-only">Copy link</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (onNavigateToUserView) {
+                          onNavigateToUserView(currentConsultant.username);
+                        }
+                      }}
+                      className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center active:scale-95 shrink-0"
+                      title="Open Booking Page"
+                    >
+                      <Globe className="w-4 h-4" />
+                      <span className="sr-only">Go to profile</span>
+                    </button>
+                  </div>
+
+                  {/* Profile Photo (to the left of the hamburger menu) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentConsultant.photo_url) {
+                        window.dispatchEvent(new CustomEvent('view-user-photo', { detail: currentConsultant.photo_url }));
+                      }
+                    }}
+                    className="flex-shrink-0 w-10 h-10 flex items-center justify-center relative group cursor-pointer hover:scale-105 active:scale-95 transition-all p-0 border-0 bg-transparent focus:outline-none"
+                    title="Click to view photo"
+                  >
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 opacity-60 blur-[3px] animate-pulse group-hover:scale-110 transition-transform duration-500" />
+                    <div className="absolute -inset-[1px] rounded-full bg-gradient-to-r from-emerald-400/80 via-teal-400/20 to-emerald-400/80 animate-spin [animation-duration:8s] opacity-75" />
+                    {currentConsultant.photo_url ? (
+                      <img
+                        src={currentConsultant.photo_url}
+                        alt=""
+                        className="w-10 h-10 rounded-full object-cover border border-emerald-400/30 shadow-md block relative z-10"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-emerald-400/20 shadow-md relative z-10">
+                        <User className="w-5 h-5 text-emerald-400" />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Hamburger Menu Icon */}
+                  <div className="flex items-center justify-center">
+                    <button
+                      id="mobile-header-hamburger-btn-consultant"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('toggle-hamburger-menu'));
+                      }}
+                      className="p-1 text-slate-200 hover:text-white bg-slate-800 active:scale-95 hover:bg-slate-750 rounded-xl transition-all flex items-center justify-center w-10 h-10 border border-slate-700 shadow-md shrink-0"
+                      title="Open Navigation Menu"
+                    >
+                      <Menu className="w-5 h-5" />
+                    </button>
+                  </div>
+                </>
+              ) : currentUser && currentRole === 'user' ? (
                 <>
                   {/* Wallet Balance Container */}
                   <button

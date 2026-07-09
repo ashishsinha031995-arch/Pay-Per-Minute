@@ -1,6 +1,6 @@
 import { db } from '../config/database.js';
 
-export function getSalaryCycleInfo(consultantId: number) {
+export function getSalaryCycleInfo(consultantId: number, refDate: Date = new Date()) {
   try {
     const cutoffDaySetting = db.prepare("SELECT value FROM admin_settings WHERE key = 'salary_cutoff_day'").get() as { value: string } | undefined;
     const cutoffDay = cutoffDaySetting ? parseInt(cutoffDaySetting.value) : 25;
@@ -8,7 +8,7 @@ export function getSalaryCycleInfo(consultantId: number) {
     const payoutDaySetting = db.prepare("SELECT value FROM admin_settings WHERE key = 'salary_payout_day'").get() as { value: string } | undefined;
     const payoutDay = payoutDaySetting ? parseInt(payoutDaySetting.value) : 7;
 
-    const today = new Date();
+    const today = refDate;
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth(); // 0-indexed
     const currentDay = today.getDate();

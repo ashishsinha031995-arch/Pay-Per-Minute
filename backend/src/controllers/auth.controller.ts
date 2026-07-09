@@ -179,7 +179,10 @@ export const consultantRegister = (req: Request, res: Response) => {
     const rawRegisterPrice = initial_price_per_minute !== undefined ? initial_price_per_minute : req.body.price_per_minute;
     if (rawRegisterPrice !== undefined && rawRegisterPrice !== null && rawRegisterPrice !== '') {
       const parsed = parseFloat(rawRegisterPrice.toString());
-      if (!isNaN(parsed) && parsed > 0) {
+      if (!isNaN(parsed)) {
+        if (parsed < 5) {
+          return res.status(400).json({ error: 'Minimum consultation fee limit is ₹5/min. Isse below price set nahi ho sakta.' });
+        }
         price = parsed;
       }
     }
@@ -411,7 +414,10 @@ export const consultantBuyPlan = async (req: Request, res: Response) => {
     const rawPrice = price_per_minute !== undefined ? price_per_minute : (req.body.initial_price_per_minute !== undefined ? req.body.initial_price_per_minute : undefined);
     if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
       const parsed = parseFloat(rawPrice.toString());
-      if (!isNaN(parsed) && parsed > 0) {
+      if (!isNaN(parsed)) {
+        if (parsed < 5) {
+          return res.status(400).json({ error: 'Minimum consultation fee limit is ₹5/min. Isse below price set nahi ho sakta.' });
+        }
         updatedPrice = parsed;
       }
     }

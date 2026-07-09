@@ -1419,7 +1419,7 @@ export function ChatRoom({
       {/* Live messaging feed */}
       <div 
         ref={messagesContainerRef}
-        className={`flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto ${isReadOnly ? 'no-scrollbar' : 'thin-scrollbar'} space-y-4 min-h-0 md:min-h-[300px]`}
+        className="flex-1 bg-slate-950 border-x border-slate-900 p-4 md:p-6 overflow-y-auto thin-scrollbar space-y-4 min-h-0 md:min-h-[300px]"
         style={{
           backgroundImage: `radial-gradient(rgba(99, 102, 241, 0.08) 1.2px, transparent 1.2px), radial-gradient(rgba(16, 185, 129, 0.04) 1.2px, transparent 1.2px)`,
           backgroundSize: '24px 24px',

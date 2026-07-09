@@ -62,6 +62,36 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedConsSchedules, setSelectedConsSchedules] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+
+  const formatTimeTo12Hour = (timeStr: string): string => {
+    if (!timeStr) return '';
+    const timeLower = timeStr.toLowerCase();
+    if (timeLower.includes('am') || timeLower.includes('pm')) {
+      return timeStr.toUpperCase();
+    }
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1].substring(0, 2);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // hour 0 is 12
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
+  const formatToYYYYMMDD = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch {
+      return dateStr;
+    }
+  };
   
   // Active selection states
   const [selectedMinutes, setSelectedMinutes] = useState<number>(10); // Default 10 mins
@@ -1855,39 +1885,35 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* LEFT Panel: Modern Recharge Gateway */}
             <div className="lg:col-span-5 bg-slate-900/40 p-6 rounded-3xl border border-slate-800 space-y-5 flex flex-col justify-between lg:self-start self-stretch">
-              <div className="space-y-1 text-left">
-                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/55 mb-2">
-                  <div className="flex items-center space-x-1.5 min-w-0 shrink-0">
-                    <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 shrink-0" />
-                    <h4 className="font-extrabold text-[13px] sm:text-base md:text-lg text-slate-100 truncate">Wallet Balance</h4>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveDashboardTab('advisors')}
-                    className="text-[10px] sm:text-[11px] font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-1.5 flex items-center space-x-1 sm:space-x-1.5 shadow-md active:scale-95 cursor-pointer shrink-0"
-                  >
-                    <ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
-                    <span>Back to Advisors</span>
-                  </button>
+              
+              {/* Wallet Balance Display Card */}
+              <div className="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-850 flex items-center justify-between text-left gap-3 w-full shadow-inner">
+                <div className="space-y-0.5 sm:space-y-1 min-w-0">
+                  <span className="text-[11px] sm:text-xs font-extrabold text-slate-400 block uppercase tracking-wider truncate">Wallet Balance</span>
+                  <span className="text-xl sm:text-2xl font-black text-emerald-400 font-mono tracking-tight flex items-baseline">
+                    <span className="text-emerald-500 font-bold text-sm sm:text-lg mr-1">₹</span>
+                    {parseFloat(currentUser.wallet_balance || 0).toFixed(2)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveDashboardTab('advisors')}
+                  className="text-[9px] sm:text-xs font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 flex items-center space-x-1 sm:space-x-1.5 shadow-md active:scale-95 cursor-pointer shrink-0"
+                >
+                  <ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+                  <span>Back to Advisors</span>
+                </button>
+              </div>
+
+              {/* Recharge Amount Section Header */}
+              <div className="space-y-1.5 text-left border-t border-slate-800/60 pt-4">
+                <div className="flex items-center space-x-1.5">
+                  <Wallet className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <h4 className="font-extrabold text-sm sm:text-base text-slate-100 uppercase tracking-wide">Recharge Amount</h4>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Enter custom amount or pick a preset below. Balances will be deducted strictly on a per-minute base only.
                 </p>
-              </div>
-
-              {/* Wallet Balance Display Card */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between text-left gap-3">
-                <div>
-                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Available Balance</span>
-                  <span className="text-2xl font-black text-emerald-400 font-mono tracking-tight flex items-baseline">
-                    <span className="text-emerald-500 font-bold text-lg mr-1">₹</span>
-                    {parseFloat(currentUser.wallet_balance || 0).toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl self-start sm:self-center">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span className="text-[10px] sm:text-xs font-bold text-emerald-400 font-sans tracking-wide">100% Safe & Secure Payment</span>
-                </div>
               </div>
 
               {/* Presets Selection Grid */}
@@ -1976,18 +2002,18 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
             {/* RIGHT Panel: Transaction Ledger */}
             <div className="lg:col-span-7 bg-slate-900/40 p-6 rounded-3xl border border-slate-800 space-y-6 self-stretch">
-              <div className="border-b border-slate-850 pb-4 text-left space-y-2.5 w-full">
+              <div className="border-b border-slate-850 pb-4 text-left w-full">
                 {/* Row for Icon and Title */}
-                <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
-                    <FileText className="w-5 h-5 text-emerald-400" />
+                <div className="flex items-center space-x-3 mb-2.5">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
                   </div>
-                  <h4 className="font-extrabold text-base sm:text-lg text-slate-100 tracking-tight">
+                  <h4 className="font-black text-lg sm:text-xl text-slate-100 tracking-tight">
                     Transaction Ledger
                   </h4>
                 </div>
                 {/* Subtitle with professional gap and sizing */}
-                <p className="text-xs text-slate-400 font-sans leading-relaxed pl-1">
+                <p className="text-xs text-slate-400 font-sans leading-relaxed pl-1 mt-2">
                   All recharges, consultation debits, and refunds logged in audit logs.
                 </p>
               </div>
@@ -3859,9 +3885,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           {selectedConsSchedules.map((sch) => (
                             <div key={sch.id} className="flex items-center justify-between py-1 border-b border-slate-800/30 text-xs font-mono last:border-0 last:pb-0">
                               <span className="text-emerald-400 font-medium">
-                                {sch.date ? sch.date : sch.day}
+                                {sch.date ? formatToYYYYMMDD(sch.date) : sch.day}
                               </span>
-                              <span className="text-slate-400">{sch.from_time} - {sch.to_time}</span>
+                              <span className="text-slate-400">{formatTimeTo12Hour(sch.from_time)} - {formatTimeTo12Hour(sch.to_time)}</span>
                             </div>
                           ))}
                         </div>

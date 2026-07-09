@@ -67,6 +67,65 @@ export function AdminPanel() {
   const [adminNewToTime, setAdminNewToTime] = useState<string>('');
   const [adminEditingScheduleId, setAdminEditingScheduleId] = useState<number | null>(null);
 
+  const formatTimeTo12Hour = (timeStr: string): string => {
+    if (!timeStr) return '';
+    const timeLower = timeStr.toLowerCase();
+    if (timeLower.includes('am') || timeLower.includes('pm')) {
+      return timeStr.toUpperCase();
+    }
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1].substring(0, 2);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // hour 0 is 12
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
+  const formatToYYYYMMDD = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const adminIsSaveDisabled = (!adminNewDate && !adminNewDay) || !adminNewFromTime || !adminNewToTime;
+
+  const getPayoutMonthOptions = () => {
+    const options = [];
+    const now = new Date();
+    
+    // 1. Current Ongoing Cycle
+    options.push({
+      label: `Current Ongoing Cycle (Today) (Cutoff: ${stats.salaryCutoffDay || 25}th)`,
+      refDate: '', // default
+    });
+
+    // 2. Last 12 months cycles
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthName = d.toLocaleString('default', { month: 'long' });
+      const year = d.getFullYear();
+      
+      // For month M, the reference date to see M's cycle as "prevCycle" is the 1st of month M+1
+      const refDate = new Date(year, d.getMonth() + 1, 1);
+      
+      options.push({
+        label: `${monthName} ${year} Cycle (Cutoff: ${stats.salaryCutoffDay || 25}th ${monthName})`,
+        refDate: refDate.toISOString().split('T')[0],
+      });
+    }
+    return options;
+  };
+
   const fetchAdminConsSchedules = async (consId: number) => {
     try {
       setAdminSchedulesLoading(true);
@@ -110,6 +169,19 @@ export function AdminPanel() {
       alert('Please fill in both From Time and To Time.');
       return;
     }
+
+    // Validate that End Time is not earlier than Start Time
+    const fromParts = adminNewFromTime.split(':').map(Number);
+    const toParts = adminNewToTime.split(':').map(Number);
+    if (fromParts.length === 2 && toParts.length === 2) {
+      const fromMins = fromParts[0] * 60 + fromParts[1];
+      const toMins = toParts[0] * 60 + toParts[1];
+      if (toMins < fromMins) {
+        alert('End Time (To Time) cannot be earlier than Start Time (From Time).');
+        return;
+      }
+    }
+
     try {
       const url = adminEditingScheduleId 
         ? `/api/consultants/${scheduleManageConsId}/schedules/${adminEditingScheduleId}`
@@ -319,6 +391,7 @@ export function AdminPanel() {
   const [commissionRateInput, setCommissionRateInput] = useState<string>('20');
   const [cutoffDayInput, setCutoffDayInput] = useState<string>('25');
   const [payoutDayInput, setPayoutDayInput] = useState<string>('7');
+  const [selectedPayoutCycleRefDate, setSelectedPayoutCycleRefDate] = useState<string>('');
   
   // Broadcast Broadcaster states
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'users' | 'consultants'>('all');
@@ -455,14 +528,19 @@ export function AdminPanel() {
   const [submittingManualAdjust, setSubmittingManualAdjust] = useState<boolean>(false);
 
   // Load backend datasets
-  const loadAdminData = async (silent = false) => {
+  const loadAdminData = async (silent = false, customRefDate?: string) => {
     try {
       if (!silent) setLoading(true);
       setError(null);
 
+      const refDateParam = customRefDate !== undefined ? customRefDate : selectedPayoutCycleRefDate;
+      const consUrl = refDateParam 
+        ? `/api/admin/consultants?cycle_ref_date=${encodeURIComponent(refDateParam)}` 
+        : '/api/admin/consultants';
+
       const [statsRes, consRes, sessRes, plansRes, blockedRes, usersRes, emailsRes, reviewsRes, adjRes, queuesRes, notifRes, leaderboardRes] = await Promise.all([
         fetch('/api/admin/stats'),
-        fetch('/api/admin/consultants'),
+        fetch(consUrl),
         fetch('/api/admin/sessions'),
         fetch('/api/plans'),
         fetch('/api/admin/blocked'),
@@ -5480,11 +5558,31 @@ export function AdminPanel() {
                     Calculate and approve monthly payouts based on the configured {stats.salaryCutoffDay || 25}th cutoff and next-month {stats.salaryPayoutDay || 7}th payout schedule.
                   </p>
                 </div>
-                <div className="flex items-center space-x-2 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-slate-850">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    Cycle cutoff: <strong>{stats.salaryCutoffDay || 25}th of Month</strong>
-                  </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center space-x-2 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-slate-850">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Cycle cutoff: <strong>{stats.salaryCutoffDay || 25}th of Month</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-slate-850">
+                    <span className="text-[10px] font-mono text-slate-400 font-bold">Cycle:</span>
+                    <select
+                      value={selectedPayoutCycleRefDate}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedPayoutCycleRefDate(val);
+                        loadAdminData(true, val);
+                      }}
+                      className="bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono font-bold text-slate-300 px-2 py-1 focus:border-emerald-500 outline-none cursor-pointer"
+                    >
+                      {getPayoutMonthOptions().map((opt) => (
+                        <option key={opt.refDate} value={opt.refDate}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -6193,7 +6291,12 @@ export function AdminPanel() {
               <div className="flex items-center space-x-2 pt-2">
                 <button
                   type="submit"
-                  className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md"
+                  disabled={adminIsSaveDisabled}
+                  className={`font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md ${
+                    adminIsSaveDisabled
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50 border border-slate-700'
+                      : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 cursor-pointer'
+                  }`}
                 >
                   {adminEditingScheduleId ? 'Update Slot' : 'Save Slot'}
                 </button>
@@ -6235,10 +6338,10 @@ export function AdminPanel() {
                     <div key={sch.id} className="bg-slate-950 p-3.5 rounded-xl border border-slate-850 flex items-center justify-between">
                       <div className="space-y-1">
                         <span className="inline-block text-[9px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
-                          {sch.date ? sch.date : sch.day}
+                          {sch.date ? formatToYYYYMMDD(sch.date) : sch.day}
                         </span>
                         <div className="text-xs font-bold text-slate-200">
-                          {sch.from_time} to {sch.to_time}
+                          {formatTimeTo12Hour(sch.from_time)} to {formatTimeTo12Hour(sch.to_time)}
                         </div>
                       </div>
 

@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import { db, logWalletTransaction } from '../config/database.js';
 import { processNextInQueue } from '../controllers/payment.controller.js';
 import { ChatMemoryService } from '../services/chatMemory.js';
+import { checkAndResetMonthlyWallets } from '../utils/salary.js';
 
 export function startChatExpiryJob(io: Server) {
   // Periodically check all active sessions, decrement or check expiry against system clock,
@@ -91,6 +92,10 @@ export function startChatExpiryJob(io: Server) {
             // 3. Add earnings to consultant wallet
             const cid = sess.consultant_id;
             const earnings = sess.consultant_earnings;
+            
+            // Check and trigger monthly wallet reset if crossed cutoff day before adding new monthly earnings
+            checkAndResetMonthlyWallets();
+
             db.prepare(`
               UPDATE consultants 
               SET wallet_today = wallet_today + ?, 

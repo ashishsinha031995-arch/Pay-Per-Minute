@@ -9,11 +9,7 @@ interface ImageEditorModalProps {
   onSave: (croppedBase64: string) => Promise<void>;
 }
 
-const DEFAULT_AVATARS = {
-  Male: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=256&q=80',
-  Female: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80',
-  Other: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80'
-};
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=256&q=80';
 
 export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
   isOpen,
@@ -22,7 +18,6 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
   initialGender = 'Male',
   onSave
 }) => {
-  const [selectedGender, setSelectedGender] = useState<string>(initialGender);
   const [imageSrc, setImageSrc] = useState<string>('');
   const [isCustomUpload, setIsCustomUpload] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -132,7 +127,7 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
     setIsPinching(false);
   };
 
-  // Load initial image or set default based on gender
+  // Load initial image or set generic default avatar
   useEffect(() => {
     if (isOpen) {
       setError(null);
@@ -146,29 +141,11 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
         setImageSrc(currentImage);
         setIsCustomUpload(true);
       } else {
-        const genderKey = (selectedGender === 'Male' || selectedGender === 'Female' || selectedGender === 'Other')
-          ? selectedGender
-          : 'Male';
-        setImageSrc(DEFAULT_AVATARS[genderKey as keyof typeof DEFAULT_AVATARS]);
+        setImageSrc(DEFAULT_AVATAR);
         setIsCustomUpload(false);
       }
     }
   }, [isOpen, currentImage]);
-
-  // If gender changes and it's NOT a custom upload, switch the default avatar
-  useEffect(() => {
-    if (!isCustomUpload && isOpen) {
-      const genderKey = (selectedGender === 'Male' || selectedGender === 'Female' || selectedGender === 'Other')
-        ? selectedGender
-        : 'Male';
-      setImageSrc(DEFAULT_AVATARS[genderKey as keyof typeof DEFAULT_AVATARS]);
-      setImageLoaded(false);
-      setZoom(1.0);
-      setOffsetX(0);
-      setOffsetY(0);
-      setRotation(0);
-    }
-  }, [selectedGender, isCustomUpload]);
 
   // Load image object for canvas manipulation
   useEffect(() => {
@@ -432,7 +409,7 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
             {/* Visual Canvas Cropper Area */}
             <div className="flex flex-col items-center justify-center space-y-2 bg-slate-950/20 p-3 rounded-2xl border border-slate-800/30">
               <div 
-                className={`relative w-36 h-36 sm:w-44 sm:h-44 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800/80 flex items-center justify-center shadow-inner group select-none touch-none ${imageLoaded ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                className={`relative w-36 h-36 sm:w-44 sm:h-44 bg-slate-950 overflow-hidden border border-slate-800/80 flex items-center justify-center shadow-inner group select-none touch-none ${cropShape === 'circle' ? 'rounded-full' : 'rounded-2xl'} ${imageLoaded ? 'cursor-grab active:cursor-grabbing' : ''}`}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUpOrLeave}
@@ -443,7 +420,7 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
               >
                 <canvas
                   ref={canvasRef}
-                  className="w-full h-full object-cover rounded-2xl pointer-events-none"
+                  className={`w-full h-full object-cover pointer-events-none ${cropShape === 'circle' ? 'rounded-full' : 'rounded-2xl'}`}
                 />
                 
                 {/* Crosshairs & WhatsApp Mask Overlay */}

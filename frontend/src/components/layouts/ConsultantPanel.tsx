@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone, ChevronRight, Wifi, MoreVertical, MessageCircle, Eye, EyeOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
 import { io } from 'socket.io-client';
@@ -230,6 +230,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [profileChangesList, setProfileChangesList] = useState<ProfileChangeItem[]>([]);
   const [bio, setBio] = useState('');
   const [pricePerMin, setPricePerMin] = useState('20');
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [category, setCategory] = useState('Consultants');
+  const [experience, setExperience] = useState('5');
+  const [languages, setLanguages] = useState('English, Hindi');
+  const [specializations, setSpecializations] = useState('General');
+  const [newPassword, setNewPassword] = useState('');
   const hasInitializedProfileRef = useRef(false);
 
   // KYC Form States
@@ -241,6 +249,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [kycRejectReason, setKycRejectReason] = useState('');
   const [uploadingAadhaar, setUploadingAadhaar] = useState(false);
   const [uploadingPan, setUploadingPan] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   // Bank Form States
   const [bankAccountHolderName, setBankAccountHolderName] = useState('');
@@ -249,6 +258,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [bankName, setBankName] = useState('');
   const [bankStatus, setBankStatus] = useState('unsubmitted'); // unsubmitted, pending, approved, rejected
   const [bankRejectReason, setBankRejectReason] = useState('');
+  const [showAccountNumber, setShowAccountNumber] = useState(false);
 
   // Profile Completion Percentage Helper
   const getProfileCompletionPercentage = () => {
@@ -306,17 +316,95 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     };
   };
 
-  const getWeeklyEarningsData = (consId: number, consSessions: any[], pricePerMinute: number) => {
-    const completed = consSessions.filter(s => s.status === 'completed');
+  const getSessionsForWeekOffset = (consSessions: any[], weekOffset: number) => {
+    const now = new Date();
+    const currentDay = now.getDay(); // 0 is Sunday, 1 is Monday...
+    const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    
+    const mondayThisWeek = new Date(now);
+    mondayThisWeek.setDate(now.getDate() + distanceToMonday);
+    mondayThisWeek.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(mondayThisWeek);
+    startOfWeek.setDate(mondayThisWeek.getDate() - (weekOffset * 7));
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    return consSessions.filter(s => {
+      const dStr = s.created_at || s.started_at;
+      if (!dStr) return false;
+      const d = new Date(dStr);
+      return d >= startOfWeek && d < endOfWeek;
+    });
+  };
+
+  const getWeekRangeString = (weekOffset: number) => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    
+    const mondayThisWeek = new Date(now);
+    mondayThisWeek.setDate(now.getDate() + distanceToMonday);
+    
+    const startOfWeek = new Date(mondayThisWeek);
+    startOfWeek.setDate(mondayThisWeek.getDate() - (weekOffset * 7));
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday of that week
+
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    return `${startOfWeek.toLocaleDateString('en-US', options)} - ${endOfWeek.toLocaleDateString('en-US', options)}, ${startOfWeek.getFullYear()}`;
+  };
+
+  const formatTimeTo12Hour = (timeStr: string): string => {
+    if (!timeStr) return '';
+    const timeLower = timeStr.toLowerCase();
+    if (timeLower.includes('am') || timeLower.includes('pm')) {
+      return timeStr.toUpperCase();
+    }
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1].substring(0, 2);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // hour 0 is 12
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
+  const formatToYYYYMMDD = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getWeeklyEarningsData = (consId: number, consSessions: any[], pricePerMinute: number, weekOffset: number = 0) => {
+    // Filter sessions to the selected offset week first
+    const targetWeekSessions = getSessionsForWeekOffset(consSessions, weekOffset);
+    const completed = targetWeekSessions.filter(s => s.status === 'completed');
     
     // Group completed sessions by day of week (Mon-Sun)
     const actualEarningsByDay = Array(7).fill(0);
+    const callCountByDay = Array(7).fill(0);
+    const totalMinutesByDay = Array(7).fill(0);
+
     completed.forEach(s => {
       const d = new Date(s.created_at || s.started_at || new Date());
       let dayIndex = d.getDay(); // 0 is Sunday, 1 is Monday...
       // Map Sunday (0) to index 6, Monday (1) to index 0, etc.
       let mappedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
       actualEarningsByDay[mappedIndex] += Number(s.consultant_earnings || 0);
+      callCountByDay[mappedIndex] += 1;
+      totalMinutesByDay[mappedIndex] += Number(s.duration_minutes || 0);
     });
 
     const days = [
@@ -334,12 +422,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       return {
         label: day.label,
         totalEarningsForDay: actual,
-        actual
+        actual,
+        callCount: callCountByDay[idx],
+        totalMinutes: totalMinutesByDay[idx]
       };
     });
 
-    // Find max value to compute accurate responsive heights
-    const maxEarnings = Math.max(...data.map(d => d.totalEarningsForDay), 1);
+    // Find max value to compute accurate responsive heights but enforce a minimum benchmark of ₹500 so low earnings don't fill the entire bar.
+    const maxEarnings = Math.max(...data.map(d => d.totalEarningsForDay), 500);
 
     return data.map(d => {
       const percentage = d.totalEarningsForDay > 0 ? Math.round((d.totalEarningsForDay / maxEarnings) * 100) : 0;
@@ -347,7 +437,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         label: d.label,
         value: `${percentage}%`,
         earnings: `₹${Math.round(d.totalEarningsForDay).toLocaleString()}`,
-        actual: d.actual
+        actual: d.actual,
+        callCount: d.callCount,
+        totalMinutes: d.totalMinutes
       };
     });
   };
@@ -390,6 +482,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
   const [performanceTab, setPerformanceTab] = useState<'weekly' | 'monthly'>('weekly');
+  const [performanceWeekOffset, setPerformanceWeekOffset] = useState<number>(0);
+  const [selectedDayFilter, setSelectedDayFilter] = useState<string>('All');
   const [hoveredMonthlyPoint, setHoveredMonthlyPoint] = useState<any>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
@@ -539,6 +633,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [newToTime, setNewToTime] = useState('');
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
 
+  const isSaveDisabled = (!newDate && !newDay) || !newFromTime || !newToTime;
+
   const fetchSchedules = async (consultantId: number, silent = false) => {
     try {
       if (!silent) setScheduleLoading(true);
@@ -582,6 +678,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       setError('Please fill in both From Time and To Time.');
       return;
     }
+
+    // Validate that End Time is not earlier than Start Time
+    const fromParts = newFromTime.split(':').map(Number);
+    const toParts = newToTime.split(':').map(Number);
+    if (fromParts.length === 2 && toParts.length === 2) {
+      const fromMins = fromParts[0] * 60 + fromParts[1];
+      const toMins = toParts[0] * 60 + toParts[1];
+      if (toMins < fromMins) {
+        setError('End Time (To Time) cannot be earlier than Start Time (From Time).');
+        setTimeout(() => setError(null), 4000);
+        return;
+      }
+    }
+
     try {
       const url = editingScheduleId 
         ? `/api/consultants/${currentConsultant.id}/schedules/${editingScheduleId}`
@@ -760,6 +870,25 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   }, [registerDisplayName, usernameSuffix]);
 
+  // Hamburger drawer toggling event from global Header
+  useEffect(() => {
+    const handleToggle = () => {
+      setIsMobileMenuOpen(prev => !prev);
+    };
+    window.addEventListener('toggle-hamburger-menu', handleToggle);
+    return () => window.removeEventListener('toggle-hamburger-menu', handleToggle);
+  }, []);
+
+  // Sync currentConsultant state with localStorage and notify global AppPage Header
+  useEffect(() => {
+    if (currentConsultant) {
+      localStorage.setItem('consultant_session', JSON.stringify(currentConsultant));
+    } else {
+      localStorage.removeItem('consultant_session');
+    }
+    window.dispatchEvent(new CustomEvent('consultant-session-updated'));
+  }, [currentConsultant]);
+
   // Load plans on mount
   useEffect(() => {
     const fetchPlans = async () => {
@@ -785,8 +914,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setCurrentConsultant(parsed);
-        loadConsultantStatsAndStatus(parsed.id);
+        if (parsed && parsed.id) {
+          setCurrentConsultant(parsed);
+          loadConsultantStatsAndStatus(parsed.id);
+        } else {
+          localStorage.removeItem('consultant_session');
+        }
       } catch (e) {
         localStorage.removeItem('consultant_session');
       }
@@ -925,6 +1058,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   const loadConsultantStatsAndStatus = async (id: number, isPolling = false, forceRefreshInputs = false) => {
+    if (!id || isNaN(id)) {
+      console.warn('loadConsultantStatsAndStatus bypassed due to invalid id:', id);
+      return;
+    }
     try {
       const res = await fetch(`/api/consultants/${id}/stats`);
       if (res.ok) {
@@ -986,6 +1123,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             setBankAccountNumber(matching.bank_account_number || '');
             setBankIfscCode(matching.bank_ifsc_code || '');
             setBankName(matching.bank_name || '');
+
+            setDisplayName(matching.display_name || '');
+            setEmail(matching.email || '');
+            setPhone((matching as any).phone || '');
+            setCategory((matching as any).category || 'Consultants');
+            setExperience((matching as any).experience?.toString() || '5');
+            setLanguages((matching as any).languages || 'English, Hindi');
+            setSpecializations((matching as any).specializations || 'General');
 
             hasInitializedProfileRef.current = true;
           }
@@ -1205,8 +1350,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       return;
     }
     const rateVal = parseFloat(registerPrice);
-    if (isNaN(rateVal) || rateVal < 1) {
-      setError('Please provide a valid Custom Audio/Chat Rate.');
+    if (isNaN(rateVal) || rateVal < 5) {
+      setError('Minimum consultation fee limit is ₹5/min. Isse below price set nahi ho sakta.');
       return;
     }
     const selectedPlan = plans.find(p => p.id === selectedPlanId);
@@ -1355,6 +1500,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       const maxRate = activePlan?.max_consultant_rate ?? 1000.0;
       const priceVal = parseFloat(pricePerMin);
       
+      if (!isNaN(priceVal) && priceVal < 5) {
+        throw new Error('Minimum consultation fee limit is ₹5/min. Isse below price set nahi ho sakta.');
+      }
+
       if (!isNaN(priceVal) && priceVal > maxRate) {
         throw new Error(`you can set max price (₹${maxRate}/min) in this Plan.`);
       }
@@ -1372,14 +1521,26 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         changes.push({ field: 'Rate per Minute', oldValue: `₹${oldPrice}/min`, newValue: `₹${priceVal}/min` });
       }
 
+      const updateBody: any = {
+        photo_url: photoUrl,
+        bio: bio,
+        price_per_minute: priceVal,
+        display_name: displayName,
+        email: email,
+        phone: phone,
+        category: category,
+        experience: experience !== '' ? parseInt(experience) : 5,
+        languages: languages,
+        specializations: specializations,
+      };
+      if (newPassword && newPassword !== '') {
+        updateBody.password = newPassword;
+      }
+
       const res = await fetch(`/api/consultants/${currentConsultant.id}/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          photo_url: photoUrl,
-          bio: bio,
-          price_per_minute: priceVal,
-        }),
+        body: JSON.stringify(updateBody),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save profile changes');
@@ -1392,6 +1553,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       if (data.photo_url !== undefined) setPhotoUrl(data.photo_url || '');
       if (data.bio !== undefined) setBio(data.bio || '');
       if (data.price_per_minute !== undefined) setPricePerMin(data.price_per_minute.toString());
+      if (data.display_name !== undefined) setDisplayName(data.display_name || '');
+      if (data.email !== undefined) setEmail(data.email || '');
+      if (data.phone !== undefined) setPhone(data.phone || '');
+      if (data.category !== undefined) setCategory(data.category || 'Consultants');
+      if (data.experience !== undefined) setExperience(data.experience.toString());
+      if (data.languages !== undefined) setLanguages(data.languages || 'English, Hindi');
+      if (data.specializations !== undefined) setSpecializations(data.specializations || 'General');
+      setNewPassword('');
 
       // Persist to currentConsultant state and local storage so UI doesn't revert
       const updatedConsultant = { ...currentConsultant, ...data };
@@ -1589,15 +1758,62 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       if (!bankAccountHolderName || !bankAccountNumber || !bankIfscCode || !bankName) {
         throw new Error("All fields (Account Holder Name, Account Number, IFSC code, Bank Name) are required.");
       }
+
+      const trimmedHolder = bankAccountHolderName.trim();
+      const trimmedNumber = bankAccountNumber.trim();
+      const trimmedIfsc = bankIfscCode.trim().toUpperCase();
+      const trimmedBank = bankName.trim();
+
+      // 1. Holder Name Validation: Only alphabets and spaces
+      const holderNameRegex = /^[A-Za-z\s]+$/;
+      if (!holderNameRegex.test(trimmedHolder)) {
+        throw new Error("Account Holder Name must contain only alphabets and spaces.");
+      }
+      if (trimmedHolder.length < 2) {
+        throw new Error("Account Holder Name must be at least 2 characters long.");
+      }
+
+      // 2. Account Number Validation: Max length 18, Min length 9
+      if (trimmedNumber.length > 18) {
+        throw new Error("Account Number cannot be longer than 18 digits.");
+      }
+      if (trimmedNumber.length < 9) {
+        throw new Error("Account Number must be at least 9 digits long.");
+      }
+
+      // 3. IFSC Code Validation: Standard Indian 11-character format
+      const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+      if (!ifscRegex.test(trimmedIfsc)) {
+        throw new Error("Invalid IFSC Code format. It must be an 11-character alphanumeric code matching the standard format (e.g., SBIN0001234): 4 letters, followed by '0', followed by 6 alphanumeric characters.");
+      }
+
+      // 4. Bank Name Validation: Prevent invalid or random values
+      const bankNameRegex = /^[A-Za-z\s.\-&()]+$/;
+      if (trimmedBank.length < 3) {
+        throw new Error("Bank Name must be at least 3 characters long.");
+      }
+      if (!bankNameRegex.test(trimmedBank)) {
+        throw new Error("Bank Name must contain only alphabets, spaces, dots, hyphens, ampersands, or parentheses.");
+      }
+      if (/(.)\1\1\1/.test(trimmedBank.toLowerCase())) {
+        throw new Error("Please enter a valid Bank Name (avoid repetitive keyboard spam).");
+      }
+      const lowerBankName = trimmedBank.toLowerCase();
+      const gibberishWords = ["asdf", "sdfg", "dfgh", "fghj", "ghjk", "hjkl", "qwer", "wert", "erty", "rtyu", "tyui", "yuio", "uiop", "zxcv", "xcvb", "cvbn", "vbnm"];
+      for (const word of gibberishWords) {
+        if (lowerBankName.includes(word)) {
+          throw new Error("Please enter a valid, standard Bank Name.");
+        }
+      }
       
       const res = await fetch(`/api/consultants/${currentConsultant.id}/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bank_account_holder_name: bankAccountHolderName,
-          bank_account_number: bankAccountNumber,
-          bank_ifsc_code: bankIfscCode,
-          bank_name: bankName,
+          bank_account_holder_name: trimmedHolder,
+          bank_account_number: trimmedNumber,
+          bank_ifsc_code: trimmedIfsc,
+          bank_name: trimmedBank,
           bank_status: 'pending'
         }),
       });
@@ -1691,12 +1907,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 <Sparkles className="w-5 h-5 text-emerald-400 animate-pulse" />
               </div>
               <div>
-                <span className="text-[10px] font-mono font-bold tracking-widest text-emerald-400 uppercase">Consultant Suite</span>
+                <span className="text-[10px] font-sans font-bold tracking-widest text-emerald-400 uppercase">Consultant Suite</span>
                 <h1 className="text-sm font-black font-sans text-slate-100 uppercase tracking-tight">Expert Partner Network</h1>
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <span className="text-[11px] text-slate-400 hidden md:inline font-mono">Already a registered expert?</span>
+              <span className="text-[11px] text-slate-400 hidden md:inline font-sans">Already a registered expert?</span>
               <button
                 type="button"
                 onClick={() => setShowLoginModal(true)}
@@ -1714,7 +1930,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             <div className="lg:col-span-7 text-left space-y-6">
               <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 rounded-full">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-emerald-400">
                   India's #1 Pay-Per-Minute Chat Portal
                 </span>
               </div>
@@ -1796,7 +2012,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 <div className="flex items-center justify-between border-b border-slate-850 pb-3 z-10">
                   <div className="flex items-center space-x-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    <span className="text-[10px] font-mono font-bold tracking-wider text-slate-400">EXPERT CONSOLE</span>
+                    <span className="text-[10px] font-sans font-bold tracking-wider text-slate-400">EXPERT CONSOLE</span>
                   </div>
                   <span className="text-[9px] bg-slate-850 text-emerald-400 px-2 py-0.5 rounded-full font-mono border border-emerald-500/10">
                     ONLINE
@@ -1818,12 +2034,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl space-y-2 z-10"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] text-slate-500 font-mono uppercase">Live Wallet Balance</span>
+                    <span className="text-[9px] text-slate-500 font-sans uppercase">Live Wallet Balance</span>
                     <Coins className="w-3.5 h-3.5 text-amber-400" />
                   </div>
                   <div className="flex items-baseline space-x-1.5">
                     <strong className="text-2xl font-black font-mono text-emerald-400 tracking-tight">₹32,450.00</strong>
-                    <span className="text-[9px] text-slate-500 font-mono">Synced</span>
+                    <span className="text-[9px] text-slate-500 font-sans">Synced</span>
                   </div>
                   <div className="h-1 bg-slate-950 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-emerald-500 to-sky-400 w-3/4 rounded-full animate-pulse" />
@@ -1850,7 +2066,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <div className="space-y-1 text-left flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-200">Aman (Client)</span>
-                      <span className="text-[8px] text-slate-500 font-mono">1:45 remaining</span>
+                      <span className="text-[8px] text-slate-500 font-sans">1:45 remaining</span>
                     </div>
                     <p className="text-[9px] text-slate-400 italic truncate">"Highly accurate predictions! Saved my job decision..."</p>
                   </div>
@@ -1885,7 +2101,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             </div>
             
             <div className="space-y-2 relative z-10">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">💡 Profit Simulator</span>
+              <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">💡 Profit Simulator</span>
               <h3 className="text-xl sm:text-2xl font-black text-slate-100">Calculate Your Potential Monthly Earnings</h3>
               <p className="text-xs text-slate-400">Set your customized per-minute call fee and average chat duration per day to estimate profits.</p>
             </div>
@@ -1943,7 +2159,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               {/* Estimate Output Panel */}
               <div className="md:col-span-5 bg-slate-950 p-6 rounded-2xl border border-slate-850 text-center space-y-4">
                 <div>
-                  <span className="text-[9px] text-slate-500 font-mono uppercase tracking-widest block">Projected Monthly Profit</span>
+                  <span className="text-[9px] text-slate-500 font-sans uppercase tracking-widest block">Projected Monthly Profit</span>
                   <strong className="text-3xl sm:text-4xl font-extrabold text-emerald-400 font-mono tracking-tight block mt-1">
                     ₹{(simulatedRate * simulatedMinutes * 30).toLocaleString()}
                   </strong>
@@ -1952,7 +2168,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                 <div className="h-px bg-slate-900" />
 
-                <div className="grid grid-cols-2 gap-2 text-left text-[10px] font-mono">
+                <div className="grid grid-cols-2 gap-2 text-left text-[10px] font-sans">
                   <div>
                     <span className="text-slate-500 block">Daily Revenue:</span>
                     <strong className="text-slate-200">₹{(simulatedRate * simulatedMinutes).toLocaleString()}</strong>
@@ -1976,7 +2192,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           {/* Bento Grid: Why Join Our Partner Network */}
           <div className="space-y-8 text-center">
             <div className="space-y-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">📦 Key Benefits</span>
+              <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">📦 Key Benefits</span>
               <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Engineered for Modern Professional Consultants</h3>
               <p className="text-xs text-slate-400 max-w-xl mx-auto">No complex invoicing, no client follow-ups, and no technical headaches. Focus purely on your advice.</p>
             </div>
@@ -2027,7 +2243,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           {/* Subscription pricing packages with elaborate pointers */}
           <div id="pricing-section" className="space-y-8 text-center pt-4">
             <div className="space-y-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">📊 STEP 1: CHOOSE A PARTNER PLAN</span>
+              <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">📊 STEP 1: CHOOSE A PARTNER PLAN</span>
               <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Simple, Predictable Subscription Packages</h3>
               <p className="text-xs text-slate-400 max-w-xl mx-auto">Select a subscription duration below to instantly generate your portal credentials and activate your direct chat booking link.</p>
             </div>
@@ -2148,7 +2364,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 <UserCheck className="w-6 h-6 text-emerald-400 animate-pulse" />
               </div>
               <div>
-                <span className="text-[10px] font-mono font-bold tracking-widest text-emerald-400 uppercase">STEP 2: REGISTER PROFILE</span>
+                <span className="text-[10px] font-sans font-bold tracking-widest text-emerald-400 uppercase">STEP 2: REGISTER PROFILE</span>
                 <h3 className="text-xl font-black text-slate-100">Activate Consultant Credentials</h3>
                 <p className="text-xs text-slate-400">Fill your professional details to simulate payment and generate portal credentials immediately.</p>
               </div>
@@ -2166,13 +2382,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-[9px] text-slate-500 font-mono uppercase block">Active Choice:</span>
+                        <span className="text-[9px] text-slate-500 font-sans uppercase block">Active Choice:</span>
                         <strong className="text-sm font-bold text-slate-200">
                           {selectedPlan?.name || 'Loading Subscription Plan...'}
                         </strong>
                       </div>
                       <div className="text-right">
-                        <span className="text-[9px] text-slate-500 font-mono block">Base Price:</span>
+                        <span className="text-[9px] text-slate-500 font-sans block">Base Price:</span>
                         <strong className="text-sm font-black text-slate-300 font-mono">
                           ₹{basePrice.toFixed(2)}
                         </strong>
@@ -2201,7 +2417,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               {/* Form Input fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-2">
-                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  <label className="block text-xs font-sans font-bold text-slate-400 uppercase tracking-wide">
                     Consultant Display Name
                   </label>
                   <input
@@ -2216,7 +2432,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  <label className="block text-xs font-sans font-bold text-slate-400 uppercase tracking-wide">
                     Custom Advisor Username
                   </label>
                   <input
@@ -2234,7 +2450,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  <label className="block text-xs font-sans font-bold text-slate-400 uppercase tracking-wide">
                     Consultant Email Address (for Credentials)
                   </label>
                   <input
@@ -2263,7 +2479,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  <label className="block text-xs font-sans font-bold text-slate-400 uppercase tracking-wide">
                     Consultant Phone Number (Mandatory)
                   </label>
                   <div className={`relative flex rounded-xl border items-center transition-colors overflow-hidden ${
@@ -2296,13 +2512,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                  <label className="block text-xs font-sans font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
                     <span>My Custom Audio/Chat Rate (₹ / Minute)</span>
                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-2 py-0.5 rounded-full font-bold">Capped by Plan</span>
                   </label>
                   <input
                     type="number"
-                    min="1"
+                    min="5"
                     placeholder="25"
                     value={registerPrice}
                     onChange={(e) => {
@@ -2331,7 +2547,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wide">
+                  <label className="block text-xs font-sans font-bold text-slate-400 uppercase tracking-wide">
                     My Professional Category
                   </label>
                   <select
@@ -2379,7 +2595,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               <div className="bg-emerald-950/80 border border-emerald-800 p-6 rounded-2xl space-y-4 animate-in slide-in-from-bottom duration-300">
                 <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
                   <UserCheck className="w-5 h-5 animate-bounce" />
-                  <span className="uppercase tracking-widest font-mono">🌟 PORTAL ACCOUNT ACTIVE & REGISTERED!</span>
+                  <span className="uppercase tracking-widest font-sans">🌟 PORTAL ACCOUNT ACTIVE & REGISTERED!</span>
                 </div>
                 <p className="text-xs text-slate-300 leading-normal">
                   Your registration is complete. We have auto-filled your credentials below. Save these securely so you can log into your consultant dashboard anytime:
@@ -2435,25 +2651,29 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               />
 
               {/* Modal Box */}
-              <div className="relative w-full max-w-md bg-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl space-y-6 overflow-hidden animate-in zoom-in-95 duration-200 z-10 text-left">
-                <div className="absolute top-4 right-4">
+              <div className="relative w-full max-w-md bg-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl space-y-5 overflow-hidden animate-in zoom-in-95 duration-200 z-10 text-left">
+                
+                {/* Header row with Icon, Title, and Close Button */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-850 gap-4">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="bg-emerald-500/10 p-2 rounded-xl shrink-0">
+                      <Key className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <h2 className="text-base font-bold text-slate-100 truncate">Consultant Login</h2>
+                  </div>
+                  
                   <button
                     onClick={() => setShowLoginModal(false)}
-                    className="text-slate-500 hover:text-slate-300 font-mono text-xs p-1 bg-slate-950 border border-slate-850 rounded-lg hover:border-slate-750"
+                    className="text-slate-500 hover:text-slate-300 font-sans text-xs px-2.5 py-1 bg-slate-950 border border-slate-850 rounded-lg hover:border-slate-750 transition-all shrink-0"
                   >
                     ✕ Close
                   </button>
                 </div>
 
-                <div className="flex items-center space-x-3 pb-3 border-b border-slate-850">
-                  <div className="bg-emerald-500/10 p-2 rounded-xl">
-                    <Key className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-slate-100">Consultant Secure Login</h2>
-                    <p className="text-[10px] text-slate-500 font-mono">Sign in to manage chats & withdraw live earnings</p>
-                  </div>
-                </div>
+                {/* Secure login helper / description shown on separate line below the header */}
+                <p className="text-xs text-slate-400 font-sans leading-relaxed bg-slate-950/50 p-2.5 rounded-xl border border-slate-850/40">
+                  Sign in to manage chats & withdraw live earnings
+                </p>
 
                 <form 
                   onSubmit={async (e) => {
@@ -2464,7 +2684,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   className="space-y-4"
                 >
                   <div>
-                    <label className="block text-[10px] font-mono text-slate-400 mb-2 uppercase tracking-wide">
+                    <label className="block text-[10px] font-sans text-slate-400 mb-2 uppercase tracking-wide">
                       Platform Username
                     </label>
                     <input
@@ -2478,7 +2698,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-mono text-slate-400 mb-2 uppercase tracking-wide">
+                    <label className="block text-[10px] font-sans text-slate-400 mb-2 uppercase tracking-wide">
                       Secure Account Password
                     </label>
                     <input
@@ -2528,7 +2748,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           <p className="text-xs text-slate-400 max-w-xs">Connecting securely and fetching your wallet & active sessions...</p>
           <button
             onClick={handleLogout}
-            className="text-xs text-rose-400 hover:underline hover:text-rose-300 font-bold font-mono mt-4"
+            className="text-xs text-rose-400 hover:underline hover:text-rose-300 font-bold font-sans mt-4"
           >
             Reset Session / Login Again
           </button>
@@ -2608,446 +2828,396 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             return null;
           })()}
 
-          {/* MOBILE NAVIGATION BAR (Sticky/Compact) */}
-          <div className="md:hidden flex items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-md">
-            <div className="flex items-center space-x-2.5">
-              <img
-                src={photoUrl || currentConsultant.photo_url}
-                alt={currentConsultant.display_name}
-                className="w-9 h-9 rounded-xl object-cover border border-emerald-500 cursor-pointer hover:scale-105 transition-transform"
-                onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
-                title="Click to view photo"
-                onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
-              />
-              <div>
-                <h3 className="text-xs font-bold leading-tight truncate max-w-[110px]">{currentConsultant.display_name}</h3>
-                <motion.span
-                  animate={{ opacity: [0.7, 1, 0.7] }}
-                  transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                  className="text-[9px] text-emerald-400 block font-bold font-mono mt-0.5"
-                >
-                  ₹{currentConsultant.price_per_minute || 0}/min
-                </motion.span>
-                <span className="text-[9px] text-slate-400 block font-mono">ID: #{currentConsultant.id}</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-1.5">
-              <button
-                onClick={handleCopyProfileUrl}
-                className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center relative group"
-                title="Copy Profile URL"
-              >
-                {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                <span className="sr-only">Copy link</span>
-              </button>
-              <button
-                onClick={() => onNavigateToUserView(currentConsultant.username)}
-                className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center"
-                title="Open Booking Page"
-              >
-                <Globe className="w-4 h-4" />
-                <span className="sr-only">Go to profile</span>
-              </button>
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center"
-              >
-                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-
           {/* UNIVERSAL HAMBURGER DRAWER OVERLAY (For both mobile & desktop) */}
-          {isMobileMenuOpen && (
-            <div className="fixed inset-0 z-50 flex justify-end">
-              {/* Dark backdrop */}
-              <div 
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-                onClick={() => setIsMobileMenuOpen(false)}
-              />
+          <AnimatePresence>
+            {isMobileMenuOpen && (
+              <>
+                {/* Backdrop overlay */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="fixed inset-0 w-full h-full bg-slate-950/70 backdrop-blur-md z-50"
+                />
 
-              {/* Sliding Drawer Body */}
-              <motion.div
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="relative w-full max-w-md h-full bg-slate-900 border-l border-slate-800 p-6 shadow-2xl flex flex-col overflow-y-auto text-left"
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
-                  <div className="flex items-center space-x-3">
-                    <img
-                      src={photoUrl || currentConsultant.photo_url}
-                      alt={currentConsultant.display_name}
-                      className="w-10 h-10 rounded-xl object-cover border-2 border-emerald-500 shadow-md cursor-pointer hover:scale-105 transition-transform"
-                      onClick={() => setLightboxImage(photoUrl || currentConsultant.photo_url)}
-                      title="Click to view photo"
-                      onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
-                    />
-                    <div>
-                      <h3 className="font-extrabold text-sm text-slate-100 font-sans tracking-wide truncate max-w-[160px] sm:max-w-[180px]">
-                        {currentConsultant.display_name}
-                      </h3>
-                      <span className="text-[10px] text-slate-400 font-mono">Advisor Control Panel</span>
+                {/* Animated Drawer Box */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -10, x: 0 }}
+                  animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10, x: 0 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                  className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-xs bg-slate-950/98 border border-slate-800/80 rounded-3xl p-6 shadow-2xl z-50 space-y-4 backdrop-blur-xl text-left max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                >
+                  <div className="border-b border-slate-800/80 pb-3 relative">
+                    <div className="absolute right-0 top-0 flex items-center space-x-1.5">
+                      <button
+                        onClick={() => {
+                          setActiveTab('notifications');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="relative p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg transition-all border border-slate-800/80 hover:bg-slate-800 active:scale-95 cursor-pointer"
+                        title="View Notifications"
+                      >
+                        <Bell className="w-4 h-4 text-amber-400" />
+                        {unreadNotifCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 bg-rose-500 rounded-full flex items-center justify-center text-[8px] text-white font-black font-mono shadow-md border border-slate-950 animate-bounce">
+                            {unreadNotifCount}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg transition-colors border border-slate-800/80 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block font-bold">CallMint Menu</span>
+                    <strong className="text-slate-200 text-sm font-bold block mt-2 pr-12">{currentConsultant.display_name} (ID: {currentConsultant.id})</strong>
+                    <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-slate-400">
+                      <span>Total Earnings:</span>
+                      <span className="text-emerald-400 font-bold font-mono">₹{wallet ? parseFloat(wallet.wallet_total || 0).toFixed(2) : '0.00'}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800/80 gap-3">
+                      <button
+                        onClick={onInstallApp}
+                        className="flex items-center space-x-1.5 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-xs font-bold text-slate-950 rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-500/10 flex-1 justify-center"
+                        title="Download CallMint Web App"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>Download Web App</span>
+                      </button>
+
+                      <button
+                        onClick={onToggleTheme}
+                        className="flex items-center justify-center p-2.5 bg-slate-900 hover:bg-slate-850 rounded-xl border border-slate-800 transition-all cursor-pointer shadow-sm active:scale-95 h-9.5 w-9.5 shrink-0"
+                        title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                      >
+                        {theme === 'dark' ? (
+                          <Sun className="w-4 h-4 text-amber-400" />
+                        ) : (
+                          <Moon className="w-4 h-4 text-sky-400" />
+                        )}
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-1.5">
+
+                  {/* Navigation Menu List */}
+                  <div className="flex flex-col space-y-1">
                     <button
                       onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        setActiveTab('dashboard');
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeTab === 'dashboard'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <TrendingUp className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeTab === 'dashboard' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Home</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to unlock Presence Settings.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('status');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'status'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Flame className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'status' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>My Current Plan</span>
+                      </div>
+                      {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to unlock Profile Settings.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('profile');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'profile'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Settings2 className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'profile' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>Profile Settings</span>
+                      </div>
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold font-mono ${
+                          activeTab === 'profile'
+                            ? 'bg-slate-950/80 text-emerald-400'
+                            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
+                        }`}>
+                          {getProfileCompletionPercentage()}%
+                        </span>
+                        {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to unlock Availability Schedule.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('schedules');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'schedules'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Calendar className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'schedules' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>Availability Schedule</span>
+                      </div>
+                      {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to unlock KYC Verification.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('kyc');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'kyc'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <UserCheck className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'kyc' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>KYC Verification</span>
+                      </div>
+                      {hasActivePlan ? (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${kycStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : kycStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
+                          {kycStatus === 'approved' ? 'Approved' : kycStatus === 'pending' ? 'Review' : 'Update'}
+                        </span>
+                      ) : (
+                        <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to unlock Bank Details.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('bank');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'bank'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Wallet className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'bank' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>Bank Details</span>
+                      </div>
+                      {hasActivePlan ? (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${bankStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : bankStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
+                          {bankStatus === 'approved' ? 'Verified' : bankStatus === 'pending' ? 'Review' : 'Update'}
+                        </span>
+                      ) : (
+                        <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to unlock Consultation History.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('sessions');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'sessions'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <FileText className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'sessions' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>Consultation History</span>
+                      </div>
+                      {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to view Followers.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('followers');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'followers'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Users className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'followers' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>Your Followers</span>
+                      </div>
+                      {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        setActiveTab('support');
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeTab === 'support'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                        activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'
+                      }`} />
+                      <span>Customer Support</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
                         setActiveTab('notifications');
                         setIsMobileMenuOpen(false);
                       }}
-                      className="relative p-2 bg-slate-950 border border-slate-850 hover:border-slate-750 text-slate-400 hover:text-white rounded-xl transition-all flex items-center justify-center cursor-pointer"
-                      title="View Notifications"
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        activeTab === 'notifications'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
                     >
-                      <Bell className="w-5 h-5 text-amber-400 animate-pulse" />
+                      <div className="flex items-center space-x-3">
+                        <Bell className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'notifications' ? 'text-slate-950' : 'text-emerald-400'
+                        }`} />
+                        <span>Notifications</span>
+                      </div>
                       {unreadNotifCount > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 bg-rose-500 rounded-full flex items-center justify-center text-[8px] text-white font-black font-mono shadow-md border border-slate-950 animate-bounce">
-                          {unreadNotifCount}
+                        <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                          activeTab === 'notifications' ? 'bg-slate-950 text-emerald-400' : 'bg-rose-500 text-white'
+                        }`}>
+                          {unreadNotifCount} New
                         </span>
                       )}
                     </button>
+
                     <button
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="p-2 bg-slate-950 border border-slate-850 hover:border-slate-750 text-slate-400 hover:text-white rounded-xl transition-all flex items-center justify-center cursor-pointer"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 border border-transparent hover:border-rose-500/20 mt-2"
                     >
-                      <X className="w-5 h-5" />
+                      <LogOut className="w-4 h-4 shrink-0" />
+                      <span>Logout</span>
                     </button>
                   </div>
-                </div>
-
-                {/* Theme Toggle card */}
-                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-3 flex items-center justify-between">
-                  <div className="flex flex-col text-left">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">App Theme</span>
-                    <span className="text-xs text-slate-300 font-sans mt-0.5">{theme === 'dark' ? 'Dark Theme Active' : 'Light Theme Active'}</span>
-                  </div>
-                  <button
-                    onClick={onToggleTheme}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-xs font-bold text-slate-300 hover:text-white rounded-xl border border-slate-800 transition-all cursor-pointer shadow-sm active:scale-95"
-                  >
-                    {theme === 'dark' ? (
-                      <>
-                        <Sun className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Light Mode</span>
-                      </>
-                    ) : (
-                      <>
-                        <Moon className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Dark Mode</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Add to Home Screen PWA card */}
-                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-4 flex items-center justify-between">
-                  <div className="flex flex-col text-left">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">PWA App</span>
-                    <span className="text-xs text-slate-300 font-sans mt-0.5">Use on Home Screen</span>
-                  </div>
-                  <button
-                    onClick={onInstallApp}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-600 hover:to-emerald-600 active:scale-95 text-xs font-bold text-white rounded-xl transition-all cursor-pointer shadow-md"
-                    title="Install CallMint on your home screen"
-                  >
-                    <Smartphone className="w-3.5 h-3.5 text-white" />
-                    <span className="text-white">Install App</span>
-                  </button>
-                </div>
-
-                {/* Profile Completion Card */}
-                <div className="bg-slate-950 border border-slate-850/80 rounded-2xl p-4 mb-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">Profile Completion</span>
-                    <span className="text-xs font-black font-mono text-emerald-400">{getProfileCompletionPercentage()}%</span>
-                  </div>
-                  <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
-                    <div 
-                      className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
-                      style={{ width: `${getProfileCompletionPercentage()}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Navigation Menu List */}
-                <div className="flex-1 space-y-2.5">
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      setActiveTab('dashboard');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <TrendingUp className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'dashboard' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                    <span>Home</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      if (!hasActivePlan) {
-                        setError("Please purchase a partner plan first to unlock Presence Settings.");
-                        handleScrollToPlans();
-                      } else {
-                        setActiveTab('status');
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'status' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <Flame className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'status' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>My Current Plan</span>
-                    </div>
-                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      if (!hasActivePlan) {
-                        setError("Please purchase a partner plan first to unlock Profile Settings.");
-                        handleScrollToPlans();
-                      } else {
-                        setActiveTab('profile');
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'profile' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <Settings2 className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'profile' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>Profile Settings</span>
-                    </div>
-                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      if (!hasActivePlan) {
-                        setError("Please purchase a partner plan first to unlock Availability Schedule.");
-                        handleScrollToPlans();
-                      } else {
-                        setActiveTab('schedules');
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <Calendar className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'schedules' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>Availability Schedule</span>
-                    </div>
-                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      if (!hasActivePlan) {
-                        setError("Please purchase a partner plan first to unlock KYC Verification.");
-                        handleScrollToPlans();
-                      } else {
-                        setActiveTab('kyc');
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'kyc' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <UserCheck className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'kyc' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>KYC Verification</span>
-                    </div>
-                    {hasActivePlan ? (
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${kycStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : kycStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
-                        {kycStatus === 'approved' ? 'Approved' : kycStatus === 'pending' ? 'Review' : 'Update'}
-                      </span>
-                    ) : (
-                      <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      if (!hasActivePlan) {
-                        setError("Please purchase a partner plan first to unlock Bank Details.");
-                        handleScrollToPlans();
-                      } else {
-                        setActiveTab('bank');
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'bank' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <Wallet className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'bank' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>Bank Details</span>
-                    </div>
-                    {hasActivePlan ? (
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${bankStatus === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : bankStatus === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/15' : 'bg-slate-800 text-slate-400'}`}>
-                        {bankStatus === 'approved' ? 'Verified' : bankStatus === 'pending' ? 'Review' : 'Update'}
-                      </span>
-                    ) : (
-                      <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      if (!hasActivePlan) {
-                        setError("Please purchase a partner plan first to unlock Consultation History.");
-                        handleScrollToPlans();
-                      } else {
-                        setActiveTab('sessions');
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'sessions' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <FileText className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'sessions' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>Consultation History</span>
-                    </div>
-                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      if (!hasActivePlan) {
-                        setError("Please purchase a partner plan first to view Followers.");
-                        handleScrollToPlans();
-                      } else {
-                        setActiveTab('followers');
-                      }
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed bg-slate-950 border border-slate-900/50' : activeTab === 'followers' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <Users className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'followers' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>Your Followers</span>
-                    </div>
-                    {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      setActiveTab('support');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                    <span>Help & Customer Support</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setSuccess(null);
-                      setActiveTab('notifications');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeTab === 'notifications' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white bg-slate-950 border border-slate-900/50'}`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <Bell className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'notifications' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                      <span>Notifications</span>
-                    </div>
-                    {unreadNotifCount > 0 && (
-                      <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full shrink-0 ${
-                        activeTab === 'notifications' ? 'bg-slate-950 text-emerald-400' : 'bg-rose-500 text-white'
-                      }`}>
-                        {unreadNotifCount} New
-                      </span>
-                    )}
-                  </button>
-                </div>
-
-                {/* Footer Section with Logout */}
-                <div className="border-t border-slate-800/80 pt-4 mt-6">
-                  <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      handleLogout();
-                    }}
-                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-xs font-black uppercase text-rose-400 hover:bg-rose-500/10 transition-all border border-rose-500/20 active:scale-98"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Log Out Partner Portal</span>
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-
-          {/* MOBILE SHAREABLE PROFILE LINK CARD (Visible on mobile only) */}
-          <div className="md:hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">My Shareable Profile Link</span>
-              {hasActivePlan ? (
-                <span className="text-[9px] text-emerald-400 font-mono">Active</span>
-              ) : (
-                <span className="text-[9px] text-amber-400 font-mono font-bold flex items-center gap-1">🔒 Locked</span>
-              )}
-            </div>
-            {hasActivePlan ? (
-              <div className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-xl p-1.5 pl-3">
-                <span className="text-xs font-mono text-emerald-400 truncate max-w-[200px]">{`/u/${currentConsultant.username}`}</span>
-                <div className="flex items-center space-x-1">
-                  <button
-                    onClick={handleCopyProfileUrl}
-                    className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center"
-                    title="Copy Profile URL"
-                  >
-                    {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={() => onNavigateToUserView(currentConsultant.username)}
-                    className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center"
-                    title="Open Booking Page"
-                  >
-                    <Globe className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div 
-                onClick={() => {
-                  setError("Please purchase a partner plan first to unlock your shareable booking link.");
-                  handleScrollToPlans();
-                }}
-                className="flex items-center justify-between bg-slate-950/60 border border-slate-850/50 rounded-xl p-3 cursor-pointer hover:border-slate-800 transition-all"
-              >
-                <span className="text-xs font-mono text-slate-500 italic select-none">Link Locked 🔒 (Buy Plan to Unlock)</span>
-                <span className="text-[9px] font-mono bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded font-black">Buy Plan</span>
-              </div>
+                </motion.div>
+              </>
             )}
-          </div>
+          </AnimatePresence>
 
-          {/* TWO-COLUMN SIDEBAR LAYOUT (For Desktop md+) */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+
+
+          {/* TWO-COLUMN SIDEBAR LAYOUT (For Desktop lg+) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
             {/* DESKTOP SIDEBAR COLUMN */}
-            <div className="hidden md:block md:col-span-3 space-y-6">
+            <div className="hidden lg:block lg:col-span-3 space-y-6">
               
               {/* Consultant Short Identity Panel */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center space-y-4 shadow-lg">
@@ -3081,7 +3251,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </span>
                   </motion.div>
                   <span className="text-[10px] font-mono text-emerald-400 block mt-1">👥 {currentConsultant.followers_count || 0} Followers</span>
-                  <span className="text-[9px] font-mono text-slate-500 block mt-0.5">ID: #{currentConsultant.id}</span>
+                  <span className="text-[9px] font-sans text-slate-500 block mt-0.5">ID: #{currentConsultant.id}</span>
                 </div>
 
                 {/* Unique Profile Booking URL */}
@@ -3115,56 +3285,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }}
                       className="flex items-center justify-between space-x-1 bg-slate-900/60 border border-slate-850/50 rounded-lg p-2 cursor-pointer hover:border-slate-800 transition-colors"
                     >
-                      <span className="text-[10px] font-mono text-slate-500 italic select-none">Link Locked 🔒</span>
+                      <span className="text-[10px] font-sans text-slate-500 italic select-none">Link Locked 🔒</span>
                       <span className="text-[9px] font-mono bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded font-black">Buy Plan</span>
                     </div>
                   )}
                 </div>
-
-                {/* Desktop Hamburger Trigger */}
-                <button
-                  onClick={() => setIsMobileMenuOpen(true)}
-                  className="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-emerald-500/40 text-slate-200 text-xs font-extrabold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center space-x-2 shadow-sm"
-                >
-                  <Menu className="w-4 h-4 text-emerald-400 animate-pulse" />
-                  <span>View Partner Drawer</span>
-                </button>
               </div>
 
-              {/* Profile Completion Circular Graph */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center space-y-3 shadow-lg">
-                <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">Profile Progress</span>
-                
-                <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path
-                      className="text-slate-800"
-                      strokeWidth="3.5"
-                      stroke="currentColor"
-                      fill="transparent"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    <path
-                      className="text-emerald-400 transition-all duration-500 ease-out"
-                      strokeDasharray={`${getProfileCompletionPercentage()}, 100`}
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="transparent"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                  </svg>
-                  <div className="absolute text-center">
-                    <span className="text-sm font-black font-mono text-slate-100">{getProfileCompletionPercentage()}%</span>
-                  </div>
-                </div>
-                
-                <p className="text-[10px] text-slate-400 leading-normal">
-                  {getProfileCompletionPercentage() === 100 
-                    ? '🎉 Your profile is 100% updated!' 
-                    : `Your profile is ${getProfileCompletionPercentage()}% complete. Complete all fields to build client trust.`}
-                </p>
-              </div>
+
 
               {/* Sidebar Navigation Links */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2 shadow-lg">
@@ -3215,7 +3343,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 >
                   <Settings2 className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'profile' ? 'text-slate-950' : 'text-emerald-400'}`} />
                   <span>Profile Settings</span>
-                  {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
+                  <span className={`ml-auto text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${activeTab === 'profile' ? 'bg-slate-950/80 text-emerald-400' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                    {getProfileCompletionPercentage()}%
+                  </span>
+                  {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-1.5 text-amber-500/80 shrink-0" />}
                 </button>
 
                 <button
@@ -3329,7 +3460,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'support' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
                   <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'}`} />
-                  <span>Help & Customer Support</span>
+                  <span>Customer Support</span>
                 </button>
 
                 <button
@@ -3367,7 +3498,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             </div>
 
             {/* DYNAMIC CONTENT WRAPPER */}
-            <div className="col-span-1 md:col-span-9 space-y-6">
+            <div className="col-span-1 lg:col-span-9 space-y-6">
               
               {/* TAB 1: DASHBOARD HOME (Highly Animated Professional Homepage) */}
               {activeTab === 'dashboard' && (
@@ -3410,7 +3541,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                             </span>
-                            <span className="text-xs font-mono font-bold text-slate-200">
+                            <span className="text-xs font-sans font-bold text-slate-200">
                               Configured Rate: <motion.span
                                 animate={{ color: ["#34d399", "#38bdf8", "#34d399"] }}
                                 transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
@@ -3451,7 +3582,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       {/* 3 PLANS DISPLAY */}
                       <div id="pricing-section-active" className="space-y-8 text-center pt-4">
                         <div className="space-y-2">
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">🔥 STEP 1: CHOOSE A PARTNER PLAN</span>
+                          <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">🔥 STEP 1: CHOOSE A PARTNER PLAN</span>
                           <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Simple, Predictable Subscription Packages</h3>
                           <p className="text-xs text-slate-400 max-w-xl mx-auto">Select a subscription duration below to instantly activate your direct chat booking link and start earning.</p>
                         </div>
@@ -3576,7 +3707,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
                         
                         <div className="space-y-2 relative z-10">
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">💡 Profit Simulator</span>
+                          <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">💡 Profit Simulator</span>
                           <h3 className="text-xl sm:text-2xl font-black text-slate-100">Calculate Your Potential Monthly Earnings</h3>
                           <p className="text-xs text-slate-400">Set your customized per-minute call fee and average chat duration per day to estimate profits.</p>
                         </div>
@@ -3633,7 +3764,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           {/* Estimate Output Panel */}
                           <div className="md:col-span-5 bg-slate-950 p-6 rounded-2xl border border-slate-850 text-center space-y-4">
                             <div>
-                              <span className="text-[9px] text-slate-500 font-mono uppercase tracking-widest block">Projected Monthly Profit</span>
+                              <span className="text-[9px] text-slate-500 font-sans uppercase tracking-widest block">Projected Monthly Profit</span>
                               <strong className="text-3xl sm:text-4xl font-extrabold text-emerald-400 font-mono tracking-tight block mt-1">
                                 ₹{(simulatedRate * simulatedMinutes * 30).toLocaleString()}
                               </strong>
@@ -3642,7 +3773,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                             <div className="h-px bg-slate-900" />
 
-                            <div className="grid grid-cols-2 gap-2 text-left text-[10px] font-mono">
+                            <div className="grid grid-cols-2 gap-2 text-left text-[10px] font-sans">
                               <div>
                                 <span className="text-slate-500 block">Daily Revenue:</span>
                                 <strong className="text-slate-200">₹{(simulatedRate * simulatedMinutes).toLocaleString()}</strong>
@@ -3670,7 +3801,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       {/* Bento Grid: Why Join Our Partner Network */}
                       <div className="space-y-8 text-center pt-4">
                         <div className="space-y-2">
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">📦 Key Benefits</span>
+                          <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">📦 Key Benefits</span>
                           <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Engineered for Modern Professional Consultants</h3>
                           <p className="text-xs text-slate-400 max-w-xl mx-auto">No complex invoicing, no client follow-ups, and no technical headaches. Focus purely on your advice.</p>
                         </div>
@@ -3722,649 +3853,881 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   ) : (
                     /* STANDARD ENHANCED DASHBOARD WHEN THEY HAVE ACTIVE PLAN */
                     <>
-                      {/* Dynamic Greeting Card */}
-                      <div className="relative bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-slate-900/95 border border-slate-800 rounded-3xl p-6 overflow-hidden shadow-2xl">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-                    <div className="relative flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
-                      <div className="text-center sm:text-left space-y-1.5">
-                        <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider text-emerald-400">
-                          <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse" />
-                          <span>Professional Dashboard</span>
+                      {/* Section 1: Professional Dashboard Header */}
+                      <div className={`border rounded-3xl p-6 relative overflow-hidden transition-all ${
+                        theme === 'light' ? 'bg-white border-slate-200 shadow-sm text-slate-900' : 'bg-slate-900 border-slate-800/80 shadow-lg text-slate-100'
+                      }`}>
+                        {/* Notification bell icon in top-right */}
+                        <div className="absolute top-6 right-6">
+                          <button className={`p-2.5 rounded-xl transition-all relative ${
+                            theme === 'light' ? 'bg-slate-50 border border-slate-250 text-slate-600 hover:bg-slate-100' : 'bg-slate-950 border border-slate-850 text-slate-400 hover:bg-slate-900'
+                          }`}>
+                            <Bell className="w-5 h-5" />
+                            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-950" />
+                          </button>
                         </div>
-                        <h2 className="text-2xl sm:text-3xl font-black font-sans text-white tracking-tight">
-                          Namaste, <span className="bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent">{currentConsultant.display_name}!</span>
-                        </h2>
 
-                        {/* Highly Animated Current Price Indicator */}
-                        <motion.div
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.2, duration: 0.6 }}
-                          className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500/10 to-sky-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-2xl shadow-lg shadow-emerald-500/5 mt-1"
-                        >
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                          </span>
-                          <span className="text-xs font-mono font-bold text-slate-200">
-                            Current Price: <motion.span
-                              animate={{ color: ["#34d399", "#38bdf8", "#34d399"] }}
-                              transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                              className="font-black text-emerald-400 font-mono"
-                            >₹{currentConsultant.price_per_minute || 0}/minute</motion.span>
-                          </span>
-                        </motion.div>
+                        {/* Header Info with Avatar */}
+                        <div className="flex items-start space-x-4 pr-12">
+                          <div className="relative shrink-0">
+                            <img
+                              src={currentConsultant.photo_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256"}
+                              alt={currentConsultant.display_name}
+                              className={`w-14 h-14 rounded-full object-cover border-2 ${
+                                theme === 'light' ? 'border-emerald-200' : 'border-emerald-500/20'
+                              }`}
+                              referrerPolicy="no-referrer"
+                            />
+                            <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 ${
+                              theme === 'light' ? 'border-white' : 'border-slate-900'
+                            } ${isOnline ? (isBusy ? 'bg-amber-400' : 'bg-emerald-500') : 'bg-slate-400'}`} />
+                          </div>
 
-                        <p className="text-xs text-slate-400 max-w-lg leading-relaxed mt-1.5">
-                          Welcome to your financial command center. Here you can track real-time consultant earnings, view salary cycle cutoff forecasts, and manage pay-per-minute consultations.
-                        </p>
+                          <div className="space-y-1">
+                            <div className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest font-extrabold ${
+                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              <Sparkles className="w-3 h-3 text-emerald-500 animate-pulse" />
+                              <span>Professional Dashboard</span>
+                            </div>
+                            <h2 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
+                              Namaste, <span className="text-emerald-500">{currentConsultant.display_name}!</span>
+                            </h2>
+                            <p className={`text-xs leading-relaxed ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                              Welcome to your financial command center.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Highlighted Inner Row showing current per-minute rate */}
+                        <div className={`mt-6 p-4 rounded-2xl border flex items-center justify-between transition-all ${
+                          theme === 'light' ? 'bg-slate-50/50 border-slate-100 hover:bg-slate-50' : 'bg-slate-950/80 border-slate-850 hover:bg-slate-950'
+                        }`}>
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              <TrendingUp className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Current Rate</span>
+                              <span className="text-base font-black font-mono tracking-tight flex items-baseline leading-none">
+                                ₹{currentConsultant.price_per_minute || 0}
+                                <span className={`text-[10px] font-normal ml-0.5 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>/min</span>
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <button 
+                            onClick={() => setActiveTab('profile')}
+                            className={`inline-flex items-center space-x-1 text-xs font-bold transition-all ${
+                              theme === 'light' ? 'text-emerald-600 hover:text-emerald-700' : 'text-emerald-400 hover:text-emerald-300'
+                            }`}
+                          >
+                            <span>View</span>
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      
-                      <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl text-center space-y-2 sm:min-w-[175px] shrink-0 backdrop-blur">
-                        <div className="space-y-1">
-                          <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Operational Mode</span>
-                          <div className="flex items-center justify-center space-x-1.5 pt-0.5">
-                            <span className={`w-2 h-2 rounded-full ${isOnline ? (isBusy ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-ping') : 'bg-slate-600'}`} />
-                            <span className="text-xs font-black uppercase text-slate-200">
-                              {isOnline ? (isBusy ? 'Busy Mode' : 'Online / Active') : 'Offline Mode'}
+
+                      {/* Section 2: Operational Mode & Status Toggle */}
+                      <div className={`border rounded-3xl p-6 transition-all ${
+                        theme === 'light' ? 'bg-white border-slate-200 shadow-sm text-slate-900' : 'bg-slate-900 border-slate-800/80 shadow-lg text-slate-100'
+                      }`}>
+                        {/* Operational Mode Header Section */}
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
+                            isOnline ? (
+                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            ) : (
+                              theme === 'light' ? 'bg-slate-50 text-slate-400 border border-slate-150' : 'bg-slate-950 border border-slate-850 text-slate-500'
+                            )
+                          }`}>
+                            <Wifi className={`w-6 h-6 ${isOnline ? 'animate-pulse' : ''}`} />
+                          </div>
+                          <div>
+                            <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>OPERATIONAL MODE</span>
+                            <h3 className={`text-base font-extrabold flex items-center space-x-2 leading-none ${
+                              isOnline ? 'text-emerald-500' : (theme === 'light' ? 'text-slate-400' : 'text-slate-500')
+                            }`}>
+                              <span>{isOnline ? (isBusy ? 'BUSY MODE' : 'ONLINE / ACTIVE') : 'OFFLINE MODE'}</span>
+                            </h3>
+                            <span className={`text-[10px] font-mono block mt-1 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                              ₹{pricePerMin}/min rate configured
                             </span>
                           </div>
                         </div>
-                        
-                        <div className="border-t border-slate-800/60 pt-2 mt-1 flex flex-col items-center space-y-1.5 w-full">
-                          <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-bold">Quick Status Toggle</span>
-                          {!hasActivePlan ? (
-                            <div className="space-y-1 w-full pt-1">
-                              <span className="text-[9px] font-extrabold text-amber-400 block uppercase">Plan Inactive</span>
+
+                        {/* Divider */}
+                        <div className={`my-5 border-t ${theme === 'light' ? 'border-slate-150' : 'border-slate-800/60'}`} />
+
+                        {/* Quick Status Toggle Row */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>QUICK STATUS TOGGLE</span>
+                            <span className={`text-xs font-semibold ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
+                              {isOnline ? 'Switch to Offline' : 'Switch to Online'}
+                            </span>
+                          </div>
+
+                          <div>
+                            {!hasActivePlan ? (
                               <button
                                 onClick={handleScrollToPlans}
-                                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-[9px] py-2 px-3 rounded-xl uppercase transition-all shadow-md animate-pulse"
+                                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-[9px] py-1.5 px-3 rounded-lg uppercase transition-all shadow-md animate-pulse"
                               >
-                                Buy plan to start Earning
+                                Buy plan
                               </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-2 py-1 rounded-xl w-full justify-between">
-                              <span className="text-[10px] font-bold text-slate-300">{isOnline ? 'Go Offline' : 'Go Online'}</span>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={handleToggleOnline}
-                                className={`relative inline-flex h-4.5 w-8.5 items-center rounded-full transition-colors ${isOnline ? 'bg-emerald-500' : 'bg-slate-800'}`}
-                              >
-                                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isOnline ? 'translate-x-4.5' : 'translate-x-1'}`} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <span className="text-[9px] text-slate-500 block">₹{pricePerMin}/min rate configured</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Withdrawable Balance Hero - Main Earnings Showcase */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-                    
-                    <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-950 border-2 border-emerald-500/20 rounded-2xl p-5 shadow-2xl flex flex-col justify-between relative overflow-hidden group hover:border-emerald-500/35 transition-all">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/[0.02] rounded-full blur-2xl pointer-events-none" />
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
-                          <div className="flex items-center space-x-2">
-                            <Wallet className="w-4 h-4 text-emerald-400" />
-                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Withdrawable</h3>
-                          </div>
-                          <span className="text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-widest shrink-0">
-                            Sync
-                          </span>
-                        </div>
-                        
-                        <div className="py-1">
-                          <div className="flex items-baseline space-x-1.5 mt-1">
-                            <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-sans tracking-tight">₹{wallet.wallet_monthly.toFixed(2)}</span>
-                            <span className="text-[10px] text-slate-400 font-mono uppercase">INR</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-850/80 flex flex-col items-start gap-1.5 text-[10px] text-slate-400 mt-4 backdrop-blur">
-                        <span className="flex items-center space-x-1.5">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span>This month ({new Date().toLocaleString('default', { month: 'long' })})</span>
-                        </span>
-                        <span className="text-[9px] text-slate-500 block">Monthly earnings till salary cutoff date</span>
-                      </div>
-                    </div>
-
-                    {/* Simple Statistics Grid */}
-                    <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-                      
-                      <motion.div 
-                        whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Today's Earnings</span>
-                          <span className="text-base sm:text-lg xl:text-xl font-black text-slate-200 mt-1 block font-sans whitespace-nowrap">₹{wallet.wallet_today.toFixed(2)}</span>
-                        </div>
-                        <span className="text-[9px] text-emerald-400/80 font-mono block mt-2.5 shrink-0">● Active</span>
-                      </motion.div>
-
-                      <motion.div 
-                        whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Lifetime Total</span>
-                          <span className="text-base sm:text-lg xl:text-xl font-black text-slate-200 mt-1 block font-sans whitespace-nowrap">₹{wallet.wallet_total.toFixed(2)}</span>
-                        </div>
-                        <span className="text-[9px] text-slate-500 font-mono block mt-2.5 shrink-0 truncate">Cumulative</span>
-                      </motion.div>
-
-                      <motion.div 
-                        whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Consultations</span>
-                          <span className="text-base sm:text-lg xl:text-xl font-black text-emerald-400 mt-1 block font-sans whitespace-nowrap">{sessions.filter((s: any) => s.status === 'completed').length}</span>
-                        </div>
-                        <span className="text-[9px] text-slate-500 font-mono block mt-2.5 shrink-0 truncate">Completed</span>
-                      </motion.div>
-
-                      <motion.div 
-                        whileHover={{ y: -3 }}
-                        className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between shadow hover:border-slate-700 transition-all min-w-0"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block font-bold truncate">Total Refunded</span>
-                          <span className="text-base sm:text-lg xl:text-xl font-black text-rose-400 mt-1 block font-sans whitespace-nowrap">₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}</span>
-                        </div>
-                        <span className="text-[9px] text-rose-400/80 font-mono block mt-2.5 shrink-0 truncate">Refunded</span>
-                      </motion.div>
-
-
-
-                    </div>
-
-                  </div>
-
-                  {/* Highly Animated Earning Growth Pulse Widget */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="bg-emerald-500/10 p-2.5 rounded-xl">
-                          <Gauge className="w-5 h-5 text-emerald-400" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-base flex items-center gap-2">
-                            Earning Performance
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                            </span>
-                          </h3>
-                          <p className="text-xs text-slate-400">Peak call/consultation frequency and earnings potential indicators</p>
-                        </div>
-                      </div>
-                      <div className="text-[11px] font-mono text-emerald-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-850">
-                        Active Rate Cap: ₹{plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25}/min
-                      </div>
-                    </div>
-
-                    {/* Staggered grow-up simulation bars representing consulting peak periods */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch pt-2">
-                      {/* Left: Dynamic Weekly/Monthly Earnings Performance Chart */}
-                      <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
-                        <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-850/85 relative flex flex-col justify-between h-full min-h-[220px]">
-                          <div className="flex items-center justify-between mb-4">
-                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                              {performanceTab === 'weekly' ? 'Weekly Performance' : 'Monthly Performance'}
-                            </span>
-                            <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5">
-                              <button
-                                type="button"
-                                onClick={() => setPerformanceTab('weekly')}
-                                className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
-                                  performanceTab === 'weekly'
-                                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                                    : 'text-slate-400 hover:text-slate-200'
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                  isOnline ? 'bg-emerald-500' : (theme === 'light' ? 'bg-slate-200' : 'bg-slate-850')
                                 }`}
                               >
-                                Weekly
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isOnline ? 'translate-x-6' : 'translate-x-1'}`} />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => setPerformanceTab('monthly')}
-                                className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
-                                  performanceTab === 'monthly'
-                                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                                    : 'text-slate-400 hover:text-slate-200'
-                                }`}
-                              >
-                                Monthly
-                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 3: Withdrawable Balance & Monthly Sync */}
+                      <div className={`border rounded-3xl p-6 transition-all ${
+                        theme === 'light' ? 'bg-white border-slate-200 shadow-sm text-slate-900' : 'bg-slate-900 border-slate-800/80 shadow-lg text-slate-100'
+                      }`}>
+                        {/* Withdrawable Balance row */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
+                              theme === 'light' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              <Wallet className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <span className={`text-[9px] font-mono uppercase tracking-wider block font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>WITHDRAWABLE</span>
+                              <div className="flex items-baseline space-x-1.5 mt-0.5 leading-none">
+                                <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight">₹{wallet.wallet_monthly.toFixed(2)}</span>
+                                <span className={`text-[10px] font-mono uppercase font-bold ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>INR</span>
+                              </div>
                             </div>
                           </div>
-                          
-                          {performanceTab === 'weekly' ? (
-                            <div className="h-44 flex items-end justify-between gap-3 relative px-1 pb-1">
-                              {/* Y axis lines */}
-                              <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
-                              <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
-                              <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
-                              
-                              {/* Animated Bars */}
-                              {getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute).map((bar, i) => (
-                                <div 
-                                  key={bar.label} 
-                                  className="flex-1 flex flex-col items-center group relative z-10"
-                                  onMouseEnter={() => setActiveBarIndex(i)}
-                                  onMouseLeave={() => setActiveBarIndex(null)}
-                                  onTouchStart={(e) => {
-                                    e.stopPropagation();
-                                    setActiveBarIndex(i);
-                                  }}
-                                >
-                                  {/* Hover/Touch tooltip */}
-                                  <span className={`text-[9px] font-mono text-emerald-400 transition-opacity absolute -top-10 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
-                                    activeBarIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                                  }`}>
-                                    {bar.earnings}
-                                  </span>
-                                  
-                                  <div className="w-full bg-slate-900/40 h-32 rounded-lg flex items-end justify-center overflow-hidden">
-                                    <motion.div
-                                      initial={{ height: 0 }}
-                                      animate={{ height: bar.value }}
-                                      transition={{ duration: 0.8, delay: i * 0.08, ease: 'easeOut' }}
-                                      className="w-full max-w-[16px] rounded-t-md cursor-pointer transition-all bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
-                                    />
-                                  </div>
-                                  <span className="text-[10px] font-mono font-bold text-slate-400 mt-2">{bar.label}</span>
-                                </div>
-                              ))}
+
+                          <button 
+                            onClick={() => {
+                              if (currentConsultant) {
+                                loadConsultantStatsAndStatus(currentConsultant.id);
+                              }
+                            }}
+                            className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                              theme === 'light' 
+                                ? 'bg-slate-50 hover:bg-slate-100 text-emerald-600 border border-slate-255 hover:border-slate-300' 
+                                : 'bg-slate-950 hover:bg-slate-850 text-emerald-400 border border-slate-850 hover:border-slate-800'
+                            }`}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>SYNC</span>
+                          </button>
+                        </div>
+
+                        {/* Nested Row summarizing this month's earnings */}
+                        <div className={`mt-5 p-4 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                          theme === 'light' ? 'bg-slate-50/50 border-slate-100 hover:bg-slate-50' : 'bg-slate-950/85 border-slate-850/80 hover:bg-slate-950'
+                        }`}>
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                              theme === 'light' ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-500/10 text-emerald-400'
+                            }`}>
+                              <ShieldCheck className="w-4.5 h-4.5" />
                             </div>
-                          ) : (
-                            // Beautiful Monthly Line Chart
-                            (() => {
-                              const monthlyData = getMonthlyEarningsData(currentConsultant.id, sessions);
-                              const width = 500;
-                              const height = 150;
-                              const paddingLeft = 25;
-                              const paddingRight = 25;
-                              const paddingTop = 15;
-                              const paddingBottom = 25;
-                              
-                              const chartWidth = width - paddingLeft - paddingRight;
-                              const chartHeight = height - paddingTop - paddingBottom;
-                              
-                              const points = monthlyData.map((d, i) => {
-                                const x = paddingLeft + (i / (monthlyData.length - 1)) * chartWidth;
-                                const y = (paddingTop + chartHeight) - (d.percentage / 100) * chartHeight;
-                                return { x, y, ...d };
-                              });
-                              
-                              const linePathStr = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                              const areaPathStr = points.length > 0 
-                                ? `${linePathStr} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`
-                                : '';
-                              
-                              return (
-                                <div className="relative h-44 w-full flex flex-col justify-end">
-                                  {/* Y axis lines */}
-                                  <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
-                                  <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
-                                  <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
-                                  
-                                  {/* Line Graph Tooltip */}
-                                  {hoveredMonthlyPoint && (
-                                    <div 
-                                      className="absolute bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-xl z-20 pointer-events-none text-left flex flex-col"
-                                      style={{
-                                        left: `${Math.min(85, Math.max(2, (hoveredMonthlyPoint.x / width) * 100))}%`,
-                                        top: '0px'
-                                      }}
-                                    >
-                                      <span className="text-[8px] font-mono text-slate-500 uppercase tracking-wider font-bold">
-                                        Day {hoveredMonthlyPoint.day}
-                                      </span>
-                                      <span className="text-[11px] font-mono text-emerald-400 font-extrabold">
-                                        ₹{Math.round(hoveredMonthlyPoint.earnings).toLocaleString()}
-                                      </span>
-                                    </div>
-                                  )}
-                                  
-                                  <svg 
-                                    viewBox={`0 0 ${width} ${height}`} 
-                                    className="w-full h-full overflow-visible"
-                                    onMouseMove={(e) => {
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      const mouseX = e.clientX - rect.left;
-                                      const ratio = mouseX / rect.width;
-                                      const index = Math.round(ratio * (monthlyData.length - 1));
-                                      if (index >= 0 && index < monthlyData.length) {
-                                        setHoveredMonthlyPoint({ ...points[index], index });
-                                      }
-                                    }}
-                                    onMouseLeave={() => setHoveredMonthlyPoint(null)}
+                            <div>
+                              <span className={`text-xs font-bold block ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>
+                                This month ({new Date().toLocaleString('default', { month: 'long' })})
+                              </span>
+                              <span className="text-[9px] block mt-0.5 text-slate-500 font-sans">
+                                Unbilled rolling earnings: ₹{salaryInfo.currentCycleEarnings.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight className={`w-4 h-4 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`} />
+                        </div>
+                      </div>
+
+                      {/* Section 4: 2x2 Statistics Grid */}
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Today's Earnings */}
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
+                          <div className="flex justify-between items-start">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                              <TrendingUp className="w-4 h-4" />
+                            </div>
+                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
+                              Live
+                            </span>
+                          </div>
+                          <div className="mt-4">
+                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Today's Earnings</span>
+                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
+                              ₹{wallet.wallet_today.toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-emerald-400 font-semibold block mt-3">● Active</span>
+                        </div>
+
+                        {/* Lifetime Total */}
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
+                          <div className="flex justify-between items-start">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                              <Coins className="w-4 h-4" />
+                            </div>
+                            <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
+                              All Time
+                            </span>
+                          </div>
+                          <div className="mt-4">
+                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Lifetime Total</span>
+                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
+                              ₹{wallet.wallet_total.toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-indigo-400 font-semibold block mt-3">● Cumulative</span>
+                        </div>
+
+                        {/* Consultations */}
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
+                          <div className="flex justify-between items-start">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                              <UserCheck className="w-4 h-4" />
+                            </div>
+                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
+                              Chats
+                            </span>
+                          </div>
+                          <div className="mt-4">
+                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Consultations</span>
+                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
+                              {sessions.filter((s: any) => s.status === 'completed').length}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-emerald-400 font-semibold block mt-3">● Completed</span>
+                        </div>
+
+                        {/* Total Refunded */}
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm min-h-[140px] text-left">
+                          <div className="flex justify-between items-start">
+                            <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                              <RefreshCw className="w-4 h-4" />
+                            </div>
+                            <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono px-2 py-0.5 rounded-full font-bold">
+                              Refunds
+                            </span>
+                          </div>
+                          <div className="mt-4">
+                            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block font-bold">Total Refunded</span>
+                            <span className="text-lg sm:text-xl font-black text-slate-100 font-sans mt-0.5 block truncate">
+                              ₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-rose-400 font-semibold block mt-3">● Refunded</span>
+                        </div>
+                      </div>
+
+                      {/* Section 5: Earning Performance */}
+                      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                          <div className="flex flex-col gap-1.5 text-left w-full sm:w-auto">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-emerald-500/10 p-2.5 rounded-xl text-emerald-400 shrink-0">
+                                <Gauge className="w-5 h-5 animate-pulse" />
+                              </div>
+                              <h3 className="font-extrabold text-base text-slate-100 flex items-center gap-2">
+                                Earning Performance
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                              </h3>
+                            </div>
+                            <p className="text-xs text-slate-400 pl-1 mt-0.5">Peak call/consultation frequency and earnings potential indicators</p>
+                          </div>
+                          <div className="text-[11px] font-mono text-emerald-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-850">
+                            Active Rate Cap: ₹{plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25}/min
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch pt-2 text-left">
+                          {/* Left: Dynamic Weekly/Monthly Earnings Performance Chart */}
+                          <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+                            <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-850/85 relative flex flex-col justify-between h-full min-h-[220px]">
+                              <div className="flex items-center justify-between mb-4">
+                                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                                  {performanceTab === 'weekly' ? 'Weekly Performance' : 'Monthly Performance'}
+                                </span>
+                                <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPerformanceTab('weekly')}
+                                    className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
+                                      performanceTab === 'weekly'
+                                        ? 'bg-emerald-500 text-white shadow-sm font-extrabold'
+                                        : 'text-slate-400 hover:text-slate-200'
+                                    }`}
                                   >
-                                    <defs>
-                                      <linearGradient id="monthlyAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
-                                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-                                      </linearGradient>
-                                    </defs>
-                                    
-                                    {/* Area under the line */}
-                                    {areaPathStr && (
-                                      <path 
-                                        d={areaPathStr} 
-                                        fill="url(#monthlyAreaGrad)"
-                                        className="transition-all duration-300"
-                                      />
-                                    )}
-                                    
-                                    {/* Line Stroke with vibrant glowing drop shadow style */}
-                                    {linePathStr && (
-                                      <motion.path 
-                                        d={linePathStr} 
-                                        fill="none" 
-                                        stroke="#10b981" 
-                                        strokeWidth="3" 
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        initial={{ pathLength: 0 }}
-                                        animate={{ pathLength: 1 }}
-                                        transition={{ duration: 1.2, ease: "easeInOut" }}
-                                        className="drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                                      />
-                                    )}
-                                    
-                                    {/* Interactive dots */}
-                                    {points.map((p, i) => {
-                                      const isHovered = hoveredMonthlyPoint && hoveredMonthlyPoint.index === i;
-                                      if (p.earnings === 0 && !isHovered) return null;
-                                      return (
-                                        <circle 
-                                          key={i}
-                                          cx={p.x}
-                                          cy={p.y}
-                                          r={isHovered ? 6 : 3.5}
-                                          fill={isHovered ? '#10b981' : '#020617'}
-                                          stroke="#10b981"
-                                          strokeWidth={isHovered ? 2.5 : 1.5}
-                                          className="cursor-pointer transition-all duration-150"
+                                    Weekly
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPerformanceTab('monthly')}
+                                    className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all ${
+                                      performanceTab === 'monthly'
+                                        ? 'bg-emerald-500 text-white shadow-sm font-extrabold'
+                                        : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    Monthly
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {performanceTab === 'weekly' ? (
+                                <>
+                                  {/* Week-wise and Day-wise Filters */}
+                                  <div className="flex flex-col gap-3 mb-5 border-b border-slate-900 pb-4">
+                                    {/* Week-wise Slider and Selector */}
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-850">
+                                      <div className="flex flex-col text-left">
+                                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-extrabold">Performance Week</span>
+                                        <span className="text-xs font-bold text-emerald-400 mt-0.5">{getWeekRangeString(performanceWeekOffset)}</span>
+                                      </div>
+                                      
+                                      <div className="flex items-center space-x-2">
+                                        <input 
+                                          type="range" 
+                                          min="0" 
+                                          max="3" 
+                                          value={performanceWeekOffset} 
+                                          onChange={(e) => setPerformanceWeekOffset(parseInt(e.target.value))}
+                                          className="w-28 sm:w-32 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                                         />
+                                        <select
+                                          value={performanceWeekOffset}
+                                          onChange={(e) => setPerformanceWeekOffset(parseInt(e.target.value))}
+                                          className="bg-slate-950 border border-slate-800 rounded-lg text-[11px] font-mono font-bold text-slate-300 px-2 py-1 focus:border-emerald-500 outline-none"
+                                        >
+                                          <option value="0">This Week</option>
+                                          <option value="1">1 Week Ago</option>
+                                          <option value="2">2 Weeks Ago</option>
+                                          <option value="3">3 Weeks Ago</option>
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    {/* Day-wise Filter segmented buttons */}
+                                    <div className="flex flex-col text-left">
+                                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-extrabold mb-1.5">Filter by Specific Day</span>
+                                      <div className="flex flex-wrap gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850">
+                                        {['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                                          <button
+                                            key={day}
+                                            type="button"
+                                            onClick={() => setSelectedDayFilter(day)}
+                                            className={`flex-1 min-w-[38px] py-1 text-[10px] font-mono font-bold rounded-lg transition-all ${
+                                              selectedDayFilter === day
+                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-extrabold'
+                                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
+                                            }`}
+                                          >
+                                            {day}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="h-44 flex items-end justify-between gap-3 relative px-1 pb-1">
+                                    {/* Y axis lines */}
+                                    <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
+                                    <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
+                                    <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
+                                    
+                                    {/* Animated Bars */}
+                                    {getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute, performanceWeekOffset).map((bar, i) => {
+                                      const isSelectedDay = selectedDayFilter === bar.label;
+                                      const isAllDays = selectedDayFilter === 'All';
+                                      const isDimmed = !isAllDays && !isSelectedDay;
+
+                                      return (
+                                        <div 
+                                          key={bar.label} 
+                                          className={`flex-1 flex flex-col items-center group relative z-10 transition-all duration-300 ${
+                                            isDimmed ? 'opacity-30 scale-95' : 'opacity-100 scale-100'
+                                          }`}
+                                          onMouseEnter={() => setActiveBarIndex(i)}
+                                          onMouseLeave={() => setActiveBarIndex(null)}
+                                          onTouchStart={(e) => {
+                                            e.stopPropagation();
+                                            setActiveBarIndex(i);
+                                            setSelectedDayFilter(bar.label);
+                                          }}
+                                          onClick={() => setSelectedDayFilter(isSelectedDay ? 'All' : bar.label)}
+                                        >
+                                          {/* Hover/Touch tooltip */}
+                                          <span className={`text-[9px] font-mono text-emerald-400 transition-opacity absolute -top-10 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
+                                            activeBarIndex === i || isSelectedDay ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                          }`}>
+                                            {bar.earnings}
+                                          </span>
+                                          
+                                          <div className={`w-full bg-slate-900/40 h-32 rounded-lg flex items-end justify-center overflow-hidden transition-all border ${
+                                            isSelectedDay ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-transparent'
+                                          }`}>
+                                            <motion.div
+                                              initial={{ height: 0 }}
+                                              animate={{ height: bar.value }}
+                                              transition={{ duration: 0.8, delay: i * 0.08, ease: 'easeOut' }}
+                                              className={`w-full max-w-[16px] rounded-t-md cursor-pointer transition-all ${
+                                                isSelectedDay 
+                                                  ? 'bg-gradient-to-t from-emerald-500 to-teal-300 shadow-[0_0_12px_rgba(16,185,129,0.6)]' 
+                                                  : 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                                              }`}
+                                            />
+                                          </div>
+                                          <span className={`text-[10px] font-mono font-bold mt-2 transition-colors ${
+                                            isSelectedDay ? 'text-emerald-400 font-extrabold' : 'text-slate-400'
+                                          }`}>{bar.label}</span>
+                                        </div>
                                       );
                                     })}
+                                  </div>
+
+                                  {/* Detailed Insights Card based on Day / Week filter */}
+                                  {(() => {
+                                    const weeklyData = getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute, performanceWeekOffset);
                                     
-                                    {/* Custom labels for x-axis days */}
-                                    {points.filter((_, idx) => idx % 5 === 0 || idx === points.length - 1).map((p, i) => (
-                                      <text 
-                                        key={i} 
-                                        x={p.x} 
-                                        y={height - 5} 
-                                        textAnchor="middle" 
-                                        className="fill-slate-400 font-mono text-[9px] font-bold"
+                                    // If a specific day is selected, show that day's stats, otherwise show week totals
+                                    let displayedEarnings = 0;
+                                    let displayedCalls = 0;
+                                    let displayedMinutes = 0;
+                                    let displayLabel = "";
+
+                                    if (selectedDayFilter === 'All') {
+                                      displayLabel = "Weekly Summary";
+                                      displayedEarnings = weeklyData.reduce((acc, d) => acc + d.actual, 0);
+                                      displayedCalls = weeklyData.reduce((acc, d) => acc + d.callCount, 0);
+                                      displayedMinutes = weeklyData.reduce((acc, d) => acc + d.totalMinutes, 0);
+                                    } else {
+                                      const matched = weeklyData.find(d => d.label === selectedDayFilter);
+                                      displayLabel = matched ? `${matched.label}day Insights` : `${selectedDayFilter} Insights`;
+                                      displayedEarnings = matched ? matched.actual : 0;
+                                      displayedCalls = matched ? matched.callCount : 0;
+                                      displayedMinutes = matched ? matched.totalMinutes : 0;
+                                    }
+
+                                    return (
+                                      <div className="mt-4 p-3 bg-slate-900/50 rounded-xl border border-slate-850/80 grid grid-cols-3 gap-2.5 text-center">
+                                        <div className="flex flex-col justify-center">
+                                          <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
+                                          <span className="text-[10px] font-bold text-slate-300 block mt-0.5">Earnings</span>
+                                          <span className="text-xs font-mono font-black text-emerald-400 mt-0.5">₹{Math.round(displayedEarnings).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex flex-col justify-center border-x border-slate-850">
+                                          <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
+                                          <span className="text-[10px] font-bold text-slate-300 block mt-0.5">Consultations</span>
+                                          <span className="text-xs font-mono font-black text-emerald-400 mt-0.5">{displayedCalls} calls</span>
+                                        </div>
+                                        <div className="flex flex-col justify-center">
+                                          <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
+                                          <span className="text-[10px] font-bold text-slate-300 block mt-0.5">Total Time</span>
+                                          <span className="text-xs font-mono font-black text-emerald-400 mt-0.5">{displayedMinutes} mins</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </>
+                              ) : (
+                                // Beautiful Monthly Line Chart
+                                (() => {
+                                  const monthlyData = getMonthlyEarningsData(currentConsultant.id, sessions);
+                                  const width = 500;
+                                  const height = 150;
+                                  const paddingLeft = 25;
+                                  const paddingRight = 25;
+                                  const paddingTop = 15;
+                                  const paddingBottom = 25;
+                                  
+                                  const chartWidth = width - paddingLeft - paddingRight;
+                                  const chartHeight = height - paddingTop - paddingBottom;
+                                  
+                                  const points = monthlyData.map((d, i) => {
+                                    const x = paddingLeft + (i / (monthlyData.length - 1)) * chartWidth;
+                                    const y = (paddingTop + chartHeight) - (d.percentage / 100) * chartHeight;
+                                    return { x, y, ...d };
+                                  });
+                                  
+                                  const linePathStr = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                                  const areaPathStr = points.length > 0 
+                                    ? `${linePathStr} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`
+                                    : '';
+                                  
+                                  return (
+                                    <div className="relative h-44 w-full flex flex-col justify-end">
+                                      {/* Y axis lines */}
+                                      <div className="absolute inset-x-0 top-1/4 border-t border-slate-900/40 pointer-events-none" />
+                                      <div className="absolute inset-x-0 top-2/4 border-t border-slate-900/40 pointer-events-none" />
+                                      <div className="absolute inset-x-0 top-3/4 border-t border-slate-900/40 pointer-events-none" />
+                                      
+                                      {/* Line Graph Tooltip */}
+                                      {hoveredMonthlyPoint && (
+                                        <div 
+                                          className="absolute bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-xl z-20 pointer-events-none text-left flex flex-col"
+                                          style={{
+                                            left: `${Math.min(85, Math.max(2, (hoveredMonthlyPoint.x / width) * 100))}%`,
+                                            top: '0px'
+                                          }}
+                                        >
+                                          <span className="text-[8px] font-sans text-slate-500 uppercase tracking-wider font-bold">
+                                            Day {hoveredMonthlyPoint.day}
+                                          </span>
+                                          <span className="text-[11px] font-mono text-emerald-400 font-extrabold">
+                                            ₹{Math.round(hoveredMonthlyPoint.earnings).toLocaleString()}
+                                          </span>
+                                        </div>
+                                      )}
+                                      
+                                      <svg 
+                                        viewBox={`0 0 ${width} ${height}`} 
+                                        className="w-full h-full overflow-visible"
+                                        onMouseMove={(e) => {
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          const mouseX = e.clientX - rect.left;
+                                          const ratio = mouseX / rect.width;
+                                          const index = Math.round(ratio * (monthlyData.length - 1));
+                                          if (index >= 0 && index < monthlyData.length) {
+                                            setHoveredMonthlyPoint({ ...points[index], index });
+                                          }
+                                        }}
+                                        onMouseLeave={() => setHoveredMonthlyPoint(null)}
                                       >
-                                        D{p.day}
+                                        <defs>
+                                          <linearGradient id="monthlyAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+                                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                                          </linearGradient>
+                                        </defs>
+                                        
+                                        {/* Filled Area */}
+                                        {areaPathStr && (
+                                          <path 
+                                            d={areaPathStr} 
+                                            fill="url(#monthlyAreaGrad)"
+                                            className="transition-all duration-300"
+                                          />
+                                        )}
+                                        
+                                        {/* Line */}
+                                        {linePathStr && (
+                                          <motion.path 
+                                            d={linePathStr} 
+                                            fill="none" 
+                                            stroke="#10b981" 
+                                            strokeWidth="3" 
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            initial={{ pathLength: 0 }}
+                                            animate={{ pathLength: 1 }}
+                                            transition={{ duration: 1.2, ease: "easeInOut" }}
+                                            className="drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                                          />
+                                        )}
+                                        
+                                        {/* Interactive dots */}
+                                        {points.map((p, i) => {
+                                          const isHovered = hoveredMonthlyPoint && hoveredMonthlyPoint.index === i;
+                                          if (p.earnings === 0 && !isHovered) return null;
+                                          return (
+                                            <circle 
+                                              key={i}
+                                              cx={p.x}
+                                              cy={p.y}
+                                              r={isHovered ? 6 : 3.5}
+                                              fill={isHovered ? '#10b981' : '#020617'}
+                                              stroke="#10b981"
+                                              strokeWidth={isHovered ? 2.5 : 1.5}
+                                              className="cursor-pointer transition-all duration-150"
+                                            />
+                                          );
+                                        })}
+                                        
+                                        {/* Custom labels for x-axis days */}
+                                        {points.filter((_, idx) => idx % 5 === 0 || idx === points.length - 1).map((p, i) => (
+                                          <text 
+                                            key={i} 
+                                            x={p.x} 
+                                            y={height - 5} 
+                                            textAnchor="middle" 
+                                            className="fill-slate-400 font-mono text-[9px] font-bold"
+                                          >
+                                            D{p.day}
+                                          </text>
+                                        ))}
+                                      </svg>
+                                    </div>
+                                  );
+                                })()
+                              )}
+                              
+                            </div>
+                          </div>
+
+                          {/* Right: Repeat User Rate Meter Speedometer */}
+                          <div className="lg:col-span-5 flex flex-col justify-between">
+                            {(() => {
+                              const metrics = getPerformanceMetrics(currentConsultant.id, sessions);
+                              const repeatUserPct = metrics.repeat.daily;
+                              const needleRotation = (repeatUserPct / 100) * 180 - 90;
+                              
+                              return (
+                                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 flex flex-col justify-between h-full shadow-lg text-center space-y-4">
+                                  <div className="flex items-center justify-between border-b border-slate-900 pb-2 flex-wrap gap-2">
+                                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                                      ⚡ Repeat User %
+                                    </h4>
+                                    <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 px-2 py-0.5 rounded-md uppercase font-mono font-bold flex items-center gap-1 shrink-0">
+                                      <span className="w-1 h-1 rounded-full bg-indigo-400 animate-pulse"></span>
+                                      LIVE REPEAT %
+                                    </span>
+                                  </div>
+
+                                  {/* Custom Speedometer Gauge */}
+                                  <div className="relative py-2 flex flex-col items-center">
+                                    <svg viewBox="0 0 200 115" className="w-full max-w-[210px] overflow-visible">
+                                      <defs>
+                                        <linearGradient id="performanceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                          <stop offset="0%" stopColor="#6366f1" /> {/* Indigo */}
+                                          <stop offset="50%" stopColor="#06b6d4" /> {/* Cyan */}
+                                          <stop offset="100%" stopColor="#10b981" /> {/* Emerald */}
+                                        </linearGradient>
+                                        <filter id="glow-effect" x="-20%" y="-20%" width="140%" height="140%">
+                                          <feGaussianBlur stdDeviation="3" result="blur" />
+                                          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                        </filter>
+                                      </defs>
+
+                                      {/* Base track arc */}
+                                      <path
+                                        d="M 25 100 A 75 75 0 0 1 175 100"
+                                        fill="none"
+                                        stroke="#1e293b"
+                                        strokeWidth="11"
+                                        strokeLinecap="round"
+                                      />
+
+                                      {/* Colored Active track arc */}
+                                      <path
+                                        d="M 25 100 A 75 75 0 0 1 175 100"
+                                        fill="none"
+                                        stroke="url(#performanceGradient)"
+                                        strokeWidth="11"
+                                        strokeLinecap="round"
+                                        strokeDasharray="236"
+                                        strokeDashoffset={236 - (236 * repeatUserPct) / 100}
+                                        className="transition-all duration-1000 ease-out"
+                                      />
+
+                                      {/* 50% dot indicator at the top center of arc so it does not merge */}
+                                      <circle cx="100" cy="25" r="3" fill="#06b6d4" />
+
+                                      {/* Dynamic Pointer needle */}
+                                      <g transform="translate(100, 100)">
+                                        <motion.g
+                                          animate={{ rotate: needleRotation }}
+                                          transition={{ type: "spring", stiffness: 75, damping: 14 }}
+                                        >
+                                          {/* Pointer line */}
+                                          <line
+                                            x1="0"
+                                            y1="0"
+                                            x2="0"
+                                            y2="-62"
+                                            stroke="#6366f1"
+                                            strokeWidth="3.5"
+                                            strokeLinecap="round"
+                                            filter="url(#glow-effect)"
+                                          />
+                                          {/* Indicator Arrow tip */}
+                                          <polygon
+                                            points="-5,-56 0,-68 5,-56"
+                                            fill="#6366f1"
+                                          />
+                                        </motion.g>
+                                      </g>
+
+                                      {/* Center cap core styled elegantly as a clean dot */}
+                                      <circle cx="100" cy="100" r="5" fill="#020617" stroke="#6366f1" strokeWidth="1.5" />
+                                      <circle cx="100" cy="100" r="2" fill="#6366f1" />
+
+                                      {/* Text Display */}
+                                      <text x="100" y="92" textAnchor="middle" className="fill-slate-100 text-xl font-black font-sans tracking-tight">
+                                        {repeatUserPct}%
                                       </text>
-                                    ))}
-                                  </svg>
+
+                                      {/* High precision SVG-aligned speedometer labels */}
+                                      <text x="25" y="112" textAnchor="middle" className="fill-slate-500 text-[9px] font-bold font-sans">0%</text>
+                                      <text x="100" y="112" textAnchor="middle" className="fill-indigo-400 text-[9px] font-bold font-sans uppercase tracking-wider">Repeat User %</text>
+                                      <text x="175" y="112" textAnchor="middle" className="fill-slate-500 text-[9px] font-bold font-sans">100%</text>
+                                    </svg>
+                                  </div>
+
+                                  {/* Only Repeat User Indicator */}
+                                  <div className="flex justify-center items-center pt-2 border-t border-slate-900">
+                                    <div className="bg-slate-900/60 py-2 px-6 rounded-xl border border-slate-850 text-center">
+                                      <span className="text-[10px] text-slate-400 uppercase font-sans tracking-wider block">Target Repeat Rate</span>
+                                      <strong className="text-xs text-indigo-400 font-mono block mt-0.5">
+                                        40%+ Preferred
+                                      </strong>
+                                    </div>
+                                  </div>
+
+                                  <p className="text-[9px] text-slate-500 italic leading-relaxed pt-1">
+                                    *Calculated live based on the ratio of returning users to unique consultees.
+                                  </p>
                                 </div>
                               );
-                            })()
-                          )}
-                          
-                          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 border-t border-slate-900/60 pt-3 mt-2">
-                            <span className="flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></span>
-                              Real Bookings
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 6: Payout cycle preview */}
+                      {salaryInfo && (
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 text-left">
+                          <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                            <div className="flex items-center gap-2.5 text-left">
+                              <Calendar className="w-5.5 h-5.5 text-emerald-400 shrink-0" />
+                              <span className="text-xs font-sans font-bold uppercase tracking-wider text-slate-300">
+                                Monthly Salary Cutoff Date
+                              </span>
+                            </div>
+                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 px-2 py-0.5 rounded uppercase font-mono font-bold">
+                              Next Cutoff: {salaryInfo.cutoffDay}th
                             </span>
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Right: High-Tech Speedometer / Performance Meter */}
-                      <div className="lg:col-span-5 flex flex-col justify-between">
-                        {(() => {
-                          const metrics = getPerformanceMetrics(currentConsultant.id, sessions);
-                          const repeatUserPct = metrics.repeat.daily;
-                          const needleRotation = (repeatUserPct / 100) * 180 - 90;
                           
-                          return (
-                            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 flex flex-col justify-between h-full shadow-lg text-center space-y-4">
-                              <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                                <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                                  ⚡ Repeat User Rate Meter
-                                </h4>
-                                <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 px-2 py-0.5 rounded-md uppercase font-mono font-bold flex items-center gap-1">
-                                  <span className="w-1 h-1 rounded-full bg-indigo-400 animate-pulse"></span>
-                                  LIVE REPEAT %
-                                </span>
-                              </div>
-
-                              {/* Custom Interactive Speedometer Gauge */}
-                              <div className="relative py-2 flex flex-col items-center">
-                                <svg viewBox="0 0 200 115" className="w-full max-w-[210px] overflow-visible">
-                                  <defs>
-                                    <linearGradient id="performanceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                      <stop offset="0%" stopColor="#6366f1" /> {/* Indigo */}
-                                      <stop offset="50%" stopColor="#06b6d4" /> {/* Cyan */}
-                                      <stop offset="100%" stopColor="#10b981" /> {/* Emerald */}
-                                    </linearGradient>
-                                    <filter id="glow-effect" x="-20%" y="-20%" width="140%" height="140%">
-                                      <feGaussianBlur stdDeviation="3" result="blur" />
-                                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                                    </filter>
-                                  </defs>
-
-                                  {/* Base track arc */}
-                                  <path
-                                    d="M 25 100 A 75 75 0 0 1 175 100"
-                                    fill="none"
-                                    stroke="#1e293b"
-                                    strokeWidth="11"
-                                    strokeLinecap="round"
-                                  />
-
-                                  {/* Colored Active track arc */}
-                                  <path
-                                    d="M 25 100 A 75 75 0 0 1 175 100"
-                                    fill="none"
-                                    stroke="url(#performanceGradient)"
-                                    strokeWidth="11"
-                                    strokeLinecap="round"
-                                    strokeDasharray="236"
-                                    strokeDashoffset={236 - (236 * repeatUserPct) / 100}
-                                    className="transition-all duration-1000 ease-out"
-                                  />
-
-                                  {/* Dynamic Pointer needle */}
-                                  <g transform="translate(100, 100)">
-                                    <motion.g
-                                      animate={{ rotate: needleRotation }}
-                                      transition={{ type: "spring", stiffness: 75, damping: 14 }}
-                                    >
-                                      {/* Pointer line */}
-                                      <line
-                                        x1="0"
-                                        y1="0"
-                                        x2="0"
-                                        y2="-62"
-                                        stroke="#6366f1"
-                                        strokeWidth="3.5"
-                                        strokeLinecap="round"
-                                        filter="url(#glow-effect)"
-                                      />
-                                      {/* Indicator Arrow tip */}
-                                      <polygon
-                                        points="-5,-56 0,-68 5,-56"
-                                        fill="#6366f1"
-                                      />
-                                    </motion.g>
-                                  </g>
-
-                                  {/* Center cap core */}
-                                  <circle cx="100" cy="100" r="10" fill="#020617" stroke="#334155" strokeWidth="2" />
-                                  <circle cx="100" cy="100" r="4" fill="#6366f1" />
-
-                                  {/* Text Display */}
-                                  <text x="100" y="92" textAnchor="middle" className="fill-slate-100 text-xl font-black font-sans tracking-tight">
-                                    {repeatUserPct}%
-                                  </text>
-                                </svg>
-
-                                {/* Mini speedometer labels */}
-                                <div className="absolute bottom-1 inset-x-0 flex justify-between px-6 text-[9px] font-mono text-slate-500 font-bold">
-                                  <span>0%</span>
-                                  <span className="text-indigo-400">REPEAT USER %</span>
-                                  <span>100%</span>
-                                </div>
-                              </div>
-
-                              {/* Only Repeat User Indicator */}
-                              <div className="flex justify-center items-center pt-2 border-t border-slate-900">
-                                <div className="bg-slate-900/60 py-2 px-6 rounded-xl border border-slate-850 text-center">
-                                  <span className="text-[10px] text-slate-400 uppercase font-mono tracking-wider block">Target Repeat Rate</span>
-                                  <strong className="text-xs text-indigo-400 font-mono block mt-0.5">
-                                    40%+ Preferred
-                                  </strong>
-                                </div>
-                              </div>
-
-                              <p className="text-[9px] text-slate-500 italic leading-relaxed pt-1">
-                                *Calculated live based on the ratio of returning users to unique consultees.
-                              </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                              <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Estimated Salary Payout</span>
+                              <strong className="text-emerald-400 text-lg font-mono block mt-1">₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
+                              <span className="text-[9px] text-slate-500 block mt-1">Earned up to {salaryInfo.cutoffDay}th</span>
                             </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Payout cycle preview inside dashboard */}
-                  {salaryInfo && (
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                          💼 Monthly Salary Cutoff Sync
-                        </span>
-                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 px-2 py-0.5 rounded uppercase font-mono font-bold">
-                          Next Cutoff: {salaryInfo.cutoffDay}th
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
-                          <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider block">Estimated Salary Payout</span>
-                          <strong className="text-emerald-400 text-lg font-mono block mt-1">₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
-                          <span className="text-[9px] text-slate-500 block mt-1">Earned up to {salaryInfo.cutoffDay}th</span>
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                              <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Credit Target Date</span>
+                              <strong className="text-amber-400 text-lg font-mono block mt-1">By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
+                              <span className="text-[9px] text-slate-500 block mt-1">Direct bank clearance</span>
+                            </div>
+
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                              <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Accumulating Unbilled</span>
+                              <strong className="text-slate-200 text-lg font-mono block mt-1">₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
+                              <span className="text-[9px] text-slate-500 block mt-1">For next month's payoff</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Section 7: Recent Chats Quick List */}
+                      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 text-left">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                          <h3 className="font-extrabold text-sm uppercase tracking-wider text-slate-100">Recent Chats</h3>
+                          <button
+                            onClick={() => setActiveTab('sessions')}
+                            className="text-xs text-emerald-400 hover:underline hover:text-emerald-300 font-bold"
+                          >
+                            See All ({sessions.length})
+                          </button>
                         </div>
 
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
-                          <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider block">Credit Target Date</span>
-                          <strong className="text-amber-400 text-lg font-mono block mt-1">By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
-                          <span className="text-[9px] text-slate-500 block mt-1">Direct bank clearance</span>
-                        </div>
-
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
-                          <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider block">Accumulating Unbilled</span>
-                          <strong className="text-slate-200 text-lg font-mono block mt-1">₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
-                          <span className="text-[9px] text-slate-500 block mt-1">For next month's payoff</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent Activity Quick View */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 text-left">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <h3 className="font-bold text-sm uppercase tracking-wider text-slate-200">Recent Chats Quick List</h3>
-                      <button
-                        onClick={() => setActiveTab('sessions')}
-                        className="text-xs text-emerald-400 hover:underline hover:text-emerald-300 font-bold"
-                      >
-                        See All ({sessions.length})
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {sessions.slice(0, 3).length === 0 ? (
-                        <p className="text-xs text-slate-500 py-4 text-center">No consultations registered yet.</p>
-                      ) : (
-                        sessions.slice(0, 3).map((sess) => (
-                          <div key={sess.id} className="bg-slate-950 border border-slate-850 p-3.5 rounded-xl flex items-center justify-between text-xs">
-                            <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <span className="font-bold text-slate-200">{sess.user_name}</span>
-                                <span className="text-[9px] font-mono text-slate-500">ID: #{sess.id}</span>
-                              </div>
-                              <p className="text-slate-400 font-mono text-[11px]">
-                                {sess.duration_minutes} Mins @ ₹{sess.price_per_minute}/min
-                              </p>
-                              {sess.rating && (
-                                <div className="flex items-center space-x-2 mt-1">
-                                  <div className="flex items-center text-amber-400">
-                                    {[...Array(5)].map((_, i) => (
-                                      <Star
-                                        key={i}
-                                        className={`w-2.5 h-2.5 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
-                                      />
-                                    ))}
+                        <div className="space-y-3">
+                          {sessions.slice(0, 3).length === 0 ? (
+                            <p className="text-xs text-slate-500 py-4 text-center">No consultations registered yet.</p>
+                          ) : (
+                            sessions.slice(0, 3).map((sess) => (
+                              <div key={sess.id} className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex items-center justify-between text-xs hover:border-slate-800 transition-colors">
+                                <div className="space-y-1">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="font-bold text-slate-200">{sess.user_name}</span>
+                                    <span className="text-[9px] font-sans text-slate-500">ID: #{sess.id}</span>
                                   </div>
-                                  {sess.review_text && (
-                                    <span className="text-[10px] text-slate-400 italic font-sans truncate max-w-[150px]" title={sess.review_text}>
-                                      "{sess.review_text}"
-                                    </span>
+                                  <p className="text-slate-400 font-sans text-[11px]">
+                                    {sess.duration_minutes} Mins @ ₹{sess.price_per_minute}/min
+                                  </p>
+                                  {sess.rating && (
+                                    <div className="flex items-center space-x-2 mt-1">
+                                      <div className="flex items-center text-amber-400">
+                                        {[...Array(5)].map((_, i) => (
+                                          <Star
+                                            key={i}
+                                            className={`w-2.5 h-2.5 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                          />
+                                        ))}
+                                      </div>
+                                      {sess.review_text && (
+                                        <span className="text-[10px] text-slate-400 italic font-sans truncate max-w-[150px]" title={sess.review_text}>
+                                          "{sess.review_text}"
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <span className="text-emerald-400 font-mono font-bold">₹{sess.consultant_earnings.toFixed(2)}</span>
-                              <span className="text-[9px] text-slate-500 block">Net Earning</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Special Admin Wallet Additions */}
-                  {manualAdjustments && manualAdjustments.length > 0 && (
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 text-left">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div className="flex items-center space-x-2">
-                          <Coins className="w-5 h-5 text-amber-400" />
-                          <h3 className="font-bold text-sm uppercase tracking-wider text-slate-200">🎁 Special Admin Credits</h3>
-                        </div>
-                        <span className="text-xs text-amber-400 font-mono font-bold">
-                          Total: ₹{manualAdjustments.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0).toFixed(2)}
-                        </span>
-                      </div>
-
-                      <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
-                        {manualAdjustments.map((adj) => (
-                          <div key={adj.id} className="bg-slate-950 border border-slate-850 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:border-slate-800 transition-colors">
-                            <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-bold font-mono">
-                                  CREDITED BY SUPER ADMIN
-                                </span>
-                                <span className="text-[9px] font-mono text-slate-500">{new Date(adj.created_at).toLocaleString()}</span>
+                                <div className="flex items-center space-x-4">
+                                  <div className="text-right">
+                                    <span className="text-emerald-400 font-mono font-bold text-sm">₹{sess.consultant_earnings.toFixed(2)}</span>
+                                    <span className="text-[9px] text-slate-500 block">Net Earning</span>
+                                  </div>
+                                  <button className="text-slate-500 hover:text-slate-300 p-1 rounded-md">
+                                    <MoreVertical className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
-                              <p className="text-slate-200 font-semibold text-xs mt-1.5">{adj.reason}</p>
-                            </div>
-                            <div className="text-right sm:self-center shrink-0">
-                              <span className="text-emerald-400 font-mono text-base font-black">+₹{adj.amount.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        ))}
+                            ))
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+
+                      {/* Section 8: Special Admin Wallet Additions */}
+                      {manualAdjustments && manualAdjustments.length > 0 && (
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 text-left">
+                          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div className="flex items-center space-x-2">
+                              <Coins className="w-5 h-5 text-amber-400" />
+                              <h3 className="font-bold text-sm uppercase tracking-wider text-slate-100">🎁 Special Admin Credits</h3>
+                            </div>
+                            <span className="text-xs text-amber-400 font-mono font-bold">
+                              Total: ₹{manualAdjustments.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                            {manualAdjustments.map((adj) => (
+                              <div key={adj.id} className="bg-slate-950 border border-slate-850 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:border-slate-800 transition-colors">
+                                <div className="space-y-1">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-bold font-mono">
+                                      CREDITED BY SUPER ADMIN
+                                    </span>
+                                    <span className="text-[9px] font-sans text-slate-500">{new Date(adj.created_at).toLocaleString()}</span>
+                                  </div>
+                                  <p className="text-slate-200 font-semibold text-xs mt-1.5">{adj.reason}</p>
+                                </div>
+                                <div className="text-right sm:self-center shrink-0">
+                                  <span className="text-emerald-400 font-mono text-base font-black">+₹{adj.amount.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </motion.div>
@@ -4378,23 +4741,74 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   transition={{ duration: 0.4 }}
                   className="space-y-6"
                 >
-                  {/* Top Bar / Header with Back Button */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800 flex-wrap gap-2">
-                    <div>
-                      <h3 className="font-bold text-slate-100 font-sans text-lg">My Current Plan</h3>
-                      <p className="text-xs text-slate-400 font-mono">Manage your live portal visibility, view active subscription, and track payout cycles.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('dashboard')}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Dashboard</span>
-                    </button>
-                  </div>
-
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+
+                    {/* Active Subscription details */}
+                    <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800 gap-2">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <Award className="w-5 h-5 text-emerald-400 shrink-0" />
+                          <h3 className="font-bold text-slate-100 truncate">My Current Plan</h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('dashboard')}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600 shrink-0"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          <span>Go Back</span>
+                        </button>
+                      </div>
+
+                      {(() => {
+                        const activePlan = plans.find((p: any) => p.id === wallet?.plan_id);
+                        if (activePlan) {
+                          const expiry = new Date(wallet.plan_expiry);
+                          const today = new Date();
+                          const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                          const daysLeft = diffDays > 0 ? diffDays : 0;
+
+                          return (
+                            <div className="space-y-4">
+                              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Active Plan</span>
+                                <span className="text-base font-extrabold text-emerald-400 block mt-0.5">{activePlan.name}</span>
+                              </div>
+
+                              <div className="space-y-2.5 text-xs">
+                                <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
+                                  <span className="text-slate-400 font-sans text-[10px] uppercase">Max Call Rate</span>
+                                  <strong className="text-slate-200">₹{activePlan.max_consultant_rate}/min</strong>
+                                </div>
+                                {activePlan.support_hours && (
+                                  <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
+                                    <span className="text-slate-400 font-sans text-[10px] uppercase">Official Support Hours</span>
+                                    <strong className="text-slate-200">{activePlan.support_hours} Hours</strong>
+                                  </div>
+                                )}
+                                {activePlan.commission_rate !== undefined && (
+                                  <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
+                                    <span className="text-slate-400 font-sans text-[10px] uppercase">Commission Charged</span>
+                                    <strong className="text-slate-200">{activePlan.commission_rate}%</strong>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-1">
+                                <span className="text-[9px] text-slate-500 font-sans block uppercase">Countdown</span>
+                                <div className="text-xs font-bold text-slate-200">
+                                  Renew subscription in <span className="text-emerald-400 font-extrabold">{daysLeft}</span> Days
+                                </div>
+                                <span className="text-[9px] text-slate-500 block">Expires on: {expiry.toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <p className="text-xs text-slate-500 italic text-center py-6">No plan information found.</p>
+                        );
+                      })()}
+                    </div>
                     
                     {/* Status Toggle Card */}
                     <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6">
@@ -4435,68 +4849,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
                       </div>
 
-                      <div className="text-xs font-mono p-3 bg-slate-950 border border-slate-850 rounded-xl text-center">
+                      <div className="text-xs font-sans p-3 bg-slate-950 border border-slate-850 rounded-xl text-center">
                         Presence state: <strong className={isOnline ? (isBusy ? 'text-amber-400' : 'text-emerald-400') : 'text-slate-500'}>
                           {isOnline ? (isBusy ? '🟠 ENGAGED / BUSY' : '🟢 ONLINE & AVAILABLE') : '🔴 OFFLINE'}
                         </strong>
                       </div>
-                    </div>
-
-                    {/* Active Subscription details */}
-                    <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6">
-                      <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
-                        <Award className="w-5 h-5 text-emerald-400" />
-                        <h3 className="font-bold text-slate-100">My Registered Plan Benefits</h3>
-                      </div>
-
-                      {(() => {
-                        const activePlan = plans.find((p: any) => p.id === wallet?.plan_id);
-                        if (activePlan) {
-                          const expiry = new Date(wallet.plan_expiry);
-                          const today = new Date();
-                          const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                          const daysLeft = diffDays > 0 ? diffDays : 0;
-
-                          return (
-                            <div className="space-y-4">
-                              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
-                                <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider block">Active Plan</span>
-                                <span className="text-base font-extrabold text-emerald-400 block mt-0.5">{activePlan.name}</span>
-                              </div>
-
-                              <div className="space-y-2.5 text-xs">
-                                <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                                  <span className="text-slate-400 font-mono text-[10px] uppercase">Max Call Rate</span>
-                                  <strong className="text-slate-200">₹{activePlan.max_consultant_rate}/min</strong>
-                                </div>
-                                {activePlan.support_hours && (
-                                  <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                                    <span className="text-slate-400 font-mono text-[10px] uppercase">Official Support Hours</span>
-                                    <strong className="text-slate-200">{activePlan.support_hours} Hours</strong>
-                                  </div>
-                                )}
-                                {activePlan.commission_rate !== undefined && (
-                                  <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                                    <span className="text-slate-400 font-mono text-[10px] uppercase">Commission Charged</span>
-                                    <strong className="text-slate-200">{activePlan.commission_rate}%</strong>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-1">
-                                <span className="text-[9px] text-slate-500 font-mono block uppercase">Countdown</span>
-                                <div className="text-xs font-bold text-slate-200">
-                                  Renew subscription in <span className="text-emerald-400 font-extrabold">{daysLeft}</span> Days
-                                </div>
-                                <span className="text-[9px] text-slate-500 block">Expires on: {expiry.toLocaleDateString()}</span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return (
-                          <p className="text-xs text-slate-500 italic text-center py-6">No plan information found.</p>
-                        );
-                      })()}
                     </div>
 
                   </div>
@@ -4506,24 +4863,24 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
                       <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
                         <Coins className="w-5 h-5 text-emerald-400" />
-                        <h3 className="font-bold text-slate-100">Monthly Salary & Bank Transfer Payout</h3>
+                        <h3 className="font-bold text-slate-100">Monthly Salary Cycle</h3>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-400">
                         <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
-                          <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider block mb-1">Cleared Earnings Expected</span>
+                          <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block mb-1">Cleared Earnings Expected</span>
                           <strong className="text-emerald-400 text-base font-mono block">₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
                           <span className="text-[9px] text-slate-500 block mt-1">Accrued up to cutoff day ({salaryInfo.cutoffDay}th)</span>
                         </div>
 
                         <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
-                          <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider block mb-1">Target Credit Timeline</span>
+                          <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block mb-1">Target Credit Timeline</span>
                           <strong className="text-amber-400 text-base font-mono block">By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
                           <span className="text-[9px] text-slate-500 block mt-1">Disbursed to verified bank account</span>
                         </div>
 
                         <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
-                          <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider block mb-1">Ongoing Unbilled Cycle</span>
+                          <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block mb-1">Ongoing Unbilled Cycle</span>
                           <strong className="text-slate-200 text-base font-mono block">₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
                           <span className="text-[9px] text-slate-500 block mt-1">Rolling into next month's cutoff</span>
                         </div>
@@ -4548,7 +4905,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
                     <div className="flex items-center space-x-2">
                       <Settings2 className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Modify Professional Profile & Rates</h3>
+                      <h3 className="font-bold text-slate-100 font-sans">Edit Profile</h3>
                     </div>
                     <button
                       type="button"
@@ -4556,119 +4913,246 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Dashboard</span>
+                      <span>Back to Home</span>
                     </button>
                   </div>
 
                   <form onSubmit={handleUpdateProfile} className="space-y-6">
-                    <div className="space-y-3">
-                      <label className="block text-xs font-mono text-slate-400">Display Profile Photo (Upload ya direct image URL select karein)</label>
-                      <div className="flex flex-col sm:flex-row items-stretch gap-3">
-                        <input
-                          type="text"
-                          placeholder="https://... direct photo link input"
-                          value={photoUrl}
-                          onChange={(e) => setPhotoUrl(e.target.value)}
-                          className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 font-mono"
-                        />
-                        
-                        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                    {/* ACCOUNT CREDENTIALS & SECURITY */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-sans">🔒 Account Credentials & Secure Info</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Username (Unique Public URL Slug)</label>
                           <input
-                            type="file"
-                            accept="image/*"
-                            id="consultant-photo-upload-tab"
-                            className="hidden"
-                            onChange={handlePhotoUpload}
-                            disabled={uploadingPhoto}
+                            type="text"
+                            value={currentConsultant?.username || ''}
+                            disabled
+                            className="bg-slate-900/60 border border-slate-800 text-slate-400 text-xs rounded-xl px-4 py-2.5 w-full font-mono cursor-not-allowed select-all"
+                            title="Username is locked as it maps to your public listing page link."
                           />
-                          <label
-                            htmlFor="consultant-photo-upload-tab"
-                            className={`cursor-pointer bg-slate-850 hover:bg-slate-800 text-slate-200 border border-slate-750 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 w-full sm:w-auto shrink-0 ${uploadingPhoto ? 'opacity-50 pointer-events-none' : ''}`}
-                          >
-                            <span>{uploadingPhoto ? 'Uploading...' : '📁 Upload File'}</span>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditorImageBase64(undefined);
-                              setIsImageEditorOpen(true);
-                            }}
-                            className="bg-indigo-600/90 hover:bg-indigo-500 text-white border border-indigo-500/30 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shrink-0"
-                          >
-                            <Crop className="w-3.5 h-3.5" />
-                            <span>Crop & Align</span>
-                          </button>
+                          <span className="text-[9px] text-slate-500 block font-sans">Public Link: callmint.com/u/{currentConsultant?.username || 'username'}</span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Display / Public Name</label>
+                          <input
+                            type="text"
+                            value={displayName}
+                            onChange={(e) => setDisplayName(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Registered Email Address</label>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Registered Phone Number</label>
+                          <input
+                            type="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 md:col-span-2">
+                          <label className="block text-[11px] font-sans text-slate-400">Change Account Password (Khaali chhodein agar same rakhna hai)</label>
+                          <input
+                            type="password"
+                            placeholder="Type new secure password if you want to change it..."
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
+                          />
                         </div>
                       </div>
+                    </div>
 
-                      {photoUrl && (
-                        <div className="mt-3 flex items-center space-x-3 bg-slate-950 p-2.5 rounded-xl border border-slate-850 max-w-md">
-                          <img 
-                            src={photoUrl} 
-                            alt="Live Preview" 
-                            className="w-10 h-10 rounded-lg object-cover border border-slate-800 cursor-pointer hover:opacity-85 transition-opacity" 
-                            onClick={() => setLightboxImage(photoUrl)}
-                            title="Click to view photo"
-                            onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} 
-                            referrerPolicy="no-referrer" 
+                    {/* PUBLIC LISTING DETAILS */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-sans">🌟 Public Profile Listing & Specialties</h4>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Expertise Category</label>
+                          <select
+                            value={category}
+                            onChange={(e: any) => setCategory(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans cursor-pointer"
+                          >
+                            <option value="Astrologers">Astrologers</option>
+                            <option value="Influencers">Influencers</option>
+                            <option value="Coaches">Coaches</option>
+                            <option value="Consultants">Consultants</option>
+                            <option value="Lawyers">Lawyers</option>
+                            <option value="Mentors">Mentors</option>
+                            <option value="Doctors">Doctors</option>
+                            <option value="Singers">Singers</option>
+                            <option value="Advisors">Advisors</option>
+                            <option value="Friends">Friends</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Years of Professional Experience</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={experience}
+                            onChange={(e) => setExperience(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                           />
-                          <div>
-                            <span className="text-[10px] text-slate-400 block font-semibold">Live Profile Picture Preview</span>
-                            <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[200px]">{photoUrl}</span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Languages Known (Comma separated)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. English, Hindi, Punjabi"
+                            value={languages}
+                            onChange={(e) => setLanguages(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[11px] font-sans text-slate-400">Key Specializations (Comma separated)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Vedic Astrology, Relationships, Finance"
+                            value={specializations}
+                            onChange={(e) => setSpecializations(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-sans">📸 Profile Media & Bio</h4>
+
+                      <div className="space-y-3">
+                        <label className="block text-xs font-sans text-slate-400">Display Profile Photo (Upload ya direct image URL select karein)</label>
+                        <div className="flex flex-col sm:flex-row items-stretch gap-3">
+                          <input
+                            type="text"
+                            placeholder="https://... direct photo link input"
+                            value={photoUrl}
+                            onChange={(e) => setPhotoUrl(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 font-mono"
+                          />
+                          
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              id="consultant-photo-upload-tab"
+                              className="hidden"
+                              onChange={handlePhotoUpload}
+                              disabled={uploadingPhoto}
+                            />
+                            <label
+                              htmlFor="consultant-photo-upload-tab"
+                              className={`cursor-pointer bg-slate-850 hover:bg-slate-800 text-slate-200 border border-slate-750 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 w-full sm:w-auto shrink-0 ${uploadingPhoto ? 'opacity-50 pointer-events-none' : ''}`}
+                            >
+                              <span>{uploadingPhoto ? 'Uploading...' : '📁 Upload File'}</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditorImageBase64(undefined);
+                                setIsImageEditorOpen(true);
+                              }}
+                              className="bg-indigo-600/90 hover:bg-indigo-500 text-white border border-indigo-500/30 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shrink-0"
+                            >
+                              <Crop className="w-3.5 h-3.5" />
+                              <span>Crop & Align</span>
+                            </button>
                           </div>
                         </div>
-                      )}
-                    </div>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-xs font-mono text-slate-400">My Consultation Call Rate (INR per Minute)</label>
-                        {wallet?.plan_id && (
-                          <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-2 py-0.5 rounded font-mono font-bold">
-                            Plan Maximum Limit: ₹{plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25}/min
-                          </span>
+                        {photoUrl && (
+                          <div className="mt-3 flex items-center space-x-3 bg-slate-950 p-2.5 rounded-xl border border-slate-850 max-w-md">
+                            <img 
+                              src={photoUrl} 
+                              alt="Live Preview" 
+                              className="w-10 h-10 rounded-lg object-cover border border-slate-800 cursor-pointer hover:opacity-85 transition-opacity" 
+                              onClick={() => setLightboxImage(photoUrl)}
+                              title="Click to view photo"
+                              onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }} 
+                              referrerPolicy="no-referrer" 
+                            />
+                            <div>
+                              <span className="text-[10px] text-slate-400 block font-semibold">Live Profile Picture Preview</span>
+                              <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[200px]">{photoUrl}</span>
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="25"
-                        value={pricePerMin}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const activePlan = plans.find(p => p.id === wallet?.plan_id);
-                          const maxRate = activePlan?.max_consultant_rate ?? 1000.0;
-                          if (val === '') {
-                            setPricePerMin('');
-                          } else {
-                            const num = parseFloat(val);
-                            if (!isNaN(num)) {
-                              if (num <= maxRate) {
-                                setPricePerMin(val);
-                              } else {
-                                setPricePerMin(maxRate.toString());
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-sans text-slate-400">My Consultation Call Rate (INR per Minute)</label>
+                          {wallet?.plan_id && (
+                            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-2 py-0.5 rounded font-mono font-bold">
+                              Plan Maximum Limit: ₹{plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25}/min
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          min="5"
+                          placeholder="25"
+                          value={pricePerMin}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const activePlan = plans.find(p => p.id === wallet?.plan_id);
+                            const maxRate = activePlan?.max_consultant_rate ?? 1000.0;
+                            if (val === '') {
+                              setPricePerMin('');
+                            } else {
+                              const num = parseFloat(val);
+                              if (!isNaN(num)) {
+                                if (num <= maxRate) {
+                                  setPricePerMin(val);
+                                } else {
+                                  setPricePerMin(maxRate.toString());
+                                }
                               }
                             }
-                          }
-                        }}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono font-bold"
-                      />
-                      {wallet?.plan_id && parseFloat(pricePerMin) > (plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25) && (
-                        <p className="text-[10px] text-rose-400 font-bold mt-1.5 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
-                          ⚠️ Warning: Your active subscription plan allows you to set a rate up to ₹{plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25}/minute.
-                        </p>
-                      )}
-                    </div>
+                          }}
+                          className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono font-bold"
+                        />
+                        {wallet?.plan_id && parseFloat(pricePerMin) > (plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25) && (
+                          <p className="text-[10px] text-rose-400 font-bold mt-1.5 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
+                            ⚠️ Warning: Your active subscription plan allows you to set a rate up to ₹{plans.find(p => p.id === wallet.plan_id)?.max_consultant_rate ?? 25}/minute.
+                          </p>
+                        )}
+                      </div>
 
-                    <div className="space-y-2">
-                      <label className="block text-xs font-mono text-slate-400">Professional Bio / Area of Expertise</label>
-                      <textarea
-                        placeholder="Describe your expertise, certifications, and what clients can expect during a pay-per-minute consultation..."
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        rows={5}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full resize-none font-sans"
-                      />
+                      <div className="space-y-2">
+                        <label className="block text-xs font-sans text-slate-400">Professional Bio / Area of Expertise</label>
+                        <textarea
+                          placeholder="Describe your expertise, certifications, and what clients can expect during a pay-per-minute consultation..."
+                          value={bio}
+                          onChange={(e) => setBio(e.target.value)}
+                          rows={5}
+                          className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full resize-none font-sans"
+                        />
+                      </div>
                     </div>
 
                     <button
@@ -4701,23 +5185,23 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 >
                   {/* Chat Session Table */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4 text-left">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
-                      <div className="flex items-center space-x-2">
-                        <FileText className="w-5 h-5 text-emerald-400" />
-                        <h3 className="font-bold text-slate-100">Consultation Chat Record Audit Ledger</h3>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800 gap-2">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <FileText className="w-6 h-6 text-emerald-400 shrink-0" />
+                        <h3 className="font-bold text-slate-100 truncate text-sm sm:text-base">Consultation History</h3>
                       </div>
                       <button
                         onClick={() => setActiveTab('dashboard')}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600 shrink-0"
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>Back to Dashboard</span>
+                        <span>Go Back</span>
                       </button>
                     </div>
 
-                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1 thin-scrollbar">
                       {sessions.length === 0 ? (
-                        <div className="text-center py-12 text-slate-500 text-xs font-mono">No sessions recorded yet for your account.</div>
+                        <div className="text-center py-12 text-slate-500 text-xs font-sans">No sessions recorded yet for your account.</div>
                       ) : (
                         sessions.map((sess) => {
                           const isUserBlocked = blockedUsers.some(b => b.user_name.toLowerCase() === sess.user_name.toLowerCase());
@@ -4729,14 +5213,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               <div className="space-y-1.5 flex-1">
                                 <div className="flex items-center space-x-2 flex-wrap gap-1">
                                   <span className="text-xs font-black text-slate-200">{sess.user_name}</span>
-                                  <span className="text-[9px] font-mono text-slate-500">Session ID: #{sess.id}</span>
+                                  <span className="text-[9px] font-sans text-slate-500">Session ID: #{sess.id}</span>
                                   {isUserBlocked && (
                                     <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[8px] font-extrabold uppercase">
                                       Blocked
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs text-slate-400 font-mono">
+                                <p className="text-xs text-slate-400 font-sans">
                                   Duration: <strong className="text-slate-200">{sess.duration_minutes} Mins</strong> • Rate: ₹{sess.price_per_minute}/min
                                 </p>
                                 <div className="text-[11px] text-emerald-400 font-mono">
@@ -4764,67 +5248,70 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     )}
                                   </div>
                                 )}
-                                <span className="text-[9px] text-slate-600 font-mono block">
-                                  Date: {new Date(sess.created_at).toLocaleString()}
-                                </span>
+                                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-900/60 text-[10px] text-slate-500 font-sans">
+                                  <span>
+                                    Date: {new Date(sess.created_at).toLocaleString()}
+                                  </span>
+                                  <div className="flex items-center space-x-1.5 shrink-0">
+                                    <span className="text-slate-500">Status:</span>
+                                    {sess.status === 'completed' && (
+                                      <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold">Completed</span>
+                                    )}
+                                    {sess.status === 'completed' && sess.refunded_amount > 0 && (
+                                      <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[9px] font-bold">Refunded</span>
+                                    )}
+                                    {sess.status === 'active' && (
+                                      <span className="bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded text-[9px] font-bold animate-pulse">Live Now</span>
+                                    )}
+                                    {sess.status === 'rejected' && (
+                                      <span className="bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded text-[9px] font-bold">Rejected</span>
+                                    )}
+                                    {sess.status === 'missed' && (
+                                      <span className="bg-slate-500/10 text-slate-400 px-2 py-0.5 rounded text-[9px] font-bold">Missed</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
 
-                              <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t border-slate-900 sm:border-0 pt-2 sm:pt-0">
+                              <div className="flex flex-row sm:flex-col items-center sm:items-end justify-end sm:justify-center gap-2 shrink-0 border-t border-slate-900 sm:border-0 pt-2 sm:pt-0 w-full sm:w-auto">
                                 {sess.status === 'completed' && (
-                                  <div className="flex flex-col items-end space-y-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                                      <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold">Completed</span>
-                                      {sess.refunded_amount > 0 && (
-                                        <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[9px] font-bold">Refunded</span>
-                                      )}
-                                    </div>
-                                    <button
-                                      onClick={() => {
-                                        onSelectSession(sess.id, currentConsultant?.display_name || 'Consultant', 'consultant', true);
-                                      }}
-                                      className="text-[10px] text-emerald-400 hover:underline hover:text-emerald-300 font-bold font-mono transition-all"
-                                    >
-                                      View Transcript
-                                    </button>
-                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      onSelectSession(sess.id, currentConsultant?.display_name || 'Consultant', 'consultant', true);
+                                    }}
+                                    className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer w-full sm:w-auto shrink-0"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                                    <span>View Chat</span>
+                                  </button>
                                 )}
                                 
                                 {sess.status === 'active' && (
-                                  <div className="flex flex-col items-end space-y-1">
-                                    <span className="bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded text-[9px] font-bold animate-pulse">Live Now</span>
-                                    <button
-                                      onClick={() => {
-                                        if (currentConsultant) {
-                                          onSelectSession(sess.id, currentConsultant.display_name, 'consultant');
-                                        }
-                                      }}
-                                      className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold text-[9px] px-2 py-0.5 rounded transition-colors"
-                                    >
-                                      Join Room
-                                    </button>
-                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      if (currentConsultant) {
+                                        onSelectSession(sess.id, currentConsultant.display_name, 'consultant');
+                                      }
+                                    }}
+                                    className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition-all text-center flex items-center justify-center space-x-1.5 shadow-md active:scale-95 cursor-pointer w-full sm:w-auto shrink-0"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+                                    <span>Join Room</span>
+                                  </button>
                                 )}
 
-                                {sess.status === 'rejected' && (
-                                  <span className="bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded text-[9px] font-bold">Rejected</span>
-                                )}
-
-                                {sess.status === 'missed' && (
-                                  <span className="bg-slate-500/10 text-slate-400 px-2 py-0.5 rounded text-[9px] font-bold">Missed</span>
-                                )}
-
-                                <div className="flex items-center space-x-1.5 mt-1">
+                                <div className="flex items-center space-x-1.5 w-full sm:w-auto justify-end">
                                   {isUserBlocked ? (
                                     <button
                                       onClick={() => handleUnblockUser(sess.user_name)}
-                                      className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg px-2.5 py-1 font-bold transition-all"
+                                      className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl px-2.5 py-1.5 font-bold transition-all w-full sm:w-auto text-center cursor-pointer shrink-0"
                                     >
                                       Unblock
                                     </button>
                                   ) : (
                                     <button
                                       onClick={() => handleBlockUser(sess.user_name)}
-                                      className="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg px-2.5 py-1 font-bold transition-all"
+                                      className="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl px-2.5 py-1.5 font-bold transition-all w-full sm:w-auto text-center cursor-pointer shrink-0"
                                     >
                                       Block Client
                                     </button>
@@ -4847,13 +5334,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                     <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
                       {blockedUsers.length === 0 ? (
-                        <div className="text-center py-6 text-slate-500 text-xs font-mono">No clients are currently blocked.</div>
+                        <div className="text-center py-6 text-slate-500 text-xs font-sans">No clients are currently blocked.</div>
                       ) : (
                         blockedUsers.map((b) => (
                           <div key={b.id} className="bg-slate-950 border border-slate-850 px-4 py-3 rounded-xl flex items-center justify-between">
                             <div className="space-y-0.5">
                               <span className="text-xs font-bold text-slate-200">{b.user_name}</span>
-                              <p className="text-[9px] text-slate-500 font-mono">Blocked on: {new Date(b.created_at).toLocaleDateString()}</p>
+                              <p className="text-[9px] text-slate-500 font-sans">Blocked on: {new Date(b.created_at).toLocaleDateString()}</p>
                             </div>
                             <button
                               onClick={() => handleUnblockUser(b.user_name)}
@@ -4895,7 +5382,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   {/* KYC Status Indicator Banner */}
                   <div className="p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950 border-slate-850" id="kyc-status-banner">
                     <div className="space-y-1 text-center sm:text-left">
-                      <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider block">Current KYC Status</span>
+                      <span className="text-[10px] text-slate-500 font-sans uppercase tracking-wider block">Current KYC Status</span>
                       <span className={`text-sm font-extrabold font-mono uppercase tracking-wide block ${
                         kycStatus === 'approved' ? 'text-emerald-400' :
                         kycStatus === 'pending' ? 'text-amber-400 animate-pulse' :
@@ -4921,10 +5408,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     
                     {/* Aadhaar Number and photo */}
                     <div className="space-y-4 bg-slate-950 p-5 rounded-xl border border-slate-850">
-                      <h4 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest border-b border-slate-900 pb-2">1. Aadhaar Card Verification</h4>
+                      <h4 className="text-xs font-bold font-sans text-emerald-400 uppercase tracking-widest border-b border-slate-900 pb-2">1. Aadhaar Card Verification</h4>
                       
                       <div className="space-y-1.5">
-                        <label className="block text-xs font-mono text-slate-400" htmlFor="aadhaar-number-input">Aadhaar Card Number (12 Digits)</label>
+                        <label className="block text-xs font-sans text-slate-400" htmlFor="aadhaar-number-input">Aadhaar Card Number (12 Digits)</label>
                         <input
                           id="aadhaar-number-input"
                           type="text"
@@ -4938,7 +5425,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
 
                       <div className="space-y-2">
-                        <label className="block text-xs font-mono text-slate-400">Aadhaar Photo Attachment</label>
+                        <label className="block text-xs font-sans text-slate-400">Aadhaar Photo Attachment</label>
                         
                         {(kycStatus === 'unsubmitted' || kycStatus === 'rejected') ? (
                           <div className="flex flex-col sm:flex-row items-stretch gap-3">
@@ -4975,23 +5462,34 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               <img 
                                 src={aadhaarPhotoUrl} 
                                 alt="Aadhaar Preview" 
-                                className="w-12 h-12 rounded-lg object-cover border border-slate-800"
+                                onClick={() => setPreviewImageUrl(aadhaarPhotoUrl)}
+                                className="w-12 h-12 rounded-lg object-cover border border-slate-800 cursor-pointer hover:opacity-80 transition-opacity"
                                 referrerPolicy="no-referrer"
+                                title="Click to preview full image"
                               />
                               <div className="text-left">
                                 <span className="text-[10px] text-slate-400 font-bold block">Aadhaar Card Attachment Verified</span>
-                                <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[180px] sm:max-w-[300px]">{aadhaarPhotoUrl}</span>
+                                <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[120px] sm:max-w-[220px]">{aadhaarPhotoUrl}</span>
                               </div>
                             </div>
-                            {(kycStatus === 'unsubmitted' || kycStatus === 'rejected') && (
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => setAadhaarPhotoUrl('')}
-                                className="text-xs font-bold text-rose-400 hover:text-rose-300 transition-colors font-mono"
+                                onClick={() => setPreviewImageUrl(aadhaarPhotoUrl)}
+                                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
                               >
-                                Clear
+                                Preview
                               </button>
-                            )}
+                              {(kycStatus === 'unsubmitted' || kycStatus === 'rejected') && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAadhaarPhotoUrl('')}
+                                  className="text-xs font-bold text-rose-400 hover:text-rose-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -4999,10 +5497,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                     {/* PAN Card Details */}
                     <div className="space-y-4 bg-slate-950 p-5 rounded-xl border border-slate-850">
-                      <h4 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest border-b border-slate-900 pb-2">2. PAN Card Verification</h4>
+                      <h4 className="text-xs font-bold font-sans text-emerald-400 uppercase tracking-widest border-b border-slate-900 pb-2">2. PAN Card Verification</h4>
                       
                       <div className="space-y-1.5">
-                        <label className="block text-xs font-mono text-slate-400" htmlFor="pan-number-input">PAN Card Number</label>
+                        <label className="block text-xs font-sans text-slate-400" htmlFor="pan-number-input">PAN Card Number</label>
                         <input
                           id="pan-number-input"
                           type="text"
@@ -5016,7 +5514,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
 
                       <div className="space-y-2">
-                        <label className="block text-xs font-mono text-slate-400">PAN Card Photo Attachment</label>
+                        <label className="block text-xs font-sans text-slate-400">PAN Card Photo Attachment</label>
                         
                         {(kycStatus === 'unsubmitted' || kycStatus === 'rejected') ? (
                           <div className="flex flex-col sm:flex-row items-stretch gap-3">
@@ -5053,23 +5551,34 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               <img 
                                 src={panPhotoUrl} 
                                 alt="PAN Preview" 
-                                className="w-12 h-12 rounded-lg object-cover border border-slate-800"
+                                onClick={() => setPreviewImageUrl(panPhotoUrl)}
+                                className="w-12 h-12 rounded-lg object-cover border border-slate-800 cursor-pointer hover:opacity-80 transition-opacity"
                                 referrerPolicy="no-referrer"
+                                title="Click to preview full image"
                               />
                               <div className="text-left">
                                 <span className="text-[10px] text-slate-400 font-bold block">PAN Card Attachment Verified</span>
-                                <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[180px] sm:max-w-[300px]">{panPhotoUrl}</span>
+                                <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[120px] sm:max-w-[220px]">{panPhotoUrl}</span>
                               </div>
                             </div>
-                            {(kycStatus === 'unsubmitted' || kycStatus === 'rejected') && (
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => setPanPhotoUrl('')}
-                                className="text-xs font-bold text-rose-400 hover:text-rose-300 transition-colors font-mono"
+                                onClick={() => setPreviewImageUrl(panPhotoUrl)}
+                                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
                               >
-                                Clear
+                                Preview
                               </button>
-                            )}
+                              {(kycStatus === 'unsubmitted' || kycStatus === 'rejected') && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPanPhotoUrl('')}
+                                  className="text-xs font-bold text-rose-400 hover:text-rose-300 transition-colors font-sans px-2.5 py-1 bg-slate-850 hover:bg-slate-800 rounded-lg border border-slate-750 cursor-pointer"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -5119,19 +5628,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Dashboard</span>
+                      <span>Go Back</span>
                     </button>
                   </div>
 
                   {/* Add / Edit Schedule Form */}
                   <form onSubmit={handleSaveSchedule} className="bg-slate-950/80 p-5 rounded-xl border border-slate-800/60 space-y-4">
-                    <h4 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest">
+                    <h4 className="text-xs font-bold font-sans text-emerald-400 uppercase tracking-widest">
                       {editingScheduleId ? '✏️ Edit Schedule' : '➕ Add Availability Slot'}
                     </h4>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono text-slate-400 mb-1">Date <span className="text-slate-500">(Optional)</span></label>
+                        <label className="block text-[10px] font-sans text-slate-400 mb-1">Date <span className="text-slate-500">(Optional)</span></label>
                         <input
                           type="date"
                           value={newDate}
@@ -5141,7 +5650,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono text-slate-400 mb-1">Day <span className="text-slate-500">(Optional)</span></label>
+                        <label className="block text-[10px] font-sans text-slate-400 mb-1">Day <span className="text-slate-500">(Optional)</span></label>
                         <select
                           value={newDay}
                           onChange={(e) => {
@@ -5162,7 +5671,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono text-slate-400 mb-1">From Time *</label>
+                        <label className="block text-[10px] font-sans text-slate-400 mb-1">From Time *</label>
                         <input
                           type="time"
                           required
@@ -5173,7 +5682,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono text-slate-400 mb-1">To Time *</label>
+                        <label className="block text-[10px] font-sans text-slate-400 mb-1">To Time *</label>
                         <input
                           type="time"
                           required
@@ -5187,7 +5696,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     <div className="flex items-center space-x-2 pt-2">
                       <button
                         type="submit"
-                        className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md"
+                        disabled={isSaveDisabled}
+                        className={`font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md ${
+                          isSaveDisabled
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50 border border-slate-700'
+                            : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 cursor-pointer'
+                        }`}
                       >
                         {editingScheduleId ? 'Update Slot' : 'Save Slot'}
                       </button>
@@ -5211,12 +5725,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                   {/* Active Slots List */}
                   <div className="space-y-3">
-                    <h4 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-widest">
+                    <h4 className="text-xs font-bold font-sans text-slate-400 uppercase tracking-widest">
                       Your Availability Slots
                     </h4>
 
                     {scheduleLoading ? (
-                      <div className="text-center py-6 text-slate-500 text-xs font-mono">
+                      <div className="text-center py-6 text-slate-500 text-xs font-sans">
                         Loading slots...
                       </div>
                     ) : schedules.length === 0 ? (
@@ -5229,10 +5743,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <div key={sch.id} className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
                             <div className="space-y-1">
                               <span className="inline-block text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
-                                {sch.date ? sch.date : sch.day}
+                                {sch.date ? formatToYYYYMMDD(sch.date) : sch.day}
                               </span>
                               <div className="text-xs font-bold text-slate-200">
-                                {sch.from_time} to {sch.to_time}
+                                {formatTimeTo12Hour(sch.from_time)} to {formatTimeTo12Hour(sch.to_time)}
                               </div>
                             </div>
 
@@ -5292,7 +5806,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   {/* Bank Details Status Indicator Banner */}
                   <div className="p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950 border-slate-850" id="bank-status-banner">
                     <div className="space-y-1 text-center sm:text-left">
-                      <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider block">Bank Account Verification Status</span>
+                      <span className="text-[10px] text-slate-500 font-sans uppercase tracking-wider block">Bank Account Verification Status</span>
                       <span className={`text-sm font-extrabold font-mono uppercase tracking-wide block ${
                         bankStatus === 'approved' ? 'text-emerald-400' :
                         bankStatus === 'pending' ? 'text-amber-400 animate-pulse' :
@@ -5316,46 +5830,69 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                   <form onSubmit={handleUpdateBank} className="space-y-4" id="bank-verification-form">
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-mono text-slate-400" htmlFor="bank-holder-name-input">Account Holder Name</label>
+                      <label className="block text-xs font-sans text-slate-400" htmlFor="bank-holder-name-input">Account Holder Name</label>
                       <input
                         id="bank-holder-name-input"
                         type="text"
                         placeholder="Enter the official bank account holder name"
                         value={bankAccountHolderName}
-                        onChange={(e) => setBankAccountHolderName(e.target.value)}
+                        onChange={(e) => setBankAccountHolderName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
                         disabled={bankStatus === 'approved' || bankStatus === 'pending'}
                         className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-sans font-bold"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-mono text-slate-400" htmlFor="bank-account-number-input">Account Number</label>
-                      <input
-                        id="bank-account-number-input"
-                        type="text"
-                        placeholder="Enter account number"
-                        value={bankAccountNumber}
-                        onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
-                        disabled={bankStatus === 'approved' || bankStatus === 'pending'}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono tracking-widest font-bold"
-                      />
+                      <label className="block text-xs font-sans text-slate-400" htmlFor="bank-account-number-input">Account Number</label>
+                      <div className="relative flex items-center">
+                        <input
+                          id="bank-account-number-input"
+                          type="text"
+                          placeholder="Enter account number"
+                          value={(bankStatus === 'approved' || bankStatus === 'pending') && !showAccountNumber ? (() => {
+                            if (bankAccountNumber.length <= 6) {
+                              return '*'.repeat(bankAccountNumber.length);
+                            }
+                            return '*'.repeat(bankAccountNumber.length - 6) + bankAccountNumber.slice(-6);
+                          })() : bankAccountNumber}
+                          onChange={(e) => {
+                            if (bankStatus !== 'approved' && bankStatus !== 'pending') {
+                              setBankAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 18));
+                            }
+                          }}
+                          disabled={bankStatus === 'approved' || bankStatus === 'pending'}
+                          maxLength={18}
+                          className="bg-slate-950 border border-slate-800 rounded-xl pl-4 pr-12 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono tracking-widest font-bold"
+                        />
+                        {bankAccountNumber && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAccountNumber(!showAccountNumber)}
+                            className="absolute right-3 text-slate-400 hover:text-slate-200 p-1 transition-colors cursor-pointer"
+                            title={showAccountNumber ? "Hide Account Number" : "Show Account Number"}
+                          >
+                            {showAccountNumber ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-mono text-slate-400" htmlFor="bank-ifsc-input">Bank IFSC Code</label>
+                      <label className="block text-xs font-sans text-slate-400" htmlFor="bank-ifsc-input">Bank IFSC Code</label>
                       <input
                         id="bank-ifsc-input"
                         type="text"
                         placeholder="e.g. SBIN0001234"
                         value={bankIfscCode}
-                        onChange={(e) => setBankIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                        onChange={(e) => setBankIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
                         disabled={bankStatus === 'approved' || bankStatus === 'pending'}
+                        maxLength={11}
                         className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono tracking-wider font-bold"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-mono text-slate-400" htmlFor="bank-name-input">Bank Name</label>
+                      <label className="block text-xs font-sans text-slate-400" htmlFor="bank-name-input">Bank Name</label>
                       <input
                         id="bank-name-input"
                         type="text"
@@ -5404,14 +5941,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
                     <div className="flex items-center space-x-2">
                       <HelpCircle className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Consultant Helpdesk & Customer Support</h3>
+                      <h3 className="font-bold text-slate-100 font-sans">Customer Support</h3>
                     </div>
                     <button
                       onClick={() => setActiveTab('dashboard')}
                       className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Dashboard</span>
+                      <span>Go Back</span>
                     </button>
                   </div>
 
@@ -5457,7 +5994,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         }
                       }} className="space-y-3">
                         <div className="space-y-1">
-                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Subject / Topic *</label>
+                          <label className="block text-[10px] font-sans text-slate-500 uppercase tracking-wider">Subject / Topic *</label>
                           <input
                             type="text"
                             name="subject"
@@ -5468,10 +6005,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
 
                         <div className="space-y-1">
-                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Select Chat Reference (Optional)</label>
+                          <label className="block text-[10px] font-sans text-slate-500 uppercase tracking-wider">Select Chat Reference (Optional)</label>
                           <select
                             name="session_id"
-                            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-mono"
+                            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full font-sans"
                           >
                             <option value="">-- No Specific Chat Reference --</option>
                             {sessions.map(s => (
@@ -5483,7 +6020,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
 
                         <div className="space-y-1">
-                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Message / Explanation *</label>
+                          <label className="block text-[10px] font-sans text-slate-500 uppercase tracking-wider">Message / Explanation *</label>
                           <textarea
                             name="message"
                             required
@@ -5507,9 +6044,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       <h4 className="font-bold text-xs text-emerald-400 uppercase tracking-widest">Your Raised Tickets</h4>
                       
                       {loadingConsultantTickets ? (
-                        <div className="text-center py-12 text-slate-500 text-xs font-mono animate-pulse">Loading helpdesk tickets...</div>
+                        <div className="text-center py-12 text-slate-500 text-xs font-sans animate-pulse">Loading helpdesk tickets...</div>
                       ) : consultantTickets.length === 0 ? (
-                        <div className="text-center py-12 text-slate-500 text-xs font-mono bg-slate-950/40 rounded-2xl border border-dashed border-slate-800/80">
+                        <div className="text-center py-12 text-slate-500 text-xs font-sans bg-slate-950/40 rounded-2xl border border-dashed border-slate-800/80">
                           Aapne abhi tak koi support ticket raise nahi kiya hai.
                         </div>
                       ) : (
@@ -5542,7 +6079,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               {/* Conversation Thread history for Consultant */}
                               {t.replies && t.replies.length > 0 ? (
                                 <div className="space-y-2 mt-2 pt-2 border-t border-slate-850/70">
-                                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Conversation History:</span>
+                                  <span className="text-[10px] font-sans text-slate-500 uppercase tracking-wider block">Conversation History:</span>
                                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                                     {t.replies.map((reply: any) => (
                                       <div 
@@ -5553,7 +6090,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                             : 'bg-slate-900 border border-slate-850 text-right ml-6'
                                         }`}
                                       >
-                                        <div className={`flex items-center gap-1 text-[9px] text-slate-500 font-mono ${reply.sender_type === 'admin' ? 'justify-start' : 'justify-end'}`}>
+                                        <div className={`flex items-center gap-1 text-[9px] text-slate-500 font-sans ${reply.sender_type === 'admin' ? 'justify-start' : 'justify-end'}`}>
                                           <span className={reply.sender_type === 'admin' ? 'text-emerald-400 font-bold' : 'text-purple-400 font-bold'}>
                                             {reply.sender_type === 'admin' ? '🛡 Admin Support' : '🙋 You'}
                                           </span>
@@ -5578,7 +6115,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   </p>
                                 </div>
                               ) : (
-                                <div className="text-[10px] text-slate-500 font-mono">
+                                <div className="text-[10px] text-slate-500 font-sans">
                                   Waiting for administrator response...
                                 </div>
                               )}
@@ -5620,12 +6157,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               )}
                               
                               {t.status === 'closed' && (
-                                <div className="bg-slate-900/50 border border-slate-850 rounded-xl p-2.5 text-center text-[10px] text-slate-500 font-mono">
+                                <div className="bg-slate-900/50 border border-slate-850 rounded-xl p-2.5 text-center text-[10px] text-slate-500 font-sans">
                                   🔒 Closed. No further replies allowed.
                                 </div>
                               )}
 
-                              <div className="text-[9px] text-slate-600 font-mono pt-1">
+                              <div className="text-[9px] text-slate-600 font-sans pt-1">
                                 Raised At: {new Date(t.created_at).toLocaleString()}
                               </div>
                             </div>
@@ -5653,9 +6190,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </div>
                     <button
                       onClick={() => setActiveTab('dashboard')}
-                      className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
                     >
-                      <span>Back to Dashboard</span>
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Go Back</span>
                     </button>
                   </div>
 
@@ -5695,8 +6233,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               </div>
                             </div>
                             <div className="text-right">
-                              <span className="text-[10px] text-slate-500 block uppercase font-mono tracking-wider">Followed on</span>
-                              <span className="text-xs text-slate-300 font-mono">
+                              <span className="text-[10px] text-slate-500 block uppercase font-sans tracking-wider">Followed on</span>
+                              <span className="text-xs text-slate-300 font-sans">
                                 {follower.created_at ? new Date(follower.created_at).toLocaleDateString() : 'N/A'}
                               </span>
                             </div>
@@ -5775,7 +6313,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 }`}>
                                   {n.is_read ? 'READ' : 'NEW UPDATE'}
                                 </span>
-                                <span className="text-[10px] text-slate-500 font-mono">
+                                <span className="text-[10px] text-slate-500 font-sans">
                                   {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
                                 </span>
                               </div>
@@ -5820,7 +6358,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   setViewingPastSessionMessages(null);
                   setViewingPastSessionInfo(null);
                 }}
-                className="text-slate-400 hover:text-white bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 text-xs font-mono transition-colors"
+                className="text-slate-400 hover:text-white bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 text-xs font-sans transition-colors"
               >
                 Close
               </button>
@@ -5855,7 +6393,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <p className="whitespace-pre-wrap leading-relaxed text-white">{msg.text}</p>
                         )}
                       </div>
-                      <span className="text-[9px] text-slate-600 font-mono mt-0.5 px-1">
+                      <span className="text-[9px] text-slate-600 font-sans mt-0.5 px-1">
                         {(() => {
                           try {
                             const d = new Date(msg.created_at);
@@ -5888,7 +6426,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             <div className="absolute top-4 right-4">
               <button
                 onClick={() => setBuyingPlan(null)}
-                className="text-slate-500 hover:text-slate-300 font-mono text-xs p-1 bg-slate-950 border border-slate-850 rounded-lg hover:border-slate-750"
+                className="text-slate-500 hover:text-slate-300 font-sans text-xs p-1 bg-slate-950 border border-slate-850 rounded-lg hover:border-slate-750"
               >
                 ✕ Close
               </button>
@@ -5900,7 +6438,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               </div>
               <div>
                 <h3 className="text-base font-black font-sans text-slate-100">Review & Buy Subscription Plan</h3>
-                <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                <p className="text-[10px] font-sans text-slate-400 uppercase tracking-widest">
                   Plan: {buyingPlan.name} (₹{buyingPlan.price})
                 </p>
               </div>
@@ -5913,7 +6451,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             {/* Form fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide">
+                <label className="block text-[10px] font-sans font-bold text-slate-400 uppercase tracking-wide">
                   Consultant Display Name
                 </label>
                 <input
@@ -5927,7 +6465,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide">
+                <label className="block text-[10px] font-sans font-bold text-slate-400 uppercase tracking-wide">
                   Custom Advisor Username
                 </label>
                 <input
@@ -5941,7 +6479,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                <label className="block text-[10px] font-sans font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
                   <span>Email Address (Locked)</span>
                   <Lock className="w-3 h-3 text-slate-500" />
                 </label>
@@ -5955,7 +6493,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                <label className="block text-[10px] font-sans font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
                   <span>Phone Number (Locked)</span>
                   <Lock className="w-3 h-3 text-slate-500" />
                 </label>
@@ -5969,7 +6507,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide">
+                <label className="block text-[10px] font-sans font-bold text-slate-400 uppercase tracking-wide">
                   My Professional Category
                 </label>
                 <select
@@ -5992,7 +6530,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                <label className="block text-[10px] font-sans font-bold text-slate-400 uppercase tracking-wide flex items-center justify-between">
                   <span>Audio/Chat Rate (₹ / Minute)</span>
                   {buyingPlan.max_consultant_rate !== undefined && (
                     <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-bold">
@@ -6002,7 +6540,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 </label>
                 <input
                   type="number"
-                  min="1"
+                  min="5"
                   placeholder="e.g. 25"
                   value={buyRate}
                   onChange={(e) => {
@@ -6056,8 +6594,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   return;
                 }
                 const rateVal = parseFloat(buyRate);
-                if (isNaN(rateVal) || rateVal < 1) {
-                  alert('Please specify a valid call rate.');
+                if (isNaN(rateVal) || rateVal < 5) {
+                  alert('Minimum consultation fee limit is ₹5/min. Isse below price set nahi ho sakta.');
                   return;
                 }
                 if (buyingPlan.max_consultant_rate !== undefined && rateVal > buyingPlan.max_consultant_rate) {
@@ -6093,7 +6631,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           </div>
           <div className="flex-1 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">New Notification</span>
+              <span className="text-[10px] font-sans text-emerald-400 font-bold uppercase tracking-wider">New Notification</span>
               <button onClick={() => setLatestToast(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer">
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -6135,7 +6673,45 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             </div>
             
             <div className="mt-3 text-center">
-              <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Profile Picture Preview</p>
+              <p className="text-[10px] text-slate-500 font-sans uppercase tracking-widest">Profile Picture Preview</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KYC Document Lightbox Modal */}
+      {previewImageUrl && (
+        <div 
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[120] p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewImageUrl(null)}
+          id="kyc-preview-lightbox"
+        >
+          <div 
+            className="relative max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-4 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top close button */}
+            <button
+              onClick={() => setPreviewImageUrl(null)}
+              className="absolute top-4 right-4 bg-slate-950/80 hover:bg-slate-950 text-slate-300 hover:text-white p-2 rounded-full border border-slate-800 transition-all z-20 cursor-pointer"
+              title="Close Preview"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            
+            {/* Image */}
+            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-850 p-2 min-h-[300px] max-h-[70vh]">
+              <img
+                src={previewImageUrl}
+                alt="KYC Document Preview"
+                className="max-w-full max-h-[65vh] object-contain rounded-xl"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            
+            <div className="mt-4 text-center">
+              <p className="text-xs text-slate-400 font-medium">KYC Document Preview</p>
+              <p className="text-[10px] text-slate-500 font-mono mt-1 truncate">{previewImageUrl}</p>
             </div>
           </div>
         </div>

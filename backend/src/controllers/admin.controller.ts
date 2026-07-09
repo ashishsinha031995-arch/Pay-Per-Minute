@@ -76,6 +76,12 @@ export const getAdminAuditLogs = (req: Request, res: Response) => {
 
 export const getAdminConsultantsList = (req: Request, res: Response) => {
   try {
+    const { cycle_ref_date } = req.query;
+    let refDate = new Date();
+    if (cycle_ref_date && typeof cycle_ref_date === 'string') {
+      refDate = new Date(cycle_ref_date);
+    }
+
     const consultants = db.prepare(`
       SELECT c.*, p.name AS plan_name,
              ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = c.id) + COALESCE(c.manual_followers_count, 0)) AS followers_count
@@ -86,7 +92,7 @@ export const getAdminConsultantsList = (req: Request, res: Response) => {
     
     // Attach detailed salary calculations and login hours for each consultant
     for (const cons of consultants) {
-      cons.salary_info = getSalaryCycleInfo(cons.id);
+      cons.salary_info = getSalaryCycleInfo(cons.id, refDate);
       cons.login_hours = calculateConsultantLoginHours(cons.id);
     }
     
@@ -164,7 +170,11 @@ export const updateConsultantBySuperAdmin = (req: Request, res: Response) => {
       db.prepare('UPDATE consultants SET bio = ? WHERE id = ?').run(bio, id);
     }
     if (price_per_minute !== undefined) {
-      db.prepare('UPDATE consultants SET price_per_minute = ? WHERE id = ?').run(parseFloat(price_per_minute) || 0, id);
+      const priceVal = parseFloat(price_per_minute) || 0;
+      if (priceVal < 5) {
+        return res.status(400).json({ error: 'Minimum consultation fee limit is ₹5/min. Isse below price set nahi ho sakta.' });
+      }
+      db.prepare('UPDATE consultants SET price_per_minute = ? WHERE id = ?').run(priceVal, id);
     }
     if (category !== undefined) {
       db.prepare('UPDATE consultants SET category = ? WHERE id = ?').run(category, id);

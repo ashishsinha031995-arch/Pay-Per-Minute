@@ -125,6 +125,33 @@ export default function AppPage() {
 
   // User Auth States
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentConsultant, setCurrentConsultant] = useState<any>(null);
+
+  useEffect(() => {
+    const syncConsultant = () => {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('consultant_session');
+        if (saved) {
+          try {
+            setCurrentConsultant(JSON.parse(saved));
+          } catch (e) {
+            setCurrentConsultant(null);
+          }
+        } else {
+          setCurrentConsultant(null);
+        }
+      }
+    };
+    syncConsultant();
+
+    window.addEventListener('storage', syncConsultant);
+    window.addEventListener('consultant-session-updated', syncConsultant);
+    return () => {
+      window.removeEventListener('storage', syncConsultant);
+      window.removeEventListener('consultant-session-updated', syncConsultant);
+    };
+  }, [currentRole]);
+
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<'login' | 'signup' | 'forgot'>('login');
   const [authRole, setAuthRole] = useState<'user' | 'consultant'>('user');
@@ -538,6 +565,7 @@ export default function AppPage() {
         }}
         socketConnected={socketConnected}
         currentUser={currentUser}
+        currentConsultant={currentConsultant}
         onLogout={handleLogout}
         onOpenAuth={() => {
           setAuthError(null);
@@ -548,6 +576,7 @@ export default function AppPage() {
         }}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onNavigateToUserView={handleNavigateToUserView}
       />
 
       {/* 2. Main Content Routing Area */}

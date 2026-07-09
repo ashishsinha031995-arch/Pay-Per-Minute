@@ -40,6 +40,37 @@ import {
 
 const router = Router();
 
+// ID mapping middleware to resolve migrated 5-digit IDs seamlessly for stale clients/sessions
+router.param('id', (req, res, next, id) => {
+  const numId = parseInt(id, 10);
+  if (!isNaN(numId)) {
+    const fullPath = req.originalUrl || req.path;
+    // Check if the route is a consultant route
+    if (fullPath.includes('/consultants/')) {
+      if (numId < 20000) {
+        const mappedId = numId < 10000 ? numId + 20000 : numId + 10000;
+        req.params.id = mappedId.toString();
+      }
+    } else {
+      // Otherwise assume it is a user route
+      if (numId < 10000) {
+        const mappedId = numId + 10000;
+        req.params.id = mappedId.toString();
+      }
+    }
+  }
+  next();
+});
+
+router.param('userId', (req, res, next, userId) => {
+  const numId = parseInt(userId, 10);
+  if (!isNaN(numId) && numId < 10000) {
+    const mappedId = numId + 10000;
+    req.params.userId = mappedId.toString();
+  }
+  next();
+});
+
 // Public Settings
 router.get('/settings/hero', getHeroSettings);
 router.get('/settings/avatars', getClassicAvatars);

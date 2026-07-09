@@ -145,7 +145,7 @@ export const getConsultantProfileById = (req: Request, res: Response) => {
 export const updateConsultantProfile = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { photo_url, bio, price_per_minute, display_name, email, password, phone } = req.body;
+    const { photo_url, bio, price_per_minute, display_name, email, password, phone, category, experience, languages, specializations } = req.body;
 
     if (photo_url !== undefined && photo_url !== null && photo_url !== '') {
       db.prepare('UPDATE consultants SET photo_url = ? WHERE id = ?').run(photo_url, id);
@@ -156,9 +156,24 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
     if (bio !== undefined) {
       db.prepare('UPDATE consultants SET bio = ? WHERE id = ?').run(bio, id);
     }
+    if (category !== undefined) {
+      db.prepare('UPDATE consultants SET category = ? WHERE id = ?').run(category, id);
+    }
+    if (experience !== undefined) {
+      db.prepare('UPDATE consultants SET experience = ? WHERE id = ?').run(Number(experience), id);
+    }
+    if (languages !== undefined) {
+      db.prepare('UPDATE consultants SET languages = ? WHERE id = ?').run(languages, id);
+    }
+    if (specializations !== undefined) {
+      db.prepare('UPDATE consultants SET specializations = ? WHERE id = ?').run(specializations, id);
+    }
     if (price_per_minute !== undefined) {
       const priceVal = parseFloat(price_per_minute);
       if (!isNaN(priceVal) && priceVal > 0) {
+        if (priceVal < 5) {
+          return res.status(400).json({ error: 'Minimum consultation fee limit is ₹5/min. Isse below price set nahi ho sakta.' });
+        }
         // Enforce plan-based price rate cap
         const consultant = db.prepare('SELECT plan_id, display_name, price_per_minute FROM consultants WHERE id = ?').get(id) as { plan_id: number | null, display_name: string, price_per_minute: number } | undefined;
         let maxRate = 1000.0; // fallback default

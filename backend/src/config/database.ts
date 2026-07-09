@@ -759,8 +759,8 @@ export function initDb() {
       'Starter Launchpad (30 Days Free Trial)', 
       0.0, 
       30, 
-      'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹25/min. 30% platform commission.',
-      25.0,
+      'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹10000/min. 30% platform commission.',
+      10000.0,
       '72 Hours',
       30.0
     );
@@ -768,8 +768,8 @@ export function initDb() {
       'Professional Growth Booster', 
       4999.0, 
       30, 
-      'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹100/min. 25% platform commission.',
-      100.0,
+      'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹10000/min. 25% platform commission.',
+      10000.0,
       '48 Hours',
       25.0
     );
@@ -777,8 +777,8 @@ export function initDb() {
       'Elite Mastermind Hub', 
       9999.0, 
       30, 
-      'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹500/min. 20% platform commission.',
-      500.0,
+      'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹10000/min. 20% platform commission.',
+      10000.0,
       '24 Hours',
       20.0
     );
@@ -1058,6 +1058,14 @@ export function initDb() {
     console.log('[Database] Corrected existing users with broken Giphy profile photos.');
   } catch (err) {
     console.error('Error correcting existing users with Giphy photos:', err);
+  }
+
+  // Self-heal and relax subscription plan calling rate limits to prevent "Rate Exceeded" errors for developers/testers
+  try {
+    db.prepare("UPDATE plans SET max_consultant_rate = 10000.0").run();
+    console.log('[Database] Self-healed existing subscription plans rate limits to ₹10000.0 successfully.');
+  } catch (err) {
+    console.error('Error relaxing existing subscription plan limits:', err);
   }
 
   // Connect to MongoDB asynchronously so it doesn't block server startup
