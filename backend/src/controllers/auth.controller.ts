@@ -20,15 +20,17 @@ export const userSignUp = (req: Request, res: Response) => {
     }
 
     if (cleanEmail) {
-      const existingEmail = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail);
-      if (existingEmail) {
-        return res.status(400).json({ error: 'Email already registered. Please choose another or login.' });
+      const existingEmailInUsers = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+      const existingEmailInConsultants = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
+      if (existingEmailInUsers || existingEmailInConsultants) {
+        return res.status(400).json({ error: 'Yeh email address pehle se hi registered hai hamare system me. (This email is already registered in our system.)' });
       }
     }
 
     if (cleanPhone) {
-      const existingPhone = db.prepare('SELECT id FROM users WHERE phone = ?').get(cleanPhone);
-      if (existingPhone) {
+      const existingPhoneInUsers = db.prepare('SELECT id FROM users WHERE phone = ?').get(cleanPhone);
+      const existingPhoneInConsultants = db.prepare('SELECT id FROM consultants WHERE phone = ?').get(cleanPhone);
+      if (existingPhoneInUsers || existingPhoneInConsultants) {
         return res.status(400).json({ error: 'Yeh phone number pehle se hi registered hai, kripya login karein ya dusra number use karein. (This phone number is already registered.)' });
       }
     }
@@ -58,12 +60,13 @@ export const userLogin = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username/Email and password are required' });
     }
     const loginCredential = username.trim().toLowerCase();
+    const cleanPassword = password.trim();
     const user = db.prepare('SELECT * FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?').get(loginCredential, loginCredential) as any;
     
     if (!user) {
       return res.status(404).json({ error: 'User not found. Check spelling or sign up!' });
     }
-    if (user.password !== password) {
+    if (user.password !== cleanPassword) {
       return res.status(400).json({ error: 'Incorrect password.' });
     }
     if (user.is_blocked === 1) {
@@ -112,7 +115,8 @@ export const consultantLogin = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username/Email and password required' });
     }
     const loginCredential = username.trim().toLowerCase();
-    const consultant = db.prepare('SELECT * FROM consultants WHERE (LOWER(username) = ? OR LOWER(email) = ?) AND password = ?').get(loginCredential, loginCredential, password) as any;
+    const cleanPassword = password.trim();
+    const consultant = db.prepare('SELECT * FROM consultants WHERE (LOWER(username) = ? OR LOWER(email) = ?) AND password = ?').get(loginCredential, loginCredential, cleanPassword) as any;
     if (!consultant) {
       return res.status(401).json({ error: 'Invalid username/email or password' });
     }
@@ -153,14 +157,16 @@ export const consultantRegister = (req: Request, res: Response) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
-    if (existingConsultantEmail) {
-      return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another.' });
+    const existingUserEmail = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+    if (existingConsultantEmail || existingUserEmail) {
+      return res.status(400).json({ error: 'Yeh email address pehle se hi registered hai hamare system me. (This email is already registered in our system.)' });
     }
 
     const cleanPhone = phone.trim();
     const existingConsultantPhone = db.prepare('SELECT id FROM consultants WHERE phone = ?').get(cleanPhone);
-    if (existingConsultantPhone) {
-      return res.status(400).json({ error: 'Yeh phone number pehle se hi registered hai expert panel ke sath. (This phone number is already registered as a consultant.)' });
+    const existingUserPhone = db.prepare('SELECT id FROM users WHERE phone = ?').get(cleanPhone);
+    if (existingConsultantPhone || existingUserPhone) {
+      return res.status(400).json({ error: 'Yeh phone number pehle se hi registered hai hamare system me. (This phone number is already registered in our system.)' });
     }
 
     let finalUsername = username ? username.trim().toLowerCase() : '';
@@ -282,10 +288,23 @@ export const consultantRegisterCreateOrder = async (req: Request, res: Response)
 
     const cleanEmail = email.trim().toLowerCase();
     const existingConsultantEmail = db.prepare('SELECT id FROM consultants WHERE LOWER(email) = ?').get(cleanEmail) as any;
-    if (existingConsultantEmail) {
-      const consultantIdParam = req.body.consultant_id;
-      if (!consultantIdParam || existingConsultantEmail.id !== Number(consultantIdParam)) {
-        return res.status(400).json({ error: 'This email is already registered as a consultant. Please choose another or login.' });
+    const existingUserEmail = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
+    
+    const consultantIdParam = req.body.consultant_id;
+    const isCurrentConsultantEmail = existingConsultantEmail && consultantIdParam && existingConsultantEmail.id === Number(consultantIdParam);
+
+    if ((existingConsultantEmail && !isCurrentConsultantEmail) || existingUserEmail) {
+      return res.status(400).json({ error: 'Yeh email address pehle se hi registered hai hamare system me. (This email is already registered in our system.)' });
+    }
+
+    if (phone) {
+      const cleanPhone = phone.trim();
+      const existingConsultantPhone = db.prepare('SELECT id FROM consultants WHERE phone = ?').get(cleanPhone) as any;
+      const existingUserPhone = db.prepare('SELECT id FROM users WHERE phone = ?').get(cleanPhone) as any;
+      const isCurrentConsultantPhone = existingConsultantPhone && consultantIdParam && existingConsultantPhone.id === Number(consultantIdParam);
+
+      if ((existingConsultantPhone && !isCurrentConsultantPhone) || existingUserPhone) {
+        return res.status(400).json({ error: 'Yeh phone number pehle se hi registered hai hamare system me. (This phone number is already registered in our system.)' });
       }
     }
 

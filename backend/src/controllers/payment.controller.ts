@@ -367,6 +367,53 @@ export const rejectSession = (req: Request, res: Response) => {
   }
 };
 
+export const timeoutSession = (req: Request, res: Response) => {
+  try {
+    const { id: session_id } = req.params;
+    const sess = db.prepare('SELECT * FROM sessions WHERE id = ?').get(session_id) as any;
+    if (!sess) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (sess.status !== 'pending') {
+      return res.status(400).json({ error: `Session is already ${sess.status}` });
+    }
+
+    const userId = sess.user_id;
+    const totalPaid = sess.total_paid;
+    const consultantId = sess.consultant_id;
+
+    db.prepare("UPDATE sessions SET status = 'missed', total_paid = 0.0, commission_amount = 0.0, consultant_earnings = 0.0, duration_minutes = 0 WHERE id = ?").run(session_id);
+    ChatMemoryService.clearMemory(session_id);
+
+    if (userId && totalPaid > 0) {
+      db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(totalPaid, userId);
+      logWalletTransaction(
+        Number(userId),
+        'refund',
+        totalPaid,
+        `Refund: Consultation request missed/timed out by advisor`
+      );
+    }
+
+    console.log(`[Timer Engine] Session ${session_id} timed out waiting for acceptance. Marked as missed.`);
+
+    const io = req.app.get('io');
+    processNextInQueue(consultantId, io);
+
+    if (io) {
+      io.to(session_id).emit('session:missed', {
+        session_id,
+        message: 'Chat request was missed by the consultant.'
+      });
+    }
+
+    res.json({ success: true, status: 'missed' });
+  } catch (err: any) {
+    console.error('Error in timeout session:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export const endSessionManually = (req: Request, res: Response) => {
   try {
     const { id: session_id } = req.params;

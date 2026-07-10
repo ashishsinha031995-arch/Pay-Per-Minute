@@ -1734,8 +1734,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
               <div>
                 <label className="block text-[10px] font-mono text-slate-400 mb-1">Mobile Number</label>
-                <div className="relative flex rounded-xl border border-slate-800 bg-slate-950 items-center focus-within:border-emerald-500 transition-colors overflow-hidden">
-                  <div className="flex items-center pl-3 pr-2 py-2.5 bg-slate-900 border-r border-slate-800 shrink-0 font-mono text-xs font-bold text-slate-400">
+                <div className="relative flex rounded-xl border border-slate-800 bg-slate-950/60 items-center focus-within:border-emerald-500 transition-colors overflow-hidden opacity-70">
+                  <div className="flex items-center pl-3 pr-2 py-2.5 bg-slate-900 border-r border-slate-800 shrink-0 font-mono text-xs font-bold text-slate-500">
                     <Phone className="w-3.5 h-3.5 mr-1" />
                     <span>+91</span>
                   </div>
@@ -1743,15 +1743,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     type="tel"
                     placeholder="9876543210"
                     value={editPhone.startsWith('+91') ? editPhone.substring(3) : editPhone}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      if (val.length <= 10) {
-                        setEditPhone('+91' + val);
-                      }
-                    }}
-                    className="w-full bg-transparent border-0 pl-3 pr-4 py-2 text-xs text-slate-100 focus:outline-none"
+                    disabled={true}
+                    className="w-full bg-transparent border-0 pl-3 pr-4 py-2 text-xs text-slate-400 cursor-not-allowed focus:outline-none"
                   />
                 </div>
+                <p className="text-[10px] text-amber-500/80 mt-1 font-mono">
+                  🔒 Mobile Number and Email are locked after registration.
+                </p>
               </div>
 
               <div className="md:col-span-2 space-y-2">

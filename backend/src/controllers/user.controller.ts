@@ -147,6 +147,24 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
     const { id } = req.params;
     const { photo_url, bio, price_per_minute, display_name, email, password, phone, category, experience, languages, specializations } = req.body;
 
+    const existingConsultant = db.prepare('SELECT * FROM consultants WHERE id = ?').get(id) as any;
+    if (!existingConsultant) {
+      return res.status(404).json({ error: 'Consultant not found' });
+    }
+
+    if (phone !== undefined && phone !== null && phone.trim() !== '') {
+      const cleanPhone = phone.trim();
+      if (existingConsultant.phone && existingConsultant.phone !== cleanPhone) {
+        return res.status(400).json({ error: 'Phone number change nahi kiya ja sakta. (Phone number cannot be changed.)' });
+      }
+    }
+    if (email !== undefined && email !== null && email.trim() !== '') {
+      const cleanEmail = email.trim().toLowerCase();
+      if (existingConsultant.email && existingConsultant.email.toLowerCase() !== cleanEmail) {
+        return res.status(400).json({ error: 'Email change nahi kiya ja sakta. (Email cannot be changed.)' });
+      }
+    }
+
     if (photo_url !== undefined && photo_url !== null && photo_url !== '') {
       db.prepare('UPDATE consultants SET photo_url = ? WHERE id = ?').run(photo_url, id);
     }
@@ -474,6 +492,19 @@ export const updateUserProfile = (req: Request, res: Response) => {
     const cleanDisplayName = (display_name || '').trim();
     if (!cleanDisplayName) {
       return res.status(400).json({ error: 'Display Name is required' });
+    }
+
+    if (phone !== undefined && phone !== null && phone.trim() !== '') {
+      const cleanPhone = phone.trim();
+      if (existingUser.phone && existingUser.phone !== cleanPhone) {
+        return res.status(400).json({ error: 'Phone number change nahi kiya ja sakta. (Phone number cannot be changed.)' });
+      }
+    }
+    if (req.body.email !== undefined && req.body.email !== null && req.body.email.trim() !== '') {
+      const cleanEmail = req.body.email.trim().toLowerCase();
+      if (existingUser.email && existingUser.email.toLowerCase() !== cleanEmail) {
+        return res.status(400).json({ error: 'Email change nahi kiya ja sakta. (Email cannot be changed.)' });
+      }
     }
 
     // Keep the current photo_url if the updated one is not a valid non-empty string

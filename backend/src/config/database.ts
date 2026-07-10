@@ -133,16 +133,39 @@ async function syncFromMongoToSQLite() {
     const Model = mongoModels[table];
     const docs = await Model.find({}).lean();
 
-    originalDb.prepare(`DELETE FROM ${table}`).run();
-
-    if (docs.length === 0) continue;
+    if (docs.length === 0) {
+      const countInSQLite = (originalDb.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as any).count;
+      if (countInSQLite > 0) {
+        console.log(`[MongoDB Sync] Table '${table}' is empty in MongoDB but has ${countInSQLite} rows in SQLite. Syncing SQLite to MongoDB...`);
+        const primaryKey = table === 'admin_settings' ? 'key' : 'id';
+        const rows = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+        const docsToInsert = rows.map(row => ({
+          _id: row[primaryKey],
+          ...row
+        }));
+        await Model.insertMany(docsToInsert);
+      }
+      continue;
+    }
 
     const primaryKey = table === 'admin_settings' ? 'key' : 'id';
+
+    // Fetch actual columns that exist in the local SQLite table schema
+    const tableInfo = originalDb.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    const existingColumns = new Set(tableInfo.map(c => c.name));
+
     let allKeys = Array.from(new Set(docs.flatMap(doc => Object.keys(doc).filter(k => k !== '_id'))));
     
+    // Filter allKeys to only include columns that actually exist in the SQLite table
+    allKeys = allKeys.filter(k => existingColumns.has(k));
+
     // Ensure primaryKey column is always in allKeys so we write the ID correctly to SQLite
-    if (!allKeys.includes(primaryKey)) {
+    if (!allKeys.includes(primaryKey) && existingColumns.has(primaryKey)) {
       allKeys.push(primaryKey);
+    }
+
+    if (allKeys.length === 0) {
+      continue;
     }
 
     const columns = allKeys.map(k => `"${k}"`).join(', ');
@@ -167,6 +190,23 @@ async function syncFromMongoToSQLite() {
     });
 
     transaction(docs);
+
+    // Securely sync any local SQLite rows that are missing in MongoDB back to MongoDB
+    try {
+      const sqliteRows = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+      const mongoIds = new Set(docs.map(doc => String(doc._id || doc[primaryKey])));
+      const missingInMongo = sqliteRows.filter(row => !mongoIds.has(String(row[primaryKey])));
+      if (missingInMongo.length > 0) {
+        console.log(`[MongoDB Sync] Back-syncing ${missingInMongo.length} local rows of table '${table}' missing in MongoDB...`);
+        const docsToInsert = missingInMongo.map(row => ({
+          _id: row[primaryKey],
+          ...row
+        }));
+        await Model.insertMany(docsToInsert);
+      }
+    } catch (e) {
+      console.error(`[MongoDB Sync] Error back-syncing table '${table}' to MongoDB:`, e);
+    }
   }
 
   originalDb.pragma('foreign_keys = ON');
@@ -748,9 +788,8 @@ export function initDb() {
   }
 
   // Seed default Subscription Plans
-  const hasStarter = db.prepare("SELECT id FROM plans WHERE name LIKE '%Starter%' OR name LIKE '%Launchpad%'").get();
-  if (!hasStarter) {
-    db.exec("DELETE FROM plans;");
+  const plansCountRow = db.prepare("SELECT COUNT(*) as count FROM plans").get() as { count: number };
+  if (plansCountRow.count === 0) {
     const insertPlan = db.prepare(`
       INSERT INTO plans (name, price, duration_days, description, max_consultant_rate, support_hours, commission_rate)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -782,30 +821,6 @@ export function initDb() {
       '24 Hours',
       20.0
     );
-  } else {
-    // Unconditionally update existing plans to correct values
-    try {
-      db.prepare(`
-        UPDATE plans 
-        SET max_consultant_rate = 25.0, 
-            description = 'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹25/min. 30% platform commission.'
-        WHERE name LIKE '%Starter%' OR name LIKE '%Launchpad%'
-      `).run();
-      db.prepare(`
-        UPDATE plans 
-        SET max_consultant_rate = 100.0, 
-            description = 'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹100/min. 25% platform commission.'
-        WHERE name LIKE '%Professional%'
-      `).run();
-      db.prepare(`
-        UPDATE plans 
-        SET max_consultant_rate = 500.0, 
-            description = 'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹500/min. 20% platform commission.'
-        WHERE name LIKE '%Elite%'
-      `).run();
-    } catch (e) {
-      console.error('Failed to update plans schema in DB initialization:', e);
-    }
   }
 
   // Seed default Consultants
@@ -1083,38 +1098,7 @@ export function initDb() {
       console.error('Error correcting existing users with Giphy photos:', err);
     }
 
-    // Enforce correct subscription plan calling rate limits
-    try {
-      originalDb.prepare("UPDATE plans SET max_consultant_rate = 25.0, description = 'Free first 30 days, then ₹999/month. Direct support within 72 hours. Consultant calling rate capped at maximum ₹25/min. 30% platform commission.' WHERE name LIKE '%Starter%' OR name LIKE '%Launchpad%'").run();
-      originalDb.prepare("UPDATE plans SET max_consultant_rate = 100.0, description = 'Accelerate your bookings and status. Direct support within 48 hours. Consultant calling rate capped at maximum ₹100/min. 25% platform commission.' WHERE name LIKE '%Professional%'").run();
-      originalDb.prepare("UPDATE plans SET max_consultant_rate = 500.0, description = 'Premium elite placement for top industry experts. Direct support within 24 hours. Consultant calling rate capped at maximum ₹500/min. 20% platform commission.' WHERE name LIKE '%Elite%'").run();
-      console.log('[Database] Enforced correct plan rate limits: Starter (25), Professional (100), Elite (500).');
-    } catch (err) {
-      console.error('Error enforcing subscription plan limits:', err);
-    }
-
-    // Cap existing consultants' rates to their assigned plans' max rate
-    try {
-      const consultants = originalDb.prepare('SELECT id, plan_id, price_per_minute, display_name FROM consultants').all() as any[];
-      const plans = originalDb.prepare('SELECT id, max_consultant_rate FROM plans').all() as any[];
-      const planMap = new Map<number, number>();
-      for (const p of plans) {
-        planMap.set(p.id, p.max_consultant_rate);
-      }
-      for (const cons of consultants) {
-        let maxRate = 25.0; // default to 25 if no plan or default plan is Starter
-        if (cons.plan_id && planMap.has(cons.plan_id)) {
-          maxRate = planMap.get(cons.plan_id)!;
-        }
-        if (cons.price_per_minute > maxRate) {
-          console.log(`[Database] Capping consultant ${cons.display_name} (#${cons.id}) rate from ₹${cons.price_per_minute}/min to plan max ₹${maxRate}/min`);
-          originalDb.prepare('UPDATE consultants SET price_per_minute = ? WHERE id = ?').run(maxRate, cons.id);
-        }
-      }
-      console.log('[Database] Consultant rates verified and capped under active plan limits successfully.');
-    } catch (err) {
-      console.error('Error capping consultant rates:', err);
-    }
+    // Automatic updates to plans and rate caps have been removed to preserve custom super admin changes.
   };
 
   // Run the migration initially for local SQLite

@@ -385,6 +385,11 @@ export default function AppPage() {
         displayName: data.display_name
       });
 
+      localStorage.setItem('prefilled_consultant_login', JSON.stringify({
+        username: data.username,
+        password: data.password
+      }));
+
       setAuthSuccess('Consultant Account Created Successfully! Please save your credentials.');
 
       // Auto-login preparer

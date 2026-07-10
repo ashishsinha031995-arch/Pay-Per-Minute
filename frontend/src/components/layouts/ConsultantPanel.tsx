@@ -20,7 +20,20 @@ interface ConsultantPanelProps {
 
 export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId, onLogout, theme = 'dark', onToggleTheme, onInstallApp }: ConsultantPanelProps) {
   // Authentication & Session States
-  const [currentConsultant, setCurrentConsultant] = useState<Consultant | null>(null);
+  const [currentConsultant, setCurrentConsultant] = useState<Consultant | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('consultant_session');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.id) {
+            return parsed;
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  });
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   
@@ -82,6 +95,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const isUsernameManuallyEditedRef = useRef(false);
   const [usernameSuffix] = useState(() => Math.floor(1000 + Math.random() * 9000));
   const lastBuyingPlanIdRef = useRef<number | null>(null);
+  const isFirstSessionSyncRef = useRef(true);
+  const [subscriptionSuccessDetails, setSubscriptionSuccessDetails] = useState<{
+    username: string;
+    password?: string;
+    displayName: string;
+    planName: string;
+    expiry: string;
+  } | null>(null);
 
   useEffect(() => {
     if (buyingPlan) {
@@ -859,6 +880,36 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return () => window.removeEventListener('storage', syncPreSignupDetails);
   }, []);
 
+  // Sync pre-filled login credentials for newly registered consultants
+  useEffect(() => {
+    const syncPrefilledLogin = () => {
+      const prefilled = localStorage.getItem('prefilled_consultant_login');
+      if (prefilled) {
+        try {
+          const parsed = JSON.parse(prefilled);
+          if (parsed.username) {
+            setUsernameInput(parsed.username);
+          }
+          if (parsed.password) {
+            setPasswordInput(parsed.password);
+          }
+          if (parsed.username && parsed.password) {
+            setCredentialsGenerated({
+              username: parsed.username,
+              password: parsed.password,
+              displayName: parsed.displayName || 'Advisor',
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing prefilled login credentials:', e);
+        }
+      }
+    };
+    syncPrefilledLogin();
+    window.addEventListener('storage', syncPrefilledLogin);
+    return () => window.removeEventListener('storage', syncPrefilledLogin);
+  }, []);
+
   // Reactive username generation based on display name
   useEffect(() => {
     if (!isUsernameManuallyEditedRef.current) {
@@ -882,6 +933,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
   // Sync currentConsultant state with localStorage and notify global AppPage Header
   useEffect(() => {
+    if (isFirstSessionSyncRef.current) {
+      isFirstSessionSyncRef.current = false;
+      // Skip clearing the session if we are booting up and currentConsultant is null,
+      // because the mount useEffect or other mechanisms will parse/load it soon.
+      if (!currentConsultant) {
+        const saved = localStorage.getItem('consultant_session');
+        if (saved) {
+          window.dispatchEvent(new CustomEvent('consultant-session-updated'));
+          return;
+        }
+      }
+    }
+
     if (currentConsultant) {
       localStorage.setItem('consultant_session', JSON.stringify(currentConsultant));
     } else {
@@ -1154,7 +1218,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       const res = await fetch('/api/consultants/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: usernameInput, password: passwordInput }),
+        body: JSON.stringify({ username: usernameInput.trim(), password: passwordInput.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1163,6 +1227,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       
       setCurrentConsultant(data.consultant);
       localStorage.setItem('consultant_session', JSON.stringify(data.consultant));
+      localStorage.removeItem('prefilled_consultant_login');
+      setCredentialsGenerated(null);
       hasInitializedProfileRef.current = false;
       loadConsultantStatsAndStatus(data.consultant.id, false, true);
       setSuccess('Logged in successfully!');
@@ -1220,10 +1286,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           setPricePerMin(buyData.consultant.price_per_minute.toString());
           setPhotoUrl(buyData.consultant.photo_url || '');
           setBio(buyData.consultant.bio || '');
+
+          const activatedPlan = plans.find(p => p.id === planId);
+          setSubscriptionSuccessDetails({
+            username: buyData.consultant.username,
+            password: buyData.consultant.password,
+            displayName: buyData.consultant.display_name,
+            planName: activatedPlan ? activatedPlan.name : 'Partner Plan',
+            expiry: buyData.consultant.plan_expiry ? new Date(buyData.consultant.plan_expiry).toLocaleDateString() : 'N/A'
+          });
         }
 
         // Force refresh inputs to sync price and updated profile settings
-        loadConsultantStatsAndStatus(currentConsultant.id, false, true);
+        loadConsultantStatsAndStatus(buyData.consultant?.id || currentConsultant.id, false, true);
         setBuyingPlanId(null);
         return;
       }
@@ -1269,10 +1344,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
               setPricePerMin(buyData.consultant.price_per_minute.toString());
               setPhotoUrl(buyData.consultant.photo_url || '');
               setBio(buyData.consultant.bio || '');
+
+              const activatedPlan = plans.find(p => p.id === planId);
+              setSubscriptionSuccessDetails({
+                username: buyData.consultant.username,
+                password: buyData.consultant.password,
+                displayName: buyData.consultant.display_name,
+                planName: activatedPlan ? activatedPlan.name : 'Partner Plan',
+                expiry: buyData.consultant.plan_expiry ? new Date(buyData.consultant.plan_expiry).toLocaleDateString() : 'N/A'
+              });
             }
 
             // Force refresh inputs to sync price and updated profile settings
-            loadConsultantStatsAndStatus(currentConsultant.id, false, true);
+            loadConsultantStatsAndStatus(buyData.consultant?.id || currentConsultant.id, false, true);
           } catch (err: any) {
             setError(err.message);
           } finally {
@@ -1397,6 +1481,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           password: data.password,
           displayName: data.display_name,
         });
+        localStorage.setItem('prefilled_consultant_login', JSON.stringify({
+          username: data.username,
+          password: data.password,
+          displayName: data.display_name,
+        }));
         setRegisterDisplayName('');
         setRegisterEmail('');
         setRegisterPhone('');
@@ -1445,6 +1534,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 password: data.password,
                 displayName: data.display_name,
               });
+              localStorage.setItem('prefilled_consultant_login', JSON.stringify({
+                username: data.username,
+                password: data.password,
+                displayName: data.display_name,
+              }));
               setRegisterDisplayName('');
               setRegisterEmail('');
               setRegisterPhone('');
@@ -2793,6 +2887,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       }
                     } catch (err) {
                       console.error('Reject error:', err);
+                    }
+                  }}
+                  onTimeout={async () => {
+                    try {
+                      const res = await fetch(`/api/sessions/${pendingRequest.id}/timeout`, { method: 'POST' });
+                      if (res.ok) {
+                        loadConsultantStatsAndStatus(currentConsultant.id);
+                      } else {
+                        const data = await res.json();
+                        console.error('Timeout API error:', data.error || 'Failed to timeout request');
+                      }
+                    } catch (err) {
+                      console.error('Timeout error:', err);
                     }
                   }}
                 />
@@ -5007,10 +5114,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <input
                             type="email"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
+                            disabled={true}
+                            className="bg-slate-950/60 border border-slate-800 text-slate-400 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none font-sans cursor-not-allowed opacity-70"
                             required
                           />
+                          <p className="text-[10px] text-amber-500/80 mt-1 font-mono">
+                            🔒 Email address is locked after registration.
+                          </p>
                         </div>
 
                         <div className="space-y-1.5">
@@ -5018,10 +5128,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <input
                             type="tel"
                             value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                            disabled={true}
+                            className="bg-slate-950/60 border border-slate-800 text-slate-400 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none font-mono cursor-not-allowed opacity-70"
                             required
                           />
+                          <p className="text-[10px] text-amber-500/80 mt-1 font-mono">
+                            🔒 Phone number is locked after registration.
+                          </p>
                         </div>
 
                         <div className="space-y-1.5 md:col-span-2">
@@ -6717,6 +6830,96 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             >
               <Sparkles className="w-4 h-4" />
               <span>Proceed to Buy Plan & Register</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription Purchase / Upgrade Success Modal */}
+      {subscriptionSuccessDetails && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          {/* Backdrop blur */}
+          <div 
+            className="absolute inset-0 bg-slate-950/90 backdrop-blur-md transition-opacity"
+            onClick={() => setSubscriptionSuccessDetails(null)}
+          />
+
+          {/* Modal Box */}
+          <div className="relative w-full max-w-lg bg-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl space-y-6 overflow-hidden animate-in zoom-in-95 duration-200 z-10 text-left max-h-[90vh] overflow-y-auto">
+            <div className="absolute top-4 right-4">
+              <button
+                onClick={() => setSubscriptionSuccessDetails(null)}
+                className="text-slate-500 hover:text-slate-300 font-sans text-xs p-1 bg-slate-950 border border-slate-850 rounded-lg hover:border-slate-750 transition-all cursor-pointer"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center text-center space-y-3 pb-4 border-b border-slate-850">
+              <div className="bg-emerald-500/10 p-4 rounded-full border border-emerald-500/20 text-emerald-400">
+                <Sparkles className="w-8 h-8 animate-pulse text-emerald-400" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl sm:text-2xl font-black font-sans text-slate-100">🎉 Partner Plan Activated!</h3>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">
+                  Plan: {subscriptionSuccessDetails.planName}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed text-center">
+              Congratulations <strong className="text-white">{subscriptionSuccessDetails.displayName}</strong>! Your partner channel is now live. We have generated/updated your secure portal credentials. Please copy and save them below:
+            </p>
+
+            {/* Credentials details section */}
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4 relative">
+              <button
+                type="button"
+                onClick={() => {
+                  const copyTxt = `Display Name: ${subscriptionSuccessDetails.displayName}\nUsername: ${subscriptionSuccessDetails.username}${subscriptionSuccessDetails.password ? `\nPassword: ${subscriptionSuccessDetails.password}` : ''}\nPlan: ${subscriptionSuccessDetails.planName}\nExpiry: ${subscriptionSuccessDetails.expiry}`;
+                  navigator.clipboard.writeText(copyTxt);
+                  alert('Credentials and subscription details copied securely to clipboard!');
+                }}
+                className="absolute top-3 right-3 text-[10px] text-slate-400 hover:text-white flex items-center gap-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 px-3 py-1.5 rounded-xl transition-all shadow cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Copy Details</span>
+              </button>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs font-mono">
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Advisor Name</span>
+                  <strong className="text-slate-200 block truncate">{subscriptionSuccessDetails.displayName}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Plan Expiry Date</span>
+                  <strong className="text-amber-500 block">{subscriptionSuccessDetails.expiry}</strong>
+                </div>
+                <div className="sm:col-span-2 h-px bg-slate-850 my-1" />
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Platform Username</span>
+                  <strong className="text-slate-100 select-all block break-all font-bold text-emerald-400">{subscriptionSuccessDetails.username}</strong>
+                </div>
+                {subscriptionSuccessDetails.password && (
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase">Portal Secure Password</span>
+                    <strong className="text-slate-100 select-all block break-all font-bold text-sky-400">{subscriptionSuccessDetails.password}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-900/50 p-3 rounded-xl border border-emerald-500/10 text-[10px] text-emerald-400 text-center leading-relaxed">
+              💡 Always keep your username and password safe. You can use these credentials to log into your Expert Panel dashboard anytime, from any device.
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSubscriptionSuccessDetails(null)}
+              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3.5 rounded-xl font-extrabold text-xs uppercase tracking-widest w-full transition-all flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/10 hover:scale-[1.02] cursor-pointer"
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span>Go to Consultant Dashboard</span>
             </button>
           </div>
         </div>

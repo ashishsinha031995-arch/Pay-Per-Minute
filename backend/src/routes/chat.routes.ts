@@ -6,6 +6,7 @@ import {
   postSessionMessageREST,
   acceptSession,
   rejectSession,
+  timeoutSession,
   endSessionManually,
   getConsultantQueueStatus,
   cancelQueuedSession
@@ -25,6 +26,7 @@ router.get('/consultants/:id/queue-status', getConsultantQueueStatus);
 // Session State Actions
 router.post('/sessions/:id/accept', acceptSession);
 router.post('/sessions/:id/reject', rejectSession);
+router.post('/sessions/:id/timeout', timeoutSession);
 router.post('/sessions/:id/end', endSessionManually);
 router.post('/sessions/:id/cancel', cancelQueuedSession);
 
