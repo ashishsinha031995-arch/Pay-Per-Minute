@@ -292,19 +292,20 @@ export function AdminPanel() {
     let score = 0;
     const totalFields = 11;
 
-    if (cons.display_name && cons.display_name.trim() !== '') score++;
-    if (cons.photo_url && cons.photo_url.trim() !== '') score++;
-    if (cons.bio && cons.bio.trim() !== '') score++;
+    if (cons.display_name && typeof cons.display_name === 'string' && cons.display_name.trim() !== '') score++;
+    if (cons.photo_url && typeof cons.photo_url === 'string' && cons.photo_url.trim() !== '') score++;
+    if (cons.bio && typeof cons.bio === 'string' && cons.bio.trim() !== '') score++;
     if (cons.price_per_minute > 0) score++;
 
-    if ((cons as any).aadhaar_number && (cons as any).aadhaar_number.trim() !== '') score++;
-    if ((cons as any).aadhaar_photo_url && (cons as any).aadhaar_photo_url.trim() !== '') score++;
-    if ((cons as any).pan_number && (cons as any).pan_number.trim() !== '') score++;
-    if ((cons as any).pan_photo_url && (cons as any).pan_photo_url.trim() !== '') score++;
+    const c = cons as any;
+    if (c.aadhaar_number && String(c.aadhaar_number).trim() !== '') score++;
+    if (c.aadhaar_photo_url && typeof c.aadhaar_photo_url === 'string' && c.aadhaar_photo_url.trim() !== '') score++;
+    if (c.pan_number && String(c.pan_number).trim() !== '') score++;
+    if (c.pan_photo_url && typeof c.pan_photo_url === 'string' && c.pan_photo_url.trim() !== '') score++;
 
-    if ((cons as any).bank_account_holder_name && (cons as any).bank_account_holder_name.trim() !== '') score++;
-    if ((cons as any).bank_account_number && (cons as any).bank_account_number.trim() !== '') score++;
-    if ((cons as any).bank_ifsc_code && (cons as any).bank_ifsc_code.trim() !== '') score++;
+    if (c.bank_account_holder_name && typeof c.bank_account_holder_name === 'string' && c.bank_account_holder_name.trim() !== '') score++;
+    if (c.bank_account_number && String(c.bank_account_number).trim() !== '') score++;
+    if (c.bank_ifsc_code && typeof c.bank_ifsc_code === 'string' && c.bank_ifsc_code.trim() !== '') score++;
 
     return Math.round((score / totalFields) * 100);
   };
@@ -1376,8 +1377,8 @@ export function AdminPanel() {
   // --- Consultants Filtering & Search ---
   const filteredConsultants = consultants.filter(c => {
     const sTerm = searchCons.toLowerCase().trim();
-    const nameMatch = c.display_name.toLowerCase().includes(sTerm);
-    const userMatch = c.username.toLowerCase().includes(sTerm);
+    const nameMatch = (c.display_name || '').toLowerCase().includes(sTerm);
+    const userMatch = (c.username || '').toLowerCase().includes(sTerm);
     const emailMatch = (c.email || '').toLowerCase().includes(sTerm);
     const idMatch = String(c.id).toLowerCase().includes(sTerm);
     if (sTerm && !nameMatch && !userMatch && !emailMatch && !idMatch) return false;
@@ -1390,7 +1391,7 @@ export function AdminPanel() {
     }
 
     if (filterConsRate !== 'all') {
-      const r = c.price_per_minute;
+      const r = c.price_per_minute || 0;
       if (filterConsRate === 'budget' && r > 20) return false;
       if (filterConsRate === 'medium' && (r <= 20 || r > 50)) return false;
       if (filterConsRate === 'premium' && r <= 50) return false;
@@ -2259,8 +2260,8 @@ export function AdminPanel() {
                             </td>
                             <td className="px-6 py-4 font-mono font-bold text-emerald-400">₹{cons.price_per_minute}/min</td>
                             <td className="px-6 py-4">
-                              <div className="font-mono text-slate-100 font-bold">₹{cons.wallet_withdrawable.toFixed(2)}</div>
-                              <span className="text-[10px] text-slate-500 font-mono">Today: ₹{cons.wallet_today.toFixed(2)}</span>
+                              <div className="font-mono text-slate-100 font-bold">₹{Number(cons.wallet_withdrawable || 0).toFixed(2)}</div>
+                              <span className="text-[10px] text-slate-500 font-mono">Today: ₹{Number(cons.wallet_today || 0).toFixed(2)}</span>
                             </td>
                             <td className="px-6 py-4 font-mono">
                               <div className="space-y-1">
@@ -2334,13 +2335,13 @@ export function AdminPanel() {
                                 <button
                                   onClick={() => {
                                     setEditingConsultant(cons);
-                                    setConsName(cons.display_name);
+                                    setConsName(cons.display_name || '');
                                     setConsEmail(cons.email || '');
                                     setConsPhone((cons.phone || '').replace(/^\+91/, ''));
-                                    setConsUsername(cons.username);
-                                    setConsPassword(cons.password);
+                                    setConsUsername(cons.username || '');
+                                    setConsPassword(cons.password || '');
                                     setConsBio(cons.bio || '');
-                                    setConsRate(cons.price_per_minute.toString());
+                                    setConsRate(String(cons.price_per_minute ?? 10));
                                     setConsCategory((cons as any).category || 'Consultants');
                                     
                                     // Initialize KYC and Bank details in modal inputs
@@ -2354,7 +2355,7 @@ export function AdminPanel() {
                                     setConsBankIfscCode((cons as any).bank_ifsc_code || '');
                                     setConsBankName((cons as any).bank_name || '');
                                     setConsBankStatus((cons as any).bank_status || 'unsubmitted');
-                                    setConsPlanId(cons.plan_id ? cons.plan_id.toString() : '');
+                                    setConsPlanId(cons.plan_id ? String(cons.plan_id) : '');
                                     setConsPlanExpiry(cons.plan_expiry || '');
                                     
                                     setShowConsultantModal(true);
