@@ -552,6 +552,79 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [isBusy, setIsBusy] = useState(false);
   const [buyingPlanId, setBuyingPlanId] = useState<number | null>(null);
 
+  // --- NATIVE OS PUSH NOTIFICATIONS FOR BACKGROUND CALLS ---
+  const [notifPermission, setNotifPermission] = useState<string>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
+  const lastNotifiedRequestIdRef = useRef<string | null>(null);
+
+  const handleRequestNotificationPermission = () => {
+    if (typeof Notification === 'undefined') {
+      alert('Your browser does not support Web Notifications.');
+      return;
+    }
+    Notification.requestPermission()
+      .then(permission => {
+        setNotifPermission(permission);
+        if (permission === 'granted') {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').then(() => {
+              console.log('[Notification API] Registered Service Worker for ConsultantPanel.');
+            });
+          }
+          new Notification("🎉 CallMint Alerts Active!", {
+            body: "You will now receive sound and full-screen alerts for all incoming consultation requests!",
+            icon: "/favicon.ico"
+          });
+        } else {
+          alert('Notification permission was denied. Please allow notifications from your browser site settings.');
+        }
+      })
+      .catch(err => {
+        console.error('Error requesting permission:', err);
+      });
+  };
+
+  useEffect(() => {
+    const pendingRequest = sessions.find(s => s.status === 'pending');
+    if (pendingRequest) {
+      if (lastNotifiedRequestIdRef.current !== pendingRequest.id) {
+        lastNotifiedRequestIdRef.current = pendingRequest.id;
+
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const title = `🚨 INCOMING CALL: ${pendingRequest.user_name}`;
+          const options = {
+            body: `Duration: ${pendingRequest.duration_minutes} Mins | Rate: ₹${pendingRequest.price_per_minute}/min. Tap here to open and accept!`,
+            icon: '/favicon.ico',
+            tag: `incoming-chat-${pendingRequest.id}`,
+            renotify: true,
+            requireInteraction: true,
+            vibrate: [300, 100, 300, 100, 300, 100, 300],
+            data: {
+              url: window.location.origin,
+            }
+          };
+
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then((reg) => {
+              reg.showNotification(title, options);
+            }).catch(() => {
+              new Notification(title, options);
+            });
+          } else {
+            new Notification(title, options);
+          }
+
+          if ('vibrate' in navigator) {
+            navigator.vibrate([300, 100, 300, 100, 300, 100, 300]);
+          }
+        }
+      }
+    } else {
+      lastNotifiedRequestIdRef.current = null;
+    }
+  }, [sessions]);
+
   // Common UI feedback
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -3662,6 +3735,33 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   transition={{ duration: 0.4 }}
                   className="space-y-6"
                 >
+                  {/* Alert Enable Banner */}
+                  {notifPermission !== 'granted' && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-left shadow-lg animate-pulse-subtle"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="p-2 bg-amber-500/15 rounded-xl border border-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                          <Bell className="w-5 h-5 animate-bounce" />
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider font-sans">Turn On Sound & Push Notifications! 🔔</h4>
+                          <p className="text-[11px] text-slate-300 leading-normal max-w-xl">
+                            Aapki screen lock hone ya background mai hone par bhi incoming requests ki ring bajegi aur accept/reject notification screen par pop-up hoga. Please alerts enable kijiye.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRequestNotificationPermission}
+                        className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-4 py-2 rounded-xl transition-all active:scale-95 shrink-0 shadow-md shadow-amber-500/10 cursor-pointer"
+                      >
+                        Enable Alerts Now
+                      </button>
+                    </motion.div>
+                  )}
                   {!hasActivePlan ? (
                     /* LANDING/ONBOARDING VIEW FOR UN-SUBSCRIBED LOGGED-IN CONSULTANTS */
                     <div className="space-y-12 animate-in fade-in duration-300">

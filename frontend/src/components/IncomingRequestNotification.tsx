@@ -137,6 +137,29 @@ export const IncomingRequestNotification: React.FC<IncomingRequestNotificationPr
     };
   }, [isMuted, request.id]);
 
+  // Global touch/click listener to instantly unlock and resume blocked AudioContext on any screen touch
+  useEffect(() => {
+    if (isMuted || !request.id) return;
+
+    const resumeAudioCtx = () => {
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().then(() => {
+          console.log('[Web Audio API] AudioContext successfully resumed via user screen interaction!');
+        }).catch(err => {
+          console.warn('[Web Audio API] Failed to resume AudioContext:', err);
+        });
+      }
+    };
+
+    window.addEventListener('click', resumeAudioCtx);
+    window.addEventListener('touchstart', resumeAudioCtx);
+
+    return () => {
+      window.removeEventListener('click', resumeAudioCtx);
+      window.removeEventListener('touchstart', resumeAudioCtx);
+    };
+  }, [isMuted, request.id]);
+
   const stopRinger = () => {
     if (ringIntervalRef.current) {
       clearInterval(ringIntervalRef.current);
