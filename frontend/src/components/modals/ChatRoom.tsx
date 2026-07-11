@@ -723,21 +723,27 @@ export function ChatRoom({
     }
   };
 
-  // 3. Scroll to bottom on message updates safely using direct element scroll
+  // 3. Scroll to bottom on message updates safely using direct element scroll (or top if read-only)
   useEffect(() => {
-    scrollToBottom('smooth');
-  }, [messages]);
+    if (isReadOnly) {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = 0;
+      }
+    } else {
+      scrollToBottom('smooth');
+    }
+  }, [messages, isReadOnly]);
 
   // Scroll to bottom when viewportHeight changes (e.g. keyboard opens/closes on mobile)
   useEffect(() => {
-    if (isMobile) {
+    if (isMobile && !isReadOnly) {
       // Small timeout to allow browser layout/reflow to finish after keyboard animations
       const timer = setTimeout(() => {
         scrollToBottom('smooth');
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [viewportHeight, isMobile]);
+  }, [viewportHeight, isMobile, isReadOnly]);
 
   // 4. Send Message Handler
   const handleSendMessage = async (e: React.FormEvent) => {

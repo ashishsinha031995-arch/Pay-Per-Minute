@@ -5495,11 +5495,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     )}
                                   </div>
                                 )}
-                                <div className={`flex items-center justify-between gap-2 pt-2 border-t text-[10px] text-slate-500 font-sans ${
+                                <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t text-[10px] text-slate-500 font-sans ${
                                   theme === 'light' ? 'border-slate-200' : 'border-slate-900/60'
                                 }`}>
-                                  <span>
-                                    Date: {new Date(sess.created_at).toLocaleString()}
+                                  <span className="whitespace-nowrap">
+                                    Date & Time: {new Date(sess.created_at).toLocaleString()}
                                   </span>
                                   <div className="flex items-center space-x-1.5 shrink-0">
                                     <span className="text-slate-500">Status:</span>
