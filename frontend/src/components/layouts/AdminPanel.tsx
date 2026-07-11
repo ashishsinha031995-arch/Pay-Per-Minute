@@ -340,9 +340,9 @@ export function AdminPanel() {
     const repeatUsersCount = Object.values(userCounts).filter(count => count > 1).length;
     const actualRepeatPct = totalUsers > 0 ? Math.round((repeatUsersCount / totalUsers) * 100) : 0;
 
-    const dailyRepeat = actualRepeatPct > 0 ? actualRepeatPct : Math.min(100, (32 + (consId % 20)));
-    const weeklyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.1)) : Math.min(100, (35 + (consId % 18)));
-    const monthlyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.25)) : Math.min(100, (39 + (consId % 15)));
+    const dailyRepeat = actualRepeatPct;
+    const weeklyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.1)) : 0;
+    const monthlyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.25)) : 0;
 
     return {
       login: { daily: dailyLogin, weekly: weeklyLogin, monthly: monthlyLogin },

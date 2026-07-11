@@ -1026,8 +1026,13 @@ export function ChatRoom({
         <div className="flex items-center space-x-2 sm:space-x-2.5 min-w-0">
           <button
             onClick={onClose}
-            className="w-8 h-8 sm:w-9 sm:h-9 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-full transition-all flex items-center justify-center shadow-sm shrink-0"
-            title="Go Back"
+            disabled={role === 'user' && (sessionInfo?.status === 'pending' || sessionInfo?.status === 'queued')}
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-all flex items-center justify-center shadow-sm shrink-0 ${
+              role === 'user' && (sessionInfo?.status === 'pending' || sessionInfo?.status === 'queued')
+                ? 'bg-slate-950/40 text-slate-600 border-slate-900/40 cursor-not-allowed opacity-30'
+                : 'bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 cursor-pointer active:scale-95'
+            }`}
+            title={role === 'user' && (sessionInfo?.status === 'pending' || sessionInfo?.status === 'queued') ? "Waiting for consultant to accept..." : "Go Back"}
           >
             <ArrowLeft className="w-4 h-4" />
           </button>

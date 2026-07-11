@@ -181,34 +181,6 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
             <div className="lg:hidden flex items-center justify-end gap-x-2.5 pr-1.5">
               {currentRole === 'consultant' && currentConsultant ? (
                 <>
-                  {/* Profile Link Copy & Web options (to the left of the photo) */}
-                  <div className="flex items-center space-x-1.5">
-                    <button
-                      onClick={handleCopyConsultantLink}
-                      className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center relative active:scale-95 shrink-0"
-                      title="Copy Profile URL"
-                    >
-                      {copiedConsultantUrl ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                      <span className="sr-only">Copy link</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (onNavigateToUserView) {
-                          onNavigateToUserView(currentConsultant.username);
-                        }
-                      }}
-                      className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all flex items-center justify-center active:scale-95 shrink-0"
-                      title="Open Booking Page"
-                    >
-                      <Globe className="w-4 h-4" />
-                      <span className="sr-only">Go to profile</span>
-                    </button>
-                  </div>
-
                   {/* Profile Photo (to the left of the hamburger menu) */}
                   <button
                     type="button"

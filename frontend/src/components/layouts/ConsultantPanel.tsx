@@ -361,9 +361,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     const repeatUsersCount = Object.values(userCounts).filter(count => count > 1).length;
     const actualRepeatPct = totalUsers > 0 ? Math.round((repeatUsersCount / totalUsers) * 100) : 0;
 
-    const dailyRepeat = actualRepeatPct > 0 ? actualRepeatPct : Math.min(100, (32 + (consId % 20)));
-    const weeklyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.1)) : Math.min(100, (35 + (consId % 18)));
-    const monthlyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.25)) : Math.min(100, (39 + (consId % 15)));
+    const dailyRepeat = actualRepeatPct;
+    const weeklyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.1)) : 0;
+    const monthlyRepeat = actualRepeatPct > 0 ? Math.min(100, Math.round(actualRepeatPct * 1.25)) : 0;
 
     return {
       login: { daily: dailyLogin, weekly: weeklyLogin, monthly: monthlyLogin },
@@ -3018,9 +3018,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </div>
                     <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block font-bold">CallMint Menu</span>
                     <strong className="text-slate-200 text-sm font-bold block mt-2 pr-12">{currentConsultant.display_name} (ID: {currentConsultant.id})</strong>
-                    <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-slate-400">
-                      <span>Total Earnings:</span>
-                      <span className="text-emerald-400 font-bold font-mono">₹{wallet ? parseFloat(wallet.wallet_total || 0).toFixed(2) : '0.00'}</span>
+                    <div className="mt-3">
+                      <button
+                        onClick={handleCopyProfileUrl}
+                        className="w-full flex items-center justify-between px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-emerald-400 hover:text-emerald-300 transition-all active:scale-95 text-[11px] font-bold font-sans cursor-pointer"
+                        title="Copy Shareable Booking Link"
+                      >
+                        <div className="flex items-center space-x-1.5">
+                          <Copy className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Copy Share Link</span>
+                        </div>
+                        <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md uppercase font-bold">
+                          {copiedUrl ? 'Copied!' : 'Copy'}
+                        </span>
+                      </button>
                     </div>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800/80 gap-3">
                       <button
@@ -5522,13 +5533,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 </div>
                               </div>
 
-                              <div className="flex flex-row sm:flex-col items-center sm:items-end justify-end sm:justify-center gap-2 shrink-0 border-t border-slate-900 sm:border-0 pt-2 sm:pt-0 w-full sm:w-auto">
+                              <div className="flex flex-row items-center sm:items-end justify-between sm:justify-center gap-2.5 shrink-0 border-t border-slate-800/50 sm:border-0 pt-3 sm:pt-0 w-full sm:w-auto">
                                 {sess.status === 'completed' && (
                                   <button
                                     onClick={() => {
                                       onSelectSession(sess.id, currentConsultant?.display_name || 'Consultant', 'consultant', true);
                                     }}
-                                    className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer w-full sm:w-auto shrink-0"
+                                    className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
                                   >
                                     <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                                     <span>View Chat</span>
@@ -5542,30 +5553,30 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                         onSelectSession(sess.id, currentConsultant.display_name, 'consultant');
                                       }
                                     }}
-                                    className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition-all text-center flex items-center justify-center space-x-1.5 shadow-md active:scale-95 cursor-pointer w-full sm:w-auto shrink-0"
+                                    className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all text-center flex items-center justify-center space-x-1.5 shadow-md active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
                                   >
                                     <MessageCircle className="w-3.5 h-3.5 shrink-0 animate-pulse" />
                                     <span>Join Room</span>
                                   </button>
                                 )}
 
-                                <div className="flex items-center space-x-1.5 w-full sm:w-auto justify-end">
-                                  {isUserBlocked ? (
-                                    <button
-                                      onClick={() => handleUnblockUser(sess.user_name)}
-                                      className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl px-2.5 py-1.5 font-bold transition-all w-full sm:w-auto text-center cursor-pointer shrink-0"
-                                    >
-                                      Unblock
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleBlockUser(sess.user_name)}
-                                      className="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl px-2.5 py-1.5 font-bold transition-all w-full sm:w-auto text-center cursor-pointer shrink-0"
-                                    >
-                                      Block Client
-                                    </button>
-                                  )}
-                                </div>
+                                {isUserBlocked ? (
+                                  <button
+                                    onClick={() => handleUnblockUser(sess.user_name)}
+                                    className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Unblock</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleBlockUser(sess.user_name)}
+                                    className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all border border-rose-500/15 hover:border-rose-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
+                                  >
+                                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Block Client</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
