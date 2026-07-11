@@ -13,7 +13,7 @@ interface IncomingRequestNotificationProps {
   };
   onAccept: () => Promise<void>;
   onReject: () => Promise<void>;
-  onTimeout?: () => Promise<void>;
+  onTimeout: () => Promise<void>;
 }
 
 export const IncomingRequestNotification: React.FC<IncomingRequestNotificationProps> = ({
@@ -56,13 +56,9 @@ export const IncomingRequestNotification: React.FC<IncomingRequestNotificationPr
   useEffect(() => {
     if (timeLeft <= 0 && !hasAutoRejectedRef.current) {
       hasAutoRejectedRef.current = true;
-      if (onTimeout) {
-        onTimeout().catch(err => console.error('Auto-timeout on countdown failed:', err));
-      } else {
-        onReject().catch(err => console.error('Auto-reject on timeout failed:', err));
-      }
+      onTimeout().catch(err => console.error('Auto-timeout on countdown failed:', err));
     }
-  }, [timeLeft, onReject, onTimeout]);
+  }, [timeLeft, onTimeout]);
 
   // Audio Ringer using Web Audio API
   useEffect(() => {
@@ -164,12 +160,16 @@ export const IncomingRequestNotification: React.FC<IncomingRequestNotificationPr
     progressBg = 'bg-amber-500/10 border-amber-500/30';
   }
 
+  if (timeLeft <= 0) {
+    return null;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
-      className={`fixed inset-0 w-full h-full min-h-[100dvh] z-[200] bg-slate-950/98 backdrop-blur-xl flex flex-col justify-between p-4 xs:p-6 sm:p-8 overflow-y-auto md:relative md:inset-auto md:z-0 md:bg-slate-950/90 md:border-2 md:p-6 md:rounded-3xl md:flex-col md:items-center md:justify-center md:gap-6 md:shadow-2xl md:overflow-hidden md:h-auto md:min-h-0 md:max-w-xl md:mx-auto select-none transition-colors duration-300 ${progressBg}`}
+      className={`fixed inset-0 w-full h-full min-h-[100dvh] z-[200] bg-slate-950/98 backdrop-blur-xl flex flex-col justify-between p-4 xs:p-6 sm:p-8 overflow-hidden md:relative md:inset-auto md:z-0 md:bg-slate-950/90 md:border-2 md:p-6 md:rounded-3xl md:flex-col md:items-center md:justify-center md:gap-6 md:shadow-2xl md:overflow-hidden md:h-auto md:min-h-0 md:max-w-xl md:mx-auto select-none transition-colors duration-300 ${progressBg}`}
     >
       {/* Background Subtle Pulsing Glow wrapped in overflow-hidden container to prevent layout shifting/scrolling */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 rounded-inherit">

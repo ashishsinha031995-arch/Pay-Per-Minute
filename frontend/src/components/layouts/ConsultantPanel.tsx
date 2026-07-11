@@ -18,6 +18,41 @@ interface ConsultantPanelProps {
   onInstallApp?: () => void;
 }
 
+const saveConsultantSession = (consultant: any) => {
+  if (!consultant) {
+    localStorage.removeItem('consultant_session');
+    return;
+  }
+  const cleaned = { ...consultant };
+  delete cleaned.aadhaar_photo_url;
+  delete cleaned.pan_photo_url;
+  delete cleaned.aadhaar_number;
+  delete cleaned.pan_number;
+  delete cleaned.bank_account_number;
+  delete cleaned.bank_account_holder_name;
+  delete cleaned.bank_ifsc_code;
+  delete cleaned.bank_name;
+  
+  for (const key of Object.keys(cleaned)) {
+    if (key !== 'photo_url' && typeof cleaned[key] === 'string' && cleaned[key].length > 10000) {
+      cleaned[key] = cleaned[key].slice(0, 100) + '... (truncated)';
+    }
+  }
+  
+  try {
+    localStorage.setItem('consultant_session', JSON.stringify(cleaned));
+  } catch (err) {
+    console.error('Failed to save consultant_session to localStorage:', err);
+    try {
+      delete cleaned.photo_url;
+      delete cleaned.bio;
+      localStorage.setItem('consultant_session', JSON.stringify(cleaned));
+    } catch (innerErr) {
+      console.error('Failed to save minimal consultant_session to localStorage:', innerErr);
+    }
+  }
+};
+
 export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeSessionId, onLogout, theme = 'dark', onToggleTheme, onInstallApp }: ConsultantPanelProps) {
   // Authentication & Session States
   const [currentConsultant, setCurrentConsultant] = useState<Consultant | null>(() => {
@@ -613,7 +648,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       if (currentConsultant) {
         const updated = { ...currentConsultant, photo_url: data.photo_url };
         setCurrentConsultant(updated);
-        localStorage.setItem('consultant_session', JSON.stringify(updated));
+        saveConsultantSession(updated);
 
         // IMMEDIATELY write back to database profile so it persists on reload and doesn't disappear
         const rateVal = parseFloat(pricePerMin) || 10.0;
@@ -947,7 +982,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
 
     if (currentConsultant) {
-      localStorage.setItem('consultant_session', JSON.stringify(currentConsultant));
+      saveConsultantSession(currentConsultant);
     } else {
       localStorage.removeItem('consultant_session');
     }
@@ -1171,13 +1206,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           setBankRejectReason(matching.bank_reject_reason || '');
 
           setCurrentConsultant(matching);
-          localStorage.setItem('consultant_session', JSON.stringify(matching));
+          saveConsultantSession(matching);
 
           // Sync input states with server-side values on first load only so typing isn't interrupted
           if (!hasInitializedProfileRef.current || forceRefreshInputs) {
             setPhotoUrl(matching.photo_url || '');
             setBio(matching.bio || '');
-            setPricePerMin(matching.price_per_minute.toString());
+            setPricePerMin(matching.price_per_minute !== undefined && matching.price_per_minute !== null ? matching.price_per_minute.toString() : '10');
             
             setAadhaarNumber(matching.aadhaar_number || '');
             setAadhaarPhotoUrl(matching.aadhaar_photo_url || '');
@@ -1226,7 +1261,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       }
       
       setCurrentConsultant(data.consultant);
-      localStorage.setItem('consultant_session', JSON.stringify(data.consultant));
+      saveConsultantSession(data.consultant);
       localStorage.removeItem('prefilled_consultant_login');
       setCredentialsGenerated(null);
       hasInitializedProfileRef.current = false;
@@ -1282,8 +1317,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         // Immediately sync local state with newly activated plan details
         if (buyData.consultant) {
           setCurrentConsultant(buyData.consultant);
-          localStorage.setItem('consultant_session', JSON.stringify(buyData.consultant));
-          setPricePerMin(buyData.consultant.price_per_minute.toString());
+          saveConsultantSession(buyData.consultant);
+          setPricePerMin(buyData.consultant.price_per_minute !== undefined && buyData.consultant.price_per_minute !== null ? buyData.consultant.price_per_minute.toString() : '10');
           setPhotoUrl(buyData.consultant.photo_url || '');
           setBio(buyData.consultant.bio || '');
 
@@ -1340,8 +1375,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             // Immediately sync local state with newly activated plan details
             if (buyData.consultant) {
               setCurrentConsultant(buyData.consultant);
-              localStorage.setItem('consultant_session', JSON.stringify(buyData.consultant));
-              setPricePerMin(buyData.consultant.price_per_minute.toString());
+              saveConsultantSession(buyData.consultant);
+              setPricePerMin(buyData.consultant.price_per_minute !== undefined && buyData.consultant.price_per_minute !== null ? buyData.consultant.price_per_minute.toString() : '10');
               setPhotoUrl(buyData.consultant.photo_url || '');
               setBio(buyData.consultant.bio || '');
 
@@ -1647,12 +1682,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       // Sync local state inputs immediately with updated values from server
       if (data.photo_url !== undefined) setPhotoUrl(data.photo_url || '');
       if (data.bio !== undefined) setBio(data.bio || '');
-      if (data.price_per_minute !== undefined) setPricePerMin(data.price_per_minute.toString());
+      if (data.price_per_minute !== undefined) setPricePerMin(data.price_per_minute !== null ? data.price_per_minute.toString() : '10');
       if (data.display_name !== undefined) setDisplayName(data.display_name || '');
       if (data.email !== undefined) setEmail(data.email || '');
       if (data.phone !== undefined) setPhone(data.phone || '');
       if (data.category !== undefined) setCategory(data.category || 'Consultants');
-      if (data.experience !== undefined) setExperience(data.experience.toString());
+      if (data.experience !== undefined) setExperience(data.experience !== null ? data.experience.toString() : '5');
       if (data.languages !== undefined) setLanguages(data.languages || 'English, Hindi');
       if (data.specializations !== undefined) setSpecializations(data.specializations || 'General');
       setNewPassword('');
@@ -1660,7 +1695,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       // Persist to currentConsultant state and local storage so UI doesn't revert
       const updatedConsultant = { ...currentConsultant, ...data };
       setCurrentConsultant(updatedConsultant);
-      localStorage.setItem('consultant_session', JSON.stringify(updatedConsultant));
+      saveConsultantSession(updatedConsultant);
 
       // Force loadConsultantStatsAndStatus to re-fetch and update
       await loadConsultantStatsAndStatus(currentConsultant.id);
@@ -3973,13 +4008,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             width: '100%',
                             margin: '0 auto',
                             border: theme === 'light' ? '1px solid #e2e8f0' : 'none',
-                            fontFamily: 'sans-serif'
+                            fontFamily: 'var(--font-sans)'
                           }}
                         >
-                          <p style={{ margin: 0, fontSize: '20px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }}>
+                          <p style={{ margin: 0, fontSize: '20px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 600, fontFamily: 'var(--font-sans)' }}>
                             Namaste, {currentConsultant?.display_name || 'Lakhan'}
                           </p>
-                          <p style={{ margin: '6px 0 20px', fontSize: '13px', color: theme === 'light' ? '#475569' : '#7a8699', lineHeight: 1.6 }}>
+                          <p style={{ margin: '6px 0 20px', fontSize: '13px', color: theme === 'light' ? '#475569' : '#7a8699', lineHeight: 1.6, fontFamily: 'var(--font-sans)' }}>
                             Welcome to your dashboard.
                           </p>
 
@@ -4006,8 +4041,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   <TrendingUp style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', fontSize: '16px', width: '16px', height: '16px' }} />
                                 </div>
                                 <div>
-                                  <p style={{ margin: 0, fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Current rate</p>
-                                  <p style={{ margin: '3px 0 0', fontSize: '16px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }} className="font-mono">
+                                  <p style={{ margin: 0, fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Current rate</p>
+                                  <p style={{ margin: '3px 0 0', fontSize: '16px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
                                     ₹{currentConsultant?.price_per_minute || 0}/min
                                   </p>
                                 </div>
@@ -4043,11 +4078,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     color: isOnline 
                                       ? (theme === 'light' ? '#10b981' : '#5dcaa5') 
                                       : (theme === 'light' ? '#ef4444' : '#e08a8a'), 
-                                    fontWeight: 500 
+                                    fontWeight: 500,
+                                    fontFamily: 'var(--font-sans)'
                                   }}>
                                     {isOnline ? (isBusy ? 'Busy mode' : 'Online mode') : 'Offline mode'}
                                   </p>
-                                  <p style={{ margin: '3px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>
+                                  <p style={{ margin: '3px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>
                                     Rate configured for this session
                                   </p>
                                 </div>
@@ -4060,7 +4096,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'}`}
                               style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                             >
-                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Toggle button</span>
+                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Toggle button</span>
                               <div style={{ 
                                 width: '36px', 
                                 height: '21px', 
@@ -4094,8 +4130,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <div>
-                                <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Your wallet</p>
-                                <p style={{ margin: 0, fontSize: '22px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }} className="font-mono">
+                                <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Your wallet</p>
+                                <p style={{ margin: 0, fontSize: '22px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
                                   ₹{wallet?.wallet_monthly ? wallet.wallet_monthly.toFixed(2) : '0.00'}
                                 </p>
                               </div>
@@ -4123,18 +4159,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             <div style={{ borderTop: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a', marginTop: '12px', paddingTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                               <ShieldCheck style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', width: '15px', height: '15px' }} />
                               <div>
-                                <p style={{ margin: 0, fontSize: '12px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }}>
+                                <p style={{ margin: 0, fontSize: '12px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
                                   This month ({new Date().toLocaleString('default', { month: 'long' })})
                                 </p>
-                                <p style={{ margin: '1px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>
-                                  Unbilled rolling earnings: ₹{salaryInfo?.currentCycleEarnings ? salaryInfo.currentCycleEarnings.toFixed(2) : '0.00'}
+                                <p style={{ margin: '1px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>
+                                  Unbilled rolling earnings: <span style={{ fontFamily: 'var(--font-mono)' }}>₹{salaryInfo?.currentCycleEarnings ? salaryInfo.currentCycleEarnings.toFixed(2) : '0.00'}</span>
                                 </p>
                               </div>
                             </div>
                           </div>
 
                           {/* Earnings Overview */}
-                          <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px' }}>Earnings overview</p>
+                          <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px', fontFamily: 'var(--font-sans)' }}>Earnings overview</p>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
                             <div style={{ 
                               background: theme === 'light' ? '#ffffff' : '#111a29', 
@@ -4142,8 +4178,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               padding: '14px', 
                               border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
                             }}>
-                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Today's earnings</p>
-                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#10b981' : '#5dcaa5', fontWeight: 500 }} className="font-mono">
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Today's earnings</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#10b981' : '#5dcaa5', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
                                 ₹{wallet?.wallet_today ? wallet.wallet_today.toFixed(2) : '0.00'}
                               </p>
                             </div>
@@ -4153,15 +4189,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               padding: '14px', 
                               border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
                             }}>
-                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Life time earnings</p>
-                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#2563eb' : '#7f9be0', fontWeight: 500 }} className="font-mono">
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Life time earnings</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#2563eb' : '#7f9be0', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
                                 ₹{wallet?.wallet_total ? wallet.wallet_total.toFixed(2) : '0.00'}
                               </p>
                             </div>
                           </div>
 
                           {/* Activity Summary */}
-                          <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px' }}>Activity summary</p>
+                          <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px', fontFamily: 'var(--font-sans)' }}>Activity summary</p>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                             <div style={{ 
                               background: theme === 'light' ? '#ffffff' : '#111a29', 
@@ -4169,8 +4205,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               padding: '14px', 
                               border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
                             }}>
-                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Consultations</p>
-                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500 }} className="font-mono">
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Consultations</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
                                 {sessions.filter((s: any) => s.status === 'completed').length}
                               </p>
                             </div>
@@ -4180,8 +4216,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               padding: '14px', 
                               border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a33' 
                             }}>
-                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699' }}>Total refunded</p>
-                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#ef4444' : '#e08a8a', fontWeight: 500 }} className="font-mono">
+                              <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Total refunded</p>
+                              <p style={{ margin: 0, fontSize: '16px', color: theme === 'light' ? '#ef4444' : '#e08a8a', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
                                 ₹{sessions.reduce((acc: any, s: any) => acc + (s.refunded_amount || 0), 0).toFixed(2)}
                               </p>
                             </div>
@@ -4271,7 +4307,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     theme === 'light' ? 'border-slate-100' : 'border-slate-900'
                                   }`}>
                                     {/* Week-wise Slider and Selector */}
-                                    <div className={`flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border ${
+                                    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border ${
                                       theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/50 border-slate-850'
                                     }`}>
                                       <div className="flex flex-col text-left">
@@ -4279,22 +4315,24 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                         <span className={`text-xs font-bold mt-0.5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>{getWeekRangeString(performanceWeekOffset)}</span>
                                       </div>
                                       
-                                      <div className="flex items-center space-x-2">
-                                        <input 
-                                          type="range" 
-                                          min="0" 
-                                          max="3" 
-                                          value={performanceWeekOffset} 
-                                          onChange={(e) => setPerformanceWeekOffset(parseInt(e.target.value))}
-                                          className={`w-28 sm:w-32 h-1 rounded-lg appearance-none cursor-pointer accent-emerald-500 ${
-                                            theme === 'light' ? 'bg-slate-200' : 'bg-slate-800'
-                                          }`}
-                                        />
+                                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                                        <div className="flex items-center h-8">
+                                          <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="3" 
+                                            value={performanceWeekOffset} 
+                                            onChange={(e) => setPerformanceWeekOffset(parseInt(e.target.value))}
+                                            className={`w-24 sm:w-32 h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500 outline-none ${
+                                              theme === 'light' ? 'bg-slate-200' : 'bg-slate-800'
+                                            }`}
+                                          />
+                                        </div>
                                         <select
                                           value={performanceWeekOffset}
                                           onChange={(e) => setPerformanceWeekOffset(parseInt(e.target.value))}
-                                          className={`border rounded-lg text-[11px] font-mono font-bold px-2 py-1 focus:border-emerald-500 outline-none ${
-                                            theme === 'light' ? 'bg-white border-slate-200 text-slate-700' : 'bg-slate-950 border-slate-800 text-slate-300'
+                                          className={`h-8 border rounded-lg text-xs font-sans font-bold px-3 focus:border-emerald-500 outline-none cursor-pointer transition-all ${
+                                            theme === 'light' ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900'
                                           }`}
                                         >
                                           <option value="0">This Week</option>
@@ -4332,10 +4370,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   </div>
 
                                   <div className="h-44 flex items-end justify-between gap-3 relative px-1 pb-1">
-                                    {/* Y axis lines */}
-                                    <div className={`absolute inset-x-0 top-1/4 border-t pointer-events-none ${theme === 'light' ? 'border-slate-100' : 'border-slate-900/40'}`} />
-                                    <div className={`absolute inset-x-0 top-2/4 border-t pointer-events-none ${theme === 'light' ? 'border-slate-100' : 'border-slate-900/40'}`} />
-                                    <div className={`absolute inset-x-0 top-3/4 border-t pointer-events-none ${theme === 'light' ? 'border-slate-100' : 'border-slate-900/40'}`} />
+                                    {/* Y axis lines removed per user request */}
                                     
                                     {/* Animated Bars */}
                                     {getWeeklyEarningsData(currentConsultant.id, sessions, currentConsultant.price_per_minute, performanceWeekOffset).map((bar, i) => {
@@ -4360,17 +4395,17 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                         >
                                           {/* Hover/Touch tooltip */}
                                           <span className={`text-[9px] font-mono transition-opacity absolute -top-10 px-2 py-1 rounded-lg border text-center font-bold z-20 shadow-xl whitespace-nowrap pointer-events-none ${
-                                            theme === 'light' ? 'bg-white border-slate-200 text-emerald-600' : 'bg-slate-950 border-slate-800 text-emerald-400'
+                                            theme === 'light' ? 'bg-white border-slate-200 text-emerald-600' : 'bg-slate-950 border-slate-880 text-emerald-400'
                                           } ${
                                             activeBarIndex === i || isSelectedDay ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                                           }`}>
                                             {bar.earnings}
                                           </span>
                                           
-                                          <div className={`w-full h-32 rounded-lg flex items-end justify-center overflow-hidden transition-all border ${
+                                          <div className={`w-full h-32 rounded-lg flex items-end justify-center overflow-hidden transition-all ${
                                             theme === 'light' 
-                                              ? (isSelectedDay ? 'border-emerald-500 bg-emerald-50/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-slate-100 bg-slate-50') 
-                                              : (isSelectedDay ? 'border-emerald-500/50 bg-slate-900/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-transparent bg-slate-900/40')
+                                              ? (isSelectedDay ? 'bg-emerald-50/10 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-slate-50/50') 
+                                              : (isSelectedDay ? 'bg-slate-900/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-slate-900/10')
                                           }`}>
                                             <motion.div
                                               initial={{ height: 0 }}
@@ -4384,7 +4419,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                             />
                                           </div>
                                           <span className={`text-[10px] font-mono font-bold mt-2 transition-colors ${
-                                            isSelectedDay ? 'text-emerald-400 font-extrabold' : 'text-slate-400'
+                                            isSelectedDay 
+                                              ? (theme === 'light' ? 'text-emerald-600 font-extrabold' : 'text-emerald-400 font-extrabold') 
+                                              : (theme === 'light' ? 'text-slate-600' : 'text-slate-400')
                                           }`}>{bar.label}</span>
                                         </div>
                                       );
@@ -4415,21 +4452,25 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     }
 
                                     return (
-                                      <div className="mt-4 p-3 bg-slate-900/50 rounded-xl border border-slate-850/80 grid grid-cols-3 gap-2.5 text-center">
+                                      <div className={`mt-4 p-3 rounded-xl border grid grid-cols-3 gap-2.5 text-center ${
+                                        theme === 'light'
+                                          ? 'bg-slate-50 border-slate-200 text-slate-800'
+                                          : 'bg-slate-900/50 border-slate-850/80 text-slate-100'
+                                      }`}>
                                         <div className="flex flex-col justify-center">
                                           <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
-                                          <span className="text-[10px] font-bold text-slate-300 block mt-0.5">Earnings</span>
-                                          <span className="text-xs font-mono font-black text-emerald-400 mt-0.5">₹{Math.round(displayedEarnings).toLocaleString()}</span>
+                                          <span className={`text-[10px] font-bold block mt-0.5 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Earnings</span>
+                                          <span className={`text-xs font-mono font-black mt-0.5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>₹{Math.round(displayedEarnings).toLocaleString()}</span>
                                         </div>
-                                        <div className="flex flex-col justify-center border-x border-slate-850">
+                                        <div className={`flex flex-col justify-center border-x ${theme === 'light' ? 'border-slate-200' : 'border-slate-850'}`}>
                                           <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
-                                          <span className="text-[10px] font-bold text-slate-300 block mt-0.5">Consultations</span>
-                                          <span className="text-xs font-mono font-black text-emerald-400 mt-0.5">{displayedCalls} calls</span>
+                                          <span className={`text-[10px] font-bold block mt-0.5 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Consultations</span>
+                                          <span className={`text-xs font-mono font-black mt-0.5 ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>{displayedCalls} calls</span>
                                         </div>
                                         <div className="flex flex-col justify-center">
                                           <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
-                                          <span className="text-[10px] font-bold text-slate-300 block mt-0.5">Total Time</span>
-                                          <span className="text-xs font-mono font-black text-emerald-400 mt-0.5">{displayedMinutes} mins</span>
+                                          <span className={`text-[10px] font-bold block mt-0.5 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Total Time</span>
+                                          <span className={`text-xs font-mono font-black mt-0.5 ${theme === 'light' ? 'text-sky-600' : 'text-sky-400'}`}>{displayedMinutes} mins</span>
                                         </div>
                                       </div>
                                     );
@@ -4715,7 +4756,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             <div className="flex items-center gap-2.5 text-left">
                               <Calendar className={`w-5.5 h-5.5 shrink-0 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
                               <span className={`text-xs font-sans font-bold uppercase tracking-wider ${
-                                theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                                theme === 'light' ? 'text-slate-900 font-extrabold' : 'text-slate-300'
                               }`}>
                                 Monthly Salary Cutoff Date
                               </span>
@@ -4750,7 +4791,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
                             }`}>
                               <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Accumulating Unbilled</span>
-                              <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
+                              <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-slate-950 font-black' : 'text-slate-200'}`}>₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
                               <span className="text-[9px] text-slate-500 block mt-1">For next month's payoff</span>
                             </div>
                           </div>
@@ -4791,7 +4832,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               }`}>
                                 <div className="space-y-1">
                                   <div className="flex items-center space-x-2">
-                                    <span className={`font-bold ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>{sess.user_name}</span>
+                                    <span className={`font-extrabold ${theme === 'light' ? 'text-slate-950' : 'text-slate-200'}`}>{sess.user_name}</span>
                                     <span className="text-[9px] font-sans text-slate-500">ID: #{sess.id}</span>
                                   </div>
                                   <p className={`font-sans text-[11px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
@@ -4908,16 +4949,24 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 
                     {/* Active Subscription details */}
-                    <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800 gap-2">
+                    <div className={`lg:col-span-6 border rounded-2xl p-6 shadow-lg space-y-6 ${
+                      theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-800 text-slate-100'
+                    }`}>
+                      <div className={`flex items-center justify-between pb-2 border-b gap-2 ${
+                        theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                      }`}>
                         <div className="flex items-center space-x-2 min-w-0">
-                          <Award className="w-5 h-5 text-emerald-400 shrink-0" />
-                          <h3 className="font-bold text-slate-100 truncate">My Current Plan</h3>
+                          <Award className={`w-5 h-5 shrink-0 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
+                          <h3 className={`font-bold truncate ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>My Current Plan</h3>
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveTab('dashboard')}
-                          className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600 shrink-0"
+                          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shrink-0 ${
+                            theme === 'light'
+                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                              : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                          }`}
                         >
                           <ArrowLeft className="w-3.5 h-3.5" />
                           <span>Go Back</span>
@@ -4934,34 +4983,34 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                           return (
                             <div className="space-y-4">
-                              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                              <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'}`}>
                                 <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Active Plan</span>
-                                <span className="text-base font-extrabold text-emerald-400 block mt-0.5">{activePlan.name}</span>
+                                <span className={`text-base font-extrabold block mt-0.5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>{activePlan.name}</span>
                               </div>
 
                               <div className="space-y-2.5 text-xs">
-                                <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                                  <span className="text-slate-400 font-sans text-[10px] uppercase">Max Call Rate</span>
-                                  <strong className="text-slate-200">₹{activePlan.max_consultant_rate}/min</strong>
+                                <div className={`flex items-center justify-between border-b pb-2 ${theme === 'light' ? 'border-slate-100' : 'border-slate-850/60'}`}>
+                                  <span className={`font-sans text-[10px] uppercase ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>Max Call Rate</span>
+                                  <strong className={theme === 'light' ? 'text-slate-800' : 'text-slate-200'}>₹{activePlan.max_consultant_rate}/min</strong>
                                 </div>
                                 {activePlan.support_hours && (
-                                  <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                                    <span className="text-slate-400 font-sans text-[10px] uppercase">Official Support Hours</span>
-                                    <strong className="text-slate-200">{activePlan.support_hours} Hours</strong>
+                                  <div className={`flex items-center justify-between border-b pb-2 ${theme === 'light' ? 'border-slate-100' : 'border-slate-850/60'}`}>
+                                    <span className={`font-sans text-[10px] uppercase ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>Official Support Hours</span>
+                                    <strong className={theme === 'light' ? 'text-slate-800' : 'text-slate-200'}>{activePlan.support_hours} Hours</strong>
                                   </div>
                                 )}
                                 {activePlan.commission_rate !== undefined && (
-                                  <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                                    <span className="text-slate-400 font-sans text-[10px] uppercase">Commission Charged</span>
-                                    <strong className="text-slate-200">{activePlan.commission_rate}%</strong>
+                                  <div className={`flex items-center justify-between border-b pb-2 ${theme === 'light' ? 'border-slate-100' : 'border-slate-850/60'}`}>
+                                    <span className={`font-sans text-[10px] uppercase ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>Commission Charged</span>
+                                    <strong className={theme === 'light' ? 'text-slate-800' : 'text-slate-200'}>{activePlan.commission_rate}%</strong>
                                   </div>
                                 )}
                               </div>
 
-                              <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-1">
+                              <div className={`p-4 rounded-xl border space-y-1 ${theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'}`}>
                                 <span className="text-[9px] text-slate-500 font-sans block uppercase">Countdown</span>
-                                <div className="text-xs font-bold text-slate-200">
-                                  Renew subscription in <span className="text-emerald-400 font-extrabold">{daysLeft}</span> Days
+                                <div className={`text-xs font-bold ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>
+                                  Renew subscription in <span className={`font-extrabold ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>{daysLeft}</span> Days
                                 </div>
                                 <span className="text-[9px] text-slate-500 block">Expires on: {expiry.toLocaleDateString()}</span>
                               </div>
@@ -4975,17 +5024,23 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     </div>
                     
                     {/* Status Toggle Card */}
-                    <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6">
-                      <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
-                        <Flame className="w-5 h-5 text-emerald-400" />
-                        <h3 className="font-bold text-slate-100">Consultant Presence Settings</h3>
+                    <div className={`lg:col-span-6 border rounded-2xl p-6 shadow-lg space-y-6 ${
+                      theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-800 text-slate-100'
+                    }`}>
+                      <div className={`flex items-center space-x-2 pb-2 border-b ${
+                        theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                      }`}>
+                        <Flame className={`w-5 h-5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
+                        <h3 className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Consultant Presence Settings</h3>
                       </div>
 
                       <div className="space-y-4">
                         {/* Online visible toggle */}
-                        <div className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-850">
+                        <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                          theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                        }`}>
                           <div>
-                            <span className="text-xs font-bold block text-slate-200">Online / Visible on Portal</span>
+                            <span className={`text-xs font-bold block ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>Online / Visible on Portal</span>
                             <span className="text-[10px] text-slate-500">Clients can view you and initiate chat requests</span>
                           </div>
                           <button
@@ -4998,9 +5053,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
 
                         {/* Busy toggle */}
-                        <div className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-850">
+                        <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                          theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                        }`}>
                           <div>
-                            <span className="text-xs font-bold block text-slate-200">Busy / Engaged Status</span>
+                            <span className={`text-xs font-bold block ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>Busy / Engaged Status</span>
                             <span className="text-[10px] text-slate-500">Puts a busy badge on your public booking profile</span>
                           </div>
                           <button
@@ -5013,8 +5070,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         </div>
                       </div>
 
-                      <div className="text-xs font-sans p-3 bg-slate-950 border border-slate-850 rounded-xl text-center">
-                        Presence state: <strong className={isOnline ? (isBusy ? 'text-amber-400' : 'text-emerald-400') : 'text-slate-500'}>
+                      <div className={`text-xs font-sans p-3 rounded-xl text-center border ${
+                        theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-950 border-slate-850 text-slate-300'
+                      }`}>
+                        Presence state: <strong className={isOnline ? (isBusy ? (theme === 'light' ? 'text-amber-600' : 'text-amber-400') : (theme === 'light' ? 'text-emerald-600' : 'text-emerald-400')) : 'text-slate-500'}>
                           {isOnline ? (isBusy ? '🟠 ENGAGED / BUSY' : '🟢 ONLINE & AVAILABLE') : '🔴 OFFLINE'}
                         </strong>
                       </div>
@@ -5024,28 +5083,32 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                   {/* Fully structured salary cycle */}
                   {salaryInfo && (
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
-                      <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
-                        <Coins className="w-5 h-5 text-emerald-400" />
-                        <h3 className="font-bold text-slate-100">Monthly Salary Cycle</h3>
+                    <div className={`border rounded-2xl p-6 shadow-lg space-y-4 ${
+                      theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-880 text-slate-100'
+                    }`}>
+                      <div className={`flex items-center space-x-2 pb-2 border-b ${
+                        theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                      }`}>
+                        <Coins className={`w-5 h-5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
+                        <h3 className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Monthly Salary Cycle</h3>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-400">
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                        <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'}`}>
                           <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block mb-1">Cleared Earnings Expected</span>
-                          <strong className="text-emerald-400 text-base font-mono block">₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
+                          <strong className={`text-base font-mono block ${theme === 'light' ? 'text-emerald-600 font-black' : 'text-emerald-400'}`}>₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
                           <span className="text-[9px] text-slate-500 block mt-1">Accrued up to cutoff day ({salaryInfo.cutoffDay}th)</span>
                         </div>
 
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                        <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'}`}>
                           <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block mb-1">Target Credit Timeline</span>
-                          <strong className="text-amber-400 text-base font-mono block">By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
+                          <strong className={`text-base font-mono block ${theme === 'light' ? 'text-amber-600 font-black' : 'text-amber-400'}`}>By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
                           <span className="text-[9px] text-slate-500 block mt-1">Disbursed to verified bank account</span>
                         </div>
 
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-850">
+                        <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'}`}>
                           <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block mb-1">Ongoing Unbilled Cycle</span>
-                          <strong className="text-slate-200 text-base font-mono block">₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
+                          <strong className={`text-base font-mono block ${theme === 'light' ? 'text-slate-950 font-black' : 'text-slate-200'}`}>₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
                           <span className="text-[9px] text-slate-500 block mt-1">Rolling into next month's cutoff</span>
                         </div>
                       </div>
@@ -5354,15 +5417,23 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   className="space-y-6"
                 >
                   {/* Chat Session Table */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4 text-left">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-800 gap-2">
+                  <div className={`border rounded-2xl p-6 shadow-lg space-y-4 text-left ${
+                    theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-880 text-slate-100'
+                  }`}>
+                    <div className={`flex items-center justify-between pb-2 border-b gap-2 ${
+                      theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                    }`}>
                       <div className="flex items-center space-x-2 min-w-0">
-                        <FileText className="w-6 h-6 text-emerald-400 shrink-0" />
-                        <h3 className="font-bold text-slate-100 truncate text-sm sm:text-base">Consultation History</h3>
+                        <FileText className={`w-6 h-6 shrink-0 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
+                        <h3 className={`font-bold truncate text-sm sm:text-base ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Consultation History</h3>
                       </div>
                       <button
                         onClick={() => setActiveTab('dashboard')}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600 shrink-0"
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shrink-0 ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                            : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                        }`}
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Go Back</span>
@@ -5378,11 +5449,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           return (
                             <div
                               key={sess.id}
-                              className="bg-slate-950 border border-slate-850 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-slate-750 transition-colors"
+                              className={`p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors border ${
+                                theme === 'light'
+                                  ? 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                                  : 'bg-slate-950 border-slate-850 hover:border-slate-750'
+                              }`}
                             >
                               <div className="space-y-1.5 flex-1">
                                 <div className="flex items-center space-x-2 flex-wrap gap-1">
-                                  <span className="text-xs font-black text-slate-200">{sess.user_name}</span>
+                                  <span className={`text-xs font-black ${theme === 'light' ? 'text-slate-900' : 'text-slate-200'}`}>{sess.user_name}</span>
                                   <span className="text-[9px] font-sans text-slate-500">Session ID: #{sess.id}</span>
                                   {isUserBlocked && (
                                     <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[8px] font-extrabold uppercase">
@@ -5390,10 +5465,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs text-slate-400 font-sans">
-                                  Duration: <strong className="text-slate-200">{sess.duration_minutes} Mins</strong> • Rate: ₹{sess.price_per_minute}/min
+                                <p className={`text-xs font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                                  Duration: <strong className={theme === 'light' ? 'text-slate-900 font-bold' : 'text-slate-200'}>{sess.duration_minutes} Mins</strong> • Rate: ₹{sess.price_per_minute}/min
                                 </p>
-                                <div className="text-[11px] text-emerald-400 font-mono">
+                                <div className={`text-[11px] font-mono ${theme === 'light' ? 'text-emerald-700 font-bold' : 'text-emerald-400'}`}>
                                   Net Earnings: <strong>₹{sess.consultant_earnings.toFixed(2)}</strong> (after platform commission)
                                 </div>
                                 {sess.refunded_amount > 0 && (
@@ -5402,7 +5477,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   </div>
                                 )}
                                 {sess.rating && (
-                                  <div className="flex items-center space-x-2 mt-1.5 bg-slate-900/50 p-1.5 rounded-lg border border-slate-800/40 w-fit">
+                                  <div className={`flex items-center space-x-2 mt-1.5 p-1.5 rounded-lg border w-fit ${
+                                    theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-slate-900/50 border-slate-800/40'
+                                  }`}>
                                     <div className="flex items-center text-amber-400">
                                       {[...Array(5)].map((_, i) => (
                                         <Star
@@ -5412,13 +5489,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                       ))}
                                     </div>
                                     {sess.review_text && (
-                                      <span className="text-[10px] text-slate-300 italic font-sans" title={sess.review_text}>
+                                      <span className={`text-[10px] italic font-sans ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`} title={sess.review_text}>
                                         "{sess.review_text}"
                                       </span>
                                     )}
                                   </div>
                                 )}
-                                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-900/60 text-[10px] text-slate-500 font-sans">
+                                <div className={`flex items-center justify-between gap-2 pt-2 border-t text-[10px] text-slate-500 font-sans ${
+                                  theme === 'light' ? 'border-slate-200' : 'border-slate-900/60'
+                                }`}>
                                   <span>
                                     Date: {new Date(sess.created_at).toLocaleString()}
                                   </span>
@@ -5496,10 +5575,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   </div>
 
                   {/* Blocked Users Card */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4 text-left">
-                    <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
+                  <div className={`border rounded-2xl p-6 shadow-lg space-y-4 text-left ${
+                    theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-880 text-slate-100'
+                  }`}>
+                    <div className={`flex items-center space-x-2 pb-2 border-b ${
+                      theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                    }`}>
                       <ShieldAlert className="w-5 h-5 text-rose-400" />
-                      <h3 className="font-bold text-slate-100">Blocked Clients List</h3>
+                      <h3 className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Blocked Clients List</h3>
                     </div>
 
                     <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
@@ -5507,9 +5590,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         <div className="text-center py-6 text-slate-500 text-xs font-sans">No clients are currently blocked.</div>
                       ) : (
                         blockedUsers.map((b) => (
-                          <div key={b.id} className="bg-slate-950 border border-slate-850 px-4 py-3 rounded-xl flex items-center justify-between">
+                          <div key={b.id} className={`px-4 py-3 rounded-xl flex items-center justify-between border ${
+                            theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                          }`}>
                             <div className="space-y-0.5">
-                              <span className="text-xs font-bold text-slate-200">{b.user_name}</span>
+                              <span className={`text-xs font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-200'}`}>{b.user_name}</span>
                               <p className="text-[9px] text-slate-500 font-sans">Blocked on: {new Date(b.created_at).toLocaleDateString()}</p>
                             </div>
                             <button

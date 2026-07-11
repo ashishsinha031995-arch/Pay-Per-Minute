@@ -71,7 +71,7 @@ for (const em of emails) {
   if (existingProcessed) {
     // Update password or other info if it was a newer email
     existingProcessed.password = password;
-    existingProcessed.planId = planId;
+    existingProcessed.plan_id = planId;
     continue;
   }
 

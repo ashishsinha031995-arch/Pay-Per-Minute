@@ -13,9 +13,10 @@ import {
 } from './AdminSubSections';
 import { downloadInvoice } from '../../utils/invoiceHelper';
 
-const normalizeCategory = (cat: string) => {
-  if (!cat) return 'Consultants';
-  const c = cat.trim();
+const normalizeCategory = (cat: any) => {
+  if (cat === null || cat === undefined) return 'Consultants';
+  const str = String(cat).trim();
+  if (!str) return 'Consultants';
   const mapping: Record<string, string> = {
     'Astrologer': 'Astrologers', 'Astrologers': 'Astrologers',
     'Influencer': 'Influencers', 'Influencers': 'Influencers',
@@ -28,7 +29,7 @@ const normalizeCategory = (cat: string) => {
     'Coach': 'Coaches', 'Coaches': 'Coaches',
     'Consultant': 'Consultants', 'Consultants': 'Consultants'
   };
-  return mapping[c] || c;
+  return mapping[str] || str;
 };
 
 export function AdminPanel() {
@@ -2337,7 +2338,7 @@ export function AdminPanel() {
                                     setEditingConsultant(cons);
                                     setConsName(cons.display_name || '');
                                     setConsEmail(cons.email || '');
-                                    setConsPhone((cons.phone || '').replace(/^\+91/, ''));
+                                    setConsPhone(String(cons.phone || '').replace(/^\+91/, ''));
                                     setConsUsername(cons.username || '');
                                     setConsPassword(cons.password || '');
                                     setConsBio(cons.bio || '');

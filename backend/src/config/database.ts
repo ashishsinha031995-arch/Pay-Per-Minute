@@ -25,7 +25,8 @@ const tables = [
   'support_ticket_replies',
   'manual_wallet_adjustments',
   'consultant_schedules',
-  'consultant_followers'
+  'consultant_followers',
+  'archived_history'
 ];
 
 const mongoSchemas: Record<string, mongoose.Schema> = {};
@@ -189,6 +190,7 @@ async function syncFromMongoToSQLite() {
       }
     });
 
+    originalDb.prepare(`DELETE FROM ${table}`).run();
     transaction(docs);
 
     // Securely sync any local SQLite rows that are missing in MongoDB back to MongoDB
@@ -235,6 +237,34 @@ async function syncFromSQLiteToMongo() {
   console.log('[MongoDB] Database seeding to MongoDB completed successfully.');
 }
 
+function archiveRowState(tableName: string, ids: any[], primaryKey: string, action: 'UPDATE' | 'DELETE') {
+  try {
+    if (tableName === 'archived_history') return;
+    
+    for (const id of ids) {
+      const row = originalDb.prepare(`SELECT * FROM ${tableName} WHERE ${primaryKey} = ?`).get(id) as any;
+      if (row) {
+        const timestamp = new Date().toISOString();
+        const dataJson = JSON.stringify(row);
+        
+        // Insert into SQLite archived_history using originalDb directly to avoid recursion
+        const result = originalDb.prepare(`
+          INSERT INTO archived_history (table_name, record_id, action, data_json, timestamp)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(tableName, String(id), action, dataJson, timestamp);
+
+        // Sync to MongoDB
+        const rowid = result.lastInsertRowid;
+        if (rowid) {
+          syncRowidToMongo('archived_history', Number(rowid), 'id');
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[Archive History Error] Failed to archive ${action} state for table ${tableName}:`, err);
+  }
+}
+
 class StatementWrapper {
   private stmt: any;
   private sql: string;
@@ -258,6 +288,15 @@ class StatementWrapper {
     let affectedIds: any[] = [];
     if (tableName && /^\s*(UPDATE|DELETE)/i.test(this.sql)) {
       affectedIds = getAffectedIds(this.sql, params, primaryKey);
+    }
+
+    // Capture states BEFORE they are updated or deleted so that they can never be permanently lost
+    if (tableName && affectedIds.length > 0) {
+      if (/^\s*DELETE/i.test(this.sql)) {
+        archiveRowState(tableName, affectedIds, primaryKey, 'DELETE');
+      } else if (/^\s*UPDATE/i.test(this.sql)) {
+        archiveRowState(tableName, affectedIds, primaryKey, 'UPDATE');
+      }
     }
 
     const result = this.stmt.run(...params);
@@ -563,6 +602,15 @@ export function initDb() {
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       FOREIGN KEY (consultant_id) REFERENCES consultants (id) ON DELETE CASCADE,
       UNIQUE(user_id, consultant_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS archived_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      data_json TEXT NOT NULL,
+      timestamp TEXT NOT NULL
     );
   `);
 
@@ -1089,11 +1137,8 @@ export function initDb() {
 
     // Fix any corrupted or Giphy URLs for existing users
     try {
-      const maleReplacement = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150';
-      const femaleReplacement = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150';
-      originalDb.prepare("UPDATE users SET photo_url = ? WHERE LOWER(gender) = 'female' AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(femaleReplacement);
-      originalDb.prepare("UPDATE users SET photo_url = ? WHERE (LOWER(gender) != 'female' OR gender IS NULL) AND (photo_url LIKE '%giphy.com%' OR photo_url IS NULL OR photo_url = '')").run(maleReplacement);
-      console.log('[Database] Corrected existing users with broken Giphy profile photos.');
+      // Disabled automatic bulk updates to user photo_urls to prevent overwriting of legitimate profile photos.
+      console.log('[Database] Skipped automatic bulk photo_url updates to protect profile data integrity.');
     } catch (err) {
       console.error('Error correcting existing users with Giphy photos:', err);
     }

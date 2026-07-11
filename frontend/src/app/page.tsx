@@ -7,6 +7,41 @@ import { ConsultantProfile } from '../components/layouts/ConsultantProfile';
 import { ChatRoom } from '../components/modals/ChatRoom';
 import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy, Smartphone } from 'lucide-react';
 
+const saveConsultantSession = (consultant: any) => {
+  if (!consultant) {
+    localStorage.removeItem('consultant_session');
+    return;
+  }
+  const cleaned = { ...consultant };
+  delete cleaned.aadhaar_photo_url;
+  delete cleaned.pan_photo_url;
+  delete cleaned.aadhaar_number;
+  delete cleaned.pan_number;
+  delete cleaned.bank_account_number;
+  delete cleaned.bank_account_holder_name;
+  delete cleaned.bank_ifsc_code;
+  delete cleaned.bank_name;
+  
+  for (const key of Object.keys(cleaned)) {
+    if (key !== 'photo_url' && typeof cleaned[key] === 'string' && cleaned[key].length > 10000) {
+      cleaned[key] = cleaned[key].slice(0, 100) + '... (truncated)';
+    }
+  }
+  
+  try {
+    localStorage.setItem('consultant_session', JSON.stringify(cleaned));
+  } catch (err) {
+    console.error('Failed to save consultant_session to localStorage:', err);
+    try {
+      delete cleaned.photo_url;
+      delete cleaned.bio;
+      localStorage.setItem('consultant_session', JSON.stringify(cleaned));
+    } catch (innerErr) {
+      console.error('Failed to save minimal consultant_session to localStorage:', innerErr);
+    }
+  }
+};
+
 export default function AppPage() {
   // Navigation & Role states
   const [currentRole, setCurrentRole] = useState<'user' | 'consultant' | 'admin'>(() => {
@@ -406,7 +441,7 @@ export default function AppPage() {
       };
 
       // Store session
-      localStorage.setItem('consultant_session', JSON.stringify(newConsultantSession));
+      saveConsultantSession(newConsultantSession);
       localStorage.setItem('current_role', 'consultant');
       sessionStorage.setItem('current_role', 'consultant');
     } catch (err: any) {
@@ -492,7 +527,7 @@ export default function AppPage() {
         if (!res.ok) throw new Error(data.error || 'Consultant authentication failed');
         
         // Save consultant session and switch role
-        localStorage.setItem('consultant_session', JSON.stringify(data.consultant));
+        saveConsultantSession(data.consultant);
         localStorage.setItem('current_role', 'consultant');
         sessionStorage.setItem('current_role', 'consultant');
         setCurrentRole('consultant');

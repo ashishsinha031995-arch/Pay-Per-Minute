@@ -1579,7 +1579,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       <History className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
                         activeDashboardTab === 'history' ? 'text-slate-950' : 'text-emerald-400'
                       }`} />
-                      <span>Past Consultation Chats</span>
+                      <span>Consultation History</span>
                     </button>
 
                     <button
@@ -1598,7 +1598,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
                         activeDashboardTab === 'support' ? 'text-slate-950' : 'text-emerald-400'
                       }`} />
-                      <span>Help & Customer Support</span>
+                      <span>Customer Support</span>
                     </button>
 
                     <button
@@ -2214,9 +2214,18 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'history' && (
         <div className="bg-slate-900/40 p-4 sm:p-6 rounded-3xl border border-slate-800/80 space-y-6">
-          <div className="flex items-center space-x-2 pb-2 border-b border-slate-850">
-            <History className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-sm text-slate-200">Consultation History</h3>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-850">
+            <div className="flex items-center space-x-2">
+              <History className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-bold text-sm text-slate-200">Consultation History</h3>
+            </div>
+            <button
+              onClick={() => setActiveDashboardTab('advisors')}
+              className="flex items-center space-x-1 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 transition-all"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back</span>
+            </button>
           </div>
 
           {!viewingPastSessionMessages ? (
@@ -2463,9 +2472,18 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       {currentUser && !selectedConsultant && activeDashboardTab === 'support' && (
         <div className="bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80 space-y-6 text-left" id="user-support-panel">
-          <div className="flex items-center space-x-2 pb-2 border-b border-slate-850">
-            <HelpCircle className="w-4 h-4 text-emerald-400" />
-            <h3 className="font-bold text-sm text-slate-200">Customer Support & Assistance Panel</h3>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-850">
+            <div className="flex items-center space-x-2">
+              <HelpCircle className="w-4 h-4 text-emerald-400" />
+              <h3 className="font-bold text-sm text-slate-200">Customer Support</h3>
+            </div>
+            <button
+              onClick={() => setActiveDashboardTab('advisors')}
+              className="flex items-center space-x-1 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 transition-all"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
