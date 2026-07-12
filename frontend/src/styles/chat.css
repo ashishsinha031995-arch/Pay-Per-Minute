@@ -38,8 +38,8 @@
 
 /* Special ultra-thin grey scrollbar for consultation history list (2x thinner than 4px) */
 .sessions-scrollbar::-webkit-scrollbar {
-  width: 2px;
-  height: 2px;
+  width: 1px;
+  height: 1px;
 }
 
 .sessions-scrollbar::-webkit-scrollbar-track {

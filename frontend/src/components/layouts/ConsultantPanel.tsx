@@ -4951,26 +4951,22 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           </button>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className={`divide-y ${theme === 'light' ? 'divide-slate-100' : 'divide-slate-800'}`}>
                           {sessions.slice(0, 3).length === 0 ? (
                             <p className="text-xs text-slate-500 py-4 text-center">No consultations registered yet.</p>
                           ) : (
                             sessions.slice(0, 3).map((sess) => (
-                              <div key={sess.id} className={`p-4 rounded-2xl flex items-center justify-between text-xs transition-colors border ${
-                                theme === 'light'
-                                  ? 'bg-slate-50 border-slate-100 hover:border-slate-200'
-                                  : 'bg-slate-950 border-slate-850 hover:border-slate-800'
-                              }`}>
-                                <div className="space-y-1">
-                                  <div className="flex items-center space-x-2">
-                                    <span className={`font-extrabold ${theme === 'light' ? 'text-slate-950' : 'text-slate-200'}`}>{sess.user_name}</span>
+                              <div key={sess.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors">
+                                <div className="flex-1 min-w-0 space-y-1 text-left">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`font-extrabold truncate max-w-[150px] sm:max-w-none ${theme === 'light' ? 'text-slate-950' : 'text-slate-200'}`}>{sess.user_name}</span>
                                     <span className="text-[9px] font-sans text-slate-500">ID: #{sess.id}</span>
                                   </div>
                                   <p className={`font-sans text-[11px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                                     {sess.duration_minutes} Mins @ ₹{sess.price_per_minute}/min
                                   </p>
                                   {sess.rating && (
-                                    <div className="flex items-center space-x-2 mt-1">
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
                                       <div className="flex items-center text-amber-400">
                                         {[...Array(5)].map((_, i) => (
                                           <Star
@@ -4980,7 +4976,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                         ))}
                                       </div>
                                       {sess.review_text && (
-                                        <span className={`text-[10px] italic font-sans truncate max-w-[150px] ${
+                                        <span className={`text-[10px] italic font-sans truncate max-w-[180px] sm:max-w-xs ${
                                           theme === 'light' ? 'text-slate-500' : 'text-slate-400'
                                         }`} title={sess.review_text}>
                                           "{sess.review_text}"
@@ -4989,18 +4985,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex items-center space-x-4">
-                                  <div className="text-right">
+                                <div className="flex items-center justify-between sm:justify-end sm:space-x-4">
+                                  <div className="text-left sm:text-right">
                                     <span className={`font-mono font-bold text-sm ${
                                       theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
                                     }`}>₹{sess.consultant_earnings.toFixed(2)}</span>
                                     <span className="text-[9px] text-slate-500 block">Net Earning</span>
                                   </div>
-                                  <button className={`p-1 rounded-md ${
-                                    theme === 'light' ? 'text-slate-400 hover:text-slate-600' : 'text-slate-500 hover:text-slate-300'
-                                  }`}>
-                                    <MoreVertical className="w-4 h-4" />
-                                  </button>
                                 </div>
                               </div>
                             ))
@@ -5560,7 +5551,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </button>
                     </div>
 
-                    <div className="flex flex-col max-h-[550px] overflow-y-auto pr-1 sessions-scrollbar">
+                    <div className="flex flex-col max-h-[550px] overflow-y-auto overflow-x-hidden pr-1 sessions-scrollbar">
                       {sessions.length === 0 ? (
                         <div className="text-center py-12 text-slate-500 text-xs font-sans">No sessions recorded yet for your account.</div>
                       ) : (
@@ -5661,10 +5652,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   </div>
 
                                   {sess.rating && (
-                                    <div className="flex justify-between items-center gap-4 whitespace-nowrap text-[12px] font-sans">
+                                    <div className="flex justify-between items-center gap-4 text-[12px] font-sans min-w-0">
                                       <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Rating & Review</span>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        <div className="flex items-center text-amber-400">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className="flex items-center text-amber-400 flex-shrink-0">
                                           {[...Array(5)].map((_, i) => (
                                             <Star
                                               key={i}
@@ -5673,7 +5664,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                           ))}
                                         </div>
                                         {sess.review_text && (
-                                          <span className="text-[10px] italic text-slate-500 truncate max-w-[150px]" title={sess.review_text}>
+                                          <span className="text-[10px] italic text-slate-500 truncate max-w-[100px] sm:max-w-[200px]" title={sess.review_text}>
                                             "{sess.review_text}"
                                           </span>
                                         )}
