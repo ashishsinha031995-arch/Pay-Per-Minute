@@ -44,6 +44,11 @@ export function startChatExpiryJob(io: Server) {
             session_id: sess.id,
             message: 'Chat request was missed by the consultant.'
           });
+          io.emit('consultant:session_update', {
+            consultant_id: Number(consultantId),
+            session_id: sess.id,
+            status: 'missed'
+          });
         }
       }
 
@@ -86,6 +91,11 @@ export function startChatExpiryJob(io: Server) {
                 session_id: sess.id,
                 message: 'Session has ended as advisor failed to participate.'
               });
+              io.emit('consultant:session_update', {
+                consultant_id: Number(consultantId),
+                session_id: sess.id,
+                status: 'missed'
+              });
               continue;
             }
 
@@ -117,6 +127,11 @@ export function startChatExpiryJob(io: Server) {
               session_id: sess.id,
               transcript,
               message: 'Session has run out of time and completed successfully.'
+            });
+            io.emit('consultant:session_update', {
+              consultant_id: Number(cid),
+              session_id: sess.id,
+              status: 'completed'
             });
           } else {
             // Calculate remaining seconds and optionally broadcast to keep clocks synchronized

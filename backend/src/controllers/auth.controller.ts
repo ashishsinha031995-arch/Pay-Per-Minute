@@ -196,15 +196,25 @@ export const forgotPasswordVerifyAndReset = async (req: Request, res: Response) 
     }
 
     const key = `${cleanRole}:${cleanEmail}`;
-    const record = forgotPasswordCodes.get(key);
+    let record = forgotPasswordCodes.get(key);
+
+    if (!record) {
+      // Fallback: search by email to see if any role has requested a code
+      for (const [mapKey, val] of forgotPasswordCodes.entries()) {
+        if (val.email === cleanEmail && val.code === cleanCode) {
+          record = val;
+          break;
+        }
+      }
+    }
 
     if (!record || record.code !== cleanCode) {
-      return res.status(400).json({ error: 'Galat verification code hai. Kripya check karein. (Incorrect verification code. Please check again.)' });
+      return res.status(400).json({ error: 'Incorrect verification code. Please check again.' });
     }
 
     if (Date.now() > record.expiresAt) {
       forgotPasswordCodes.delete(key);
-      return res.status(400).json({ error: 'Verification code expire ho chuka hai. Kripya naya code request karein. (Verification code has expired. Please request a new one.)' });
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
     }
 
     // Success! Update password

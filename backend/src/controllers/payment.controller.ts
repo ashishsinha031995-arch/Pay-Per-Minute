@@ -358,6 +358,11 @@ export const rejectSession = (req: Request, res: Response) => {
         session_id,
         message: 'Chat request was rejected by the consultant.'
       });
+      io.emit('consultant:session_update', {
+        consultant_id: Number(consultantId),
+        session_id,
+        status: 'rejected'
+      });
     }
 
     res.json({ success: true, status: 'rejected' });
@@ -544,11 +549,21 @@ export const endSessionManually = (req: Request, res: Response) => {
           session_id: sess.id,
           message: 'Session has ended as advisor failed to participate.'
         });
+        io.emit('consultant:session_update', {
+          consultant_id: Number(cid),
+          session_id: sess.id,
+          status: 'missed'
+        });
       } else {
         io.to(sess.id).emit('session:expired', {
           session_id: sess.id,
           transcript,
           message: `Session was manually ended. Talked for ${actualMinutes} mins.`
+        });
+        io.emit('consultant:session_update', {
+          consultant_id: Number(cid),
+          session_id: sess.id,
+          status: 'completed'
         });
       }
     }
@@ -717,6 +732,11 @@ export const cancelQueuedSession = (req: Request, res: Response) => {
       io.to(session_id).emit('session:cancelled', {
         session_id,
         message: 'You have exited the queue.'
+      });
+      io.emit('consultant:session_update', {
+        consultant_id: Number(consultantId),
+        session_id,
+        status: 'cancelled'
       });
       // Also notify consultant if it was pending
       if (sess.status === 'pending') {

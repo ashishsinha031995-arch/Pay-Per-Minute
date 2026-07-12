@@ -6,6 +6,7 @@ import { downloadInvoice } from '../../utils/invoiceHelper';
 import { CallMintLandingPage } from './CallMintLandingPage';
 import { ImageEditorModal } from '../modals/ImageEditorModal';
 import { ProfileChangesSuccessModal, ProfileChangeItem } from '../modals/ProfileChangesSuccessModal';
+import { compressImageBase64 } from '../../utils/helpers';
 
 const formatToLocalDateString = (dateStr: any) => {
   if (!dateStr) return '';
@@ -305,10 +306,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     setError(null);
     setSuccess(null);
     try {
+      console.log('[Image Optimization] Compressing profile photo...');
+      const compressedBase64 = await compressImageBase64(croppedBase64, 50 * 1024);
+
       const res = await fetch('/api/user/upload-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: croppedBase64 })
+        body: JSON.stringify({ image: compressedBase64 })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to upload photo');

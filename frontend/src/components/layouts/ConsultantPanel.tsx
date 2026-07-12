@@ -7,6 +7,7 @@ import { io } from 'socket.io-client';
 import { ImageEditorModal } from '../modals/ImageEditorModal';
 import { Crop } from 'lucide-react';
 import { ProfileChangesSuccessModal, ProfileChangeItem } from '../modals/ProfileChangesSuccessModal';
+import { compressImageBase64 } from '../../utils/helpers';
 
 interface ConsultantPanelProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant', isReadOnly?: boolean) => void;
@@ -808,10 +809,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     setSuccess(null);
 
     try {
+      console.log('[Image Optimization] Compressing consultant profile photo...');
+      const compressedBase64 = await compressImageBase64(croppedBase64, 50 * 1024);
+
       const res = await fetch('/api/user/upload-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: croppedBase64 })
+        body: JSON.stringify({ image: compressedBase64 })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to upload photo');
@@ -1307,6 +1311,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       }
     });
 
+    socket.on('consultant:session_update', (data) => {
+      if (Number(data.consultant_id) === Number(currentConsultant.id)) {
+        console.log(`[WebSocket] Session ${data.session_id} updated to ${data.status}. Refreshing consultant stats...`);
+        loadConsultantStatsAndStatus(currentConsultant.id, true);
+      }
+    });
+
+    const handleGlobalRefresh = () => {
+      console.log('[CustomEvent] refresh-consultant-stats triggered!');
+      loadConsultantStatsAndStatus(currentConsultant.id, true);
+    };
+    window.addEventListener('refresh-consultant-stats', handleGlobalRefresh);
+
     // Send a client-side heartbeat every 15 seconds to keep any background connection active
     const pingInterval = setInterval(() => {
       if (socket.connected) {
@@ -1329,6 +1346,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return () => {
       clearInterval(pingInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('refresh-consultant-stats', handleGlobalRefresh);
       socket.disconnect();
     };
   }, [currentConsultant?.id]);
@@ -1998,10 +2016,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         try {
+          console.log('[Image Optimization] Compressing Aadhaar KYC Document...');
+          const compressedBase64 = await compressImageBase64(base64String, 50 * 1024);
+
           const res = await fetch('/api/user/upload-photo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64String })
+            body: JSON.stringify({ image: compressedBase64 })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Upload failed');
@@ -2058,10 +2079,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         try {
+          console.log('[Image Optimization] Compressing PAN KYC Document...');
+          const compressedBase64 = await compressImageBase64(base64String, 50 * 1024);
+
           const res = await fetch('/api/user/upload-photo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64String })
+            body: JSON.stringify({ image: compressedBase64 })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Upload failed');
@@ -5319,6 +5343,21 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className={`font-extrabold truncate max-w-[150px] sm:max-w-none ${theme === 'light' ? 'text-slate-950' : 'text-slate-200'}`}>{sess.user_name}</span>
                                     <span className="text-[9px] font-sans text-slate-500">ID: #{sess.id}</span>
+                                    {sess.status === 'completed' && (
+                                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold">Completed</span>
+                                    )}
+                                    {sess.status === 'active' && (
+                                      <span className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold animate-pulse">Live Now</span>
+                                    )}
+                                    {sess.status === 'rejected' && (
+                                      <span className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold">Rejected</span>
+                                    )}
+                                    {sess.status === 'cancelled' && (
+                                      <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold">Cancelled</span>
+                                    )}
+                                    {sess.status === 'missed' && (
+                                      <span className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold">Missed</span>
+                                    )}
                                   </div>
                                   <p className={`font-sans text-[11px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                                     {sess.duration_minutes} Mins @ ₹{sess.price_per_minute}/min
@@ -6046,6 +6085,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                       )}
                                       {sess.status === 'rejected' && (
                                         <span className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold">Rejected</span>
+                                      )}
+                                      {sess.status === 'cancelled' && (
+                                        <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold">Cancelled</span>
                                       )}
                                       {sess.status === 'missed' && (
                                         <span className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold">Missed</span>

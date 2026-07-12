@@ -14,6 +14,7 @@ import {
   mockAuditLogs, mockSupportTickets, initialCoupons, mockBlogPages, systemRolesList,
   dailyRevenueTrendData, weeklyRevenueTrendData, dailySubscriptionSalesData
 } from './AdminMockData';
+import { compressImageBase64 } from '../../utils/helpers';
 
 interface DashboardGraphsProps {
   consultants?: any[];
@@ -2703,10 +2704,13 @@ export function SettingsPanel() {
     reader.onload = async () => {
       try {
         const base64String = reader.result as string;
+        console.log('[Image Optimization] Compressing custom avatar image...');
+        const compressedBase64 = await compressImageBase64(base64String, 50 * 1024);
+
         const res = await fetch('/api/user/upload-photo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64String })
+          body: JSON.stringify({ image: compressedBase64 })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to upload image file');

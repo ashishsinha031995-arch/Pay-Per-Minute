@@ -12,6 +12,7 @@ import {
   SupportTicketsPanel, AuditLogsPanel, RoleManagementPanel, SettingsPanel 
 } from './AdminSubSections';
 import { downloadInvoice } from '../../utils/invoiceHelper';
+import { compressImageBase64 } from '../../utils/helpers';
 
 const normalizeCategory = (cat: any) => {
   if (cat === null || cat === undefined) return 'Consultants';
@@ -1224,10 +1225,13 @@ export function AdminPanel() {
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         try {
+          console.log('[Image Optimization] Compressing user photo...');
+          const compressedBase64 = await compressImageBase64(base64String, 50 * 1024);
+
           const res = await fetch('/api/user/upload-photo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64String })
+            body: JSON.stringify({ image: compressedBase64 })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Failed to upload photo');

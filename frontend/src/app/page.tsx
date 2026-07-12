@@ -670,6 +670,7 @@ export default function AppPage() {
             onClose={() => {
               setActiveSession(null);
               if (currentUser?.id) refreshUserProfile(currentUser.id);
+              window.dispatchEvent(new CustomEvent('refresh-consultant-stats'));
             }}
           />
         )}
@@ -762,13 +763,13 @@ export default function AppPage() {
 
             {/* Error / Success notification feeds */}
             {authError && (
-              <div className="bg-rose-500/10 text-rose-400 border border-rose-500/20 p-3 rounded-xl text-xs flex items-center space-x-2 font-mono">
+              <div className="bg-rose-500/10 text-rose-400 border border-rose-500/20 p-3 rounded-xl text-xs flex items-center space-x-2 font-sans font-medium">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 <span>{authError}</span>
               </div>
             )}
             {authSuccess && (
-              <div className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 p-3 rounded-xl text-xs flex items-center space-x-2 font-mono">
+              <div className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 p-3 rounded-xl text-xs flex items-center space-x-2 font-sans font-medium">
                 <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
                 <span>{authSuccess}</span>
               </div>
