@@ -13,3 +13,23 @@ html, body, button, input, select, textarea, label, a, span, p, h1, h2, h3, h4, 
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important;
 }
 
+/* Color the native browser date/time picker calendar and clock icons (right side) to emerald green */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(72%) sepia(61%) saturate(444%) hue-rotate(110deg) brightness(96%) contrast(92%);
+  cursor: pointer;
+}
+
+/* Style select dropdown arrows to use an elegant emerald green arrow icon */
+select {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2334d399' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>") !important;
+  background-position: right 0.75rem center !important;
+  background-repeat: no-repeat !important;
+  background-size: 1rem !important;
+  padding-right: 2.5rem !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+

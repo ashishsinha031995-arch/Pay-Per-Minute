@@ -197,28 +197,35 @@ export const forgotPasswordVerifyAndReset = async (req: Request, res: Response) 
 
     const key = `${cleanRole}:${cleanEmail}`;
     let record = forgotPasswordCodes.get(key);
+    let foundKey = key;
 
     if (!record) {
       // Fallback: search by email to see if any role has requested a code
       for (const [mapKey, val] of forgotPasswordCodes.entries()) {
-        if (val.email === cleanEmail && val.code === cleanCode) {
+        if (val.email === cleanEmail) {
           record = val;
+          foundKey = mapKey;
           break;
         }
       }
     }
 
-    if (!record || record.code !== cleanCode) {
+    if (!record) {
+      return res.status(400).json({ error: 'No verification code found for this email address. Please request a new code first.' });
+    }
+
+    if (record.code !== cleanCode) {
       return res.status(400).json({ error: 'Incorrect verification code. Please check again.' });
     }
 
     if (Date.now() > record.expiresAt) {
-      forgotPasswordCodes.delete(key);
-      return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+      forgotPasswordCodes.delete(foundKey);
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
     }
 
-    // Success! Update password
-    if (cleanRole === 'consultant') {
+    // Success! Update password using the correct role for this account
+    const targetRole = record.role || cleanRole;
+    if (targetRole === 'consultant') {
       db.prepare('UPDATE consultants SET password = ? WHERE LOWER(email) = ?').run(new_password, cleanEmail);
     } else {
       db.prepare('UPDATE users SET password = ? WHERE LOWER(email) = ?').run(new_password, cleanEmail);
@@ -226,7 +233,7 @@ export const forgotPasswordVerifyAndReset = async (req: Request, res: Response) 
 
     // Fetch user/consultant details for the email response
     let displayName = 'User';
-    if (cleanRole === 'consultant') {
+    if (targetRole === 'consultant') {
       const c = db.prepare('SELECT display_name FROM consultants WHERE LOWER(email) = ?').get(cleanEmail) as any;
       if (c) displayName = c.display_name;
     } else {
@@ -235,7 +242,7 @@ export const forgotPasswordVerifyAndReset = async (req: Request, res: Response) 
     }
 
     // Clear code from map
-    forgotPasswordCodes.delete(key);
+    forgotPasswordCodes.delete(foundKey);
 
     // Send confirmation email with the new password
     const subject = `Your CallMint Password Has Been Reset Successfully ✅`;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone, ChevronRight, Wifi, MoreVertical, MessageCircle, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone, ChevronRight, Wifi, MoreVertical, MessageCircle, Eye, EyeOff, AlertTriangle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
@@ -3637,7 +3637,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     >
                       <div className="flex items-center space-x-3">
                         <ShieldAlert className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
-                          activeTab === 'blocked' && hasActivePlan ? 'text-slate-950' : 'text-rose-450'
+                          activeTab === 'blocked' && hasActivePlan ? 'text-slate-950' : 'text-emerald-400'
                         }`} />
                         <span>Blocked Clients</span>
                       </div>
@@ -3953,7 +3953,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   }}
                   className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'blocked' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
                 >
-                  <ShieldAlert className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'blocked' ? 'text-slate-950' : 'text-rose-400'}`} />
+                  <ShieldAlert className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'blocked' ? 'text-slate-950' : 'text-emerald-400'}`} />
                   <span>Blocked Clients</span>
                   {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
@@ -5509,26 +5509,26 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                               <div className="space-y-2.5 text-xs">
                                 <div className={`flex items-center justify-between border-b pb-2 ${theme === 'light' ? 'border-slate-100' : 'border-slate-850/60'}`}>
-                                  <span className={`font-sans text-[10px] uppercase ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>Max Call Rate</span>
-                                  <strong className={theme === 'light' ? 'text-slate-800' : 'text-slate-200'}>₹{activePlan.max_consultant_rate}/min</strong>
+                                  <span className="font-sans text-[10px] uppercase text-slate-400">Max Call Rate</span>
+                                  <strong className="text-slate-200">₹{activePlan.max_consultant_rate}/min</strong>
                                 </div>
                                 {activePlan.support_hours && (
                                   <div className={`flex items-center justify-between border-b pb-2 ${theme === 'light' ? 'border-slate-100' : 'border-slate-850/60'}`}>
-                                    <span className={`font-sans text-[10px] uppercase ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>Official Support Hours</span>
-                                    <strong className={theme === 'light' ? 'text-slate-800' : 'text-slate-200'}>{activePlan.support_hours} Hours</strong>
+                                    <span className="font-sans text-[10px] uppercase text-slate-400">Official Support Hours</span>
+                                    <strong className="text-slate-200">{activePlan.support_hours} Hours</strong>
                                   </div>
                                 )}
                                 {activePlan.commission_rate !== undefined && (
                                   <div className={`flex items-center justify-between border-b pb-2 ${theme === 'light' ? 'border-slate-100' : 'border-slate-850/60'}`}>
-                                    <span className={`font-sans text-[10px] uppercase ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>Commission Charged</span>
-                                    <strong className={theme === 'light' ? 'text-slate-800' : 'text-slate-200'}>{activePlan.commission_rate}%</strong>
+                                    <span className="font-sans text-[10px] uppercase text-slate-400">Commission Charged</span>
+                                    <strong className="text-slate-200">{activePlan.commission_rate}%</strong>
                                   </div>
                                 )}
                               </div>
 
                               <div className={`p-4 rounded-xl border space-y-1 ${theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'}`}>
                                 <span className="text-[9px] text-slate-500 font-sans block uppercase">Countdown</span>
-                                <div className={`text-xs font-bold ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>
+                                <div className="text-xs font-bold text-slate-200">
                                   Renew subscription in <span className={`font-extrabold ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>{daysLeft}</span> Days
                                 </div>
                                 <span className="text-[9px] text-slate-500 block">Expires on: {expiry.toLocaleDateString()}</span>
@@ -5550,7 +5550,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         theme === 'light' ? 'border-slate-100' : 'border-slate-800'
                       }`}>
                         <Flame className={`w-5 h-5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
-                        <h3 className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Consultant Presence Settings</h3>
+                        <h3 className="font-bold text-slate-100">Consultant Presence Settings</h3>
                       </div>
 
                       <div className="space-y-4">
@@ -5559,7 +5559,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
                         }`}>
                           <div>
-                            <span className={`text-xs font-bold block ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>Online / Visible on Portal</span>
+                            <span className="text-xs font-bold block text-slate-200">Online / Visible on Portal</span>
                             <span className="text-[10px] text-slate-500">Clients can view you and initiate chat requests</span>
                           </div>
                           <button
@@ -5576,7 +5576,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
                         }`}>
                           <div>
-                            <span className={`text-xs font-bold block ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>Busy / Engaged Status</span>
+                            <span className="text-xs font-bold block text-slate-200">Busy / Engaged Status</span>
                             <span className="text-[10px] text-slate-500">Puts a busy badge on your public booking profile</span>
                           </div>
                           <button
@@ -5609,7 +5609,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         theme === 'light' ? 'border-slate-100' : 'border-slate-800'
                       }`}>
                         <Coins className={`w-5 h-5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
-                        <h3 className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Monthly Salary Cycle</h3>
+                        <h3 className="font-bold text-slate-100">Monthly Salary Cycle</h3>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-400">
@@ -5627,7 +5627,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                         <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'}`}>
                           <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block mb-1">Ongoing Unbilled Cycle</span>
-                          <strong className={`text-base font-mono block ${theme === 'light' ? 'text-slate-950 font-black' : 'text-slate-200'}`}>₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
+                          <strong className="text-base font-mono block text-slate-100">₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
                           <span className="text-[9px] text-slate-500 block mt-1">Rolling into next month's cutoff</span>
                         </div>
                       </div>
@@ -5671,7 +5671,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     }`}>
                       <div className="flex items-center space-x-2">
                         <Settings2 className="w-5 h-5 text-emerald-400" />
-                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Edit Profile</h3>
+                        <h3 className="font-bold font-sans text-slate-100">Edit Profile</h3>
                       </div>
                       <button
                         type="button"
@@ -5690,9 +5690,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     <form onSubmit={handleUpdateProfile} className="flex-1 flex flex-col min-h-0">
                       {/* Scrollable container */}
                       <div className="flex-1 flex flex-col max-h-none sm:max-h-[600px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0 space-y-6 sm:mt-6">
-                    {/* ACCOUNT CREDENTIALS & SECURITY */}
+                    {/* ACCOUNT CREDENTIALS */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
-                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-sans">🔒 Account Credentials & Secure Info</h4>
+                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-sans">🔒 Account Credentials</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="block text-[11px] font-sans text-slate-400">Username (Unique Public URL Slug)</label>
@@ -5744,14 +5744,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             🔒 Phone number is locked after registration.
                           </p>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* PUBLIC LISTING DETAILS */}
-                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
-                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-sans">🌟 Public Profile Listing & Specialties</h4>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="block text-[11px] font-sans text-slate-400">Expertise Category</label>
                           <select
@@ -5791,17 +5784,6 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             placeholder="e.g. English, Hindi, Punjabi"
                             value={languages}
                             onChange={(e) => setLanguages(e.target.value)}
-                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="block text-[11px] font-sans text-slate-400">Key Specializations (Comma separated)</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Vedic Astrology, Relationships, Finance"
-                            value={specializations}
-                            onChange={(e) => setSpecializations(e.target.value)}
                             className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
                           />
                         </div>
@@ -5926,13 +5908,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       type="submit"
                       className="bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 py-3 rounded-xl text-xs font-extrabold w-full transition-all uppercase tracking-wider shadow-lg hover:shadow-emerald-500/5"
                     >
-                      Save Profile & Consultation Settings
+                      Save Changes
                     </button>
-                    {profileFeedbackSuccess && (
-                      <p className="text-xs text-emerald-400 font-bold mt-2 text-center bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl">
-                        ✓ {profileFeedbackSuccess}
-                      </p>
-                    )}
                     {profileFeedbackError && (
                       <p className="text-xs text-rose-400 font-bold mt-2 text-center bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-xl">
                         ✗ {profileFeedbackError}
@@ -5976,7 +5953,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     }`}>
                       <div className="flex items-center space-x-2 min-w-0">
                         <FileText className={`w-6 h-6 shrink-0 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
-                        <h3 className={`font-bold truncate text-sm sm:text-base ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Consultation History</h3>
+                        <h3 className="font-bold truncate text-sm sm:text-base text-slate-100">Consultation History</h3>
                       </div>
                       <button
                         onClick={() => setActiveTab('dashboard')}
@@ -6014,9 +5991,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   </div>
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1.5">
-                                      <p className={`font-semibold text-[13px] ${
-                                        theme === 'light' ? 'text-slate-800' : 'text-slate-100'
-                                      }`}>
+                                      <p className="font-semibold text-[13px] text-slate-100">
                                         {sess.user_name}
                                       </p>
                                       {isUserBlocked && (
@@ -6035,12 +6010,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 <div className="space-y-2 pt-1 text-[12px] font-sans">
                                   <div className="flex justify-between items-center gap-4 whitespace-nowrap">
                                     <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Duration</span>
-                                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'} flex-shrink-0`}>{sess.duration_minutes} mins</span>
+                                    <span className="font-semibold text-slate-300 flex-shrink-0">{sess.duration_minutes} mins</span>
                                   </div>
 
                                   <div className="flex justify-between items-center gap-4 whitespace-nowrap">
                                     <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Rate</span>
-                                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'} flex-shrink-0`}>₹{sess.price_per_minute}/min</span>
+                                    <span className="font-semibold text-slate-300 flex-shrink-0">₹{sess.price_per_minute}/min</span>
                                   </div>
 
                                   <div className="flex justify-between items-center gap-4 whitespace-nowrap">
@@ -6059,7 +6034,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                                   <div className="flex justify-between items-center gap-4 whitespace-nowrap">
                                     <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Date & Time</span>
-                                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'} flex-shrink-0`}>
+                                    <span className="font-semibold text-slate-300 flex-shrink-0">
                                       {new Date(sess.created_at).toLocaleString('en-US', {
                                         year: 'numeric',
                                         month: 'numeric',
@@ -6219,7 +6194,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     }`}>
                       <div className="flex items-center space-x-2 min-w-0">
                         <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
-                        <h3 className={`font-bold truncate text-sm sm:text-base ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Blocked Clients</h3>
+                        <h3 className="font-bold truncate text-sm sm:text-base text-slate-100">Blocked Clients</h3>
                       </div>
                       <button
                         onClick={() => setActiveTab('dashboard')}
@@ -6244,7 +6219,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
                           }`}>
                             <div className="space-y-0.5">
-                              <span className={`text-xs font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-200'}`}>{b.user_name}</span>
+                              <span className="text-xs font-bold text-slate-100">{b.user_name}</span>
                               <p className="text-[9px] text-slate-500 font-sans">Blocked on: {new Date(b.created_at).toLocaleDateString()}</p>
                             </div>
                             <button
@@ -6293,7 +6268,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     }`}>
                       <div className="flex items-center space-x-2">
                         <UserCheck className="w-5 h-5 text-emerald-400" />
-                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>KYC Details</h3>
+                        <h3 className="font-bold font-sans text-slate-100">KYC Details</h3>
                       </div>
                       <button
                         onClick={() => setActiveTab('dashboard')}
@@ -6406,7 +6381,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 title="Click to preview full image"
                               />
                               <div className="text-left">
-                                <span className={`text-[10px] font-bold block ${theme === 'light' ? 'text-slate-700' : 'text-slate-400'}`}>Aadhaar Card Attachment Verified</span>
+                                <span className="text-[10px] font-bold block text-slate-400">Aadhaar Card Attachment Verified</span>
                                 <span className={`text-[9px] font-mono block truncate max-w-[120px] sm:max-w-[220px] ${
                                   theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
                                 }`}>{aadhaarPhotoUrl}</span>
@@ -6511,7 +6486,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 title="Click to preview full image"
                               />
                               <div className="text-left">
-                                <span className={`text-[10px] font-bold block ${theme === 'light' ? 'text-slate-700' : 'text-slate-400'}`}>PAN Card Attachment Verified</span>
+                                <span className="text-[10px] font-bold block text-slate-400">PAN Card Attachment Verified</span>
                                 <span className={`text-[9px] font-mono block truncate max-w-[120px] sm:max-w-[220px] ${
                                   theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
                                 }`}>{panPhotoUrl}</span>
@@ -6606,7 +6581,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     }`}>
                       <div className="flex items-center space-x-2">
                         <Calendar className="w-5 h-5 text-emerald-400" />
-                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Availability Schedule</h3>
+                        <h3 className="font-bold font-sans text-slate-100">Availability Schedule</h3>
                       </div>
                       <button
                         type="button"
@@ -6817,7 +6792,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     }`}>
                       <div className="flex items-center space-x-2">
                         <Wallet className="w-5 h-5 text-emerald-400" />
-                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Bank Details For Payout</h3>
+                        <h3 className="font-bold font-sans text-slate-100">Bank Details For Payout</h3>
                       </div>
                       <button
                         onClick={() => setActiveTab('dashboard')}
@@ -7240,7 +7215,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     }`}>
                       <div className="flex items-center space-x-2">
                         <Users className="w-5 h-5 text-emerald-400" />
-                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Your Followers</h3>
+                        <h3 className="font-bold font-sans text-slate-100">Your Followers</h3>
                       </div>
                       <button
                         onClick={() => setActiveTab('dashboard')}
@@ -7298,14 +7273,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     </div>
                                   )}
                                   <div>
-                                    <h4 className={`font-bold text-sm ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>
+                                    <h4 className="font-bold text-sm text-slate-100">
                                       {follower.display_name || 'Anonymous User'}
                                     </h4>
                                   </div>
                                 </div>
                                 <div className="text-right">
                                   <span className="text-[10px] text-slate-500 block uppercase font-sans tracking-wider">Followed on</span>
-                                  <span className={`text-xs font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
+                                  <span className="text-xs font-sans text-slate-300">
                                     {follower.created_at ? new Date(follower.created_at).toLocaleDateString() : 'N/A'}
                                   </span>
                                 </div>
@@ -7354,7 +7329,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <Bell className="w-5 h-5 animate-pulse" />
                         </div>
                         <div className="min-w-0 text-left">
-                          <h3 className={`font-extrabold text-sm sm:text-base font-sans tracking-tight leading-normal truncate ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Notifications</h3>
+                          <h3 className="font-extrabold text-sm sm:text-base font-sans tracking-tight leading-normal truncate text-slate-100">Notifications</h3>
                           <p className="text-[10px] text-slate-400 truncate hidden sm:block">Official updates and policy announcements.</p>
                         </div>
                       </div>

@@ -1044,7 +1044,7 @@ export default function AppPage() {
                     <>
                       {forgotStep === 'email' ? (
                         <div>
-                          <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">Registered Email Address *</label>
+                          <label className="block text-xs font-semibold tracking-wide text-slate-400 mb-1.5 uppercase">Registered Email Address *</label>
                           <div className="relative">
                             <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">@</span>
                             <input
@@ -1060,13 +1060,13 @@ export default function AppPage() {
                       ) : (
                         <div className="space-y-4">
                           <div>
-                            <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase font-medium">Resetting Account</label>
+                            <label className="block text-xs font-semibold tracking-wide text-slate-400 mb-1.5 uppercase">Resetting Account</label>
                             <div className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl px-4 py-2.5 opacity-80">
                               {forgotEmail} ({authRole === 'consultant' ? 'Consultant' : 'User'})
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase font-medium">Verification Code (6-Digit) *</label>
+                            <label className="block text-xs font-semibold tracking-wide text-slate-400 mb-1.5 uppercase">Verification Code (6-Digit) *</label>
                             <div className="relative">
                               <Key className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
                               <input
@@ -1075,12 +1075,12 @@ export default function AppPage() {
                                 placeholder="Enter 6-digit code"
                                 value={verificationCode}
                                 onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors font-sans tracking-widest font-bold"
                               />
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase font-bold text-emerald-400">Choose New Password *</label>
+                            <label className="block text-xs font-bold tracking-wide text-emerald-400 mb-1.5 uppercase">Choose New Password *</label>
                             <div className="relative">
                               <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
                               <input
