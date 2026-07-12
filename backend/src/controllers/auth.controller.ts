@@ -89,7 +89,214 @@ export const userLogin = (req: Request, res: Response) => {
   }
 };
 
+const forgotPasswordCodes = new Map<string, { code: string, expiresAt: number, email: string, role: 'user' | 'consultant' }>();
+
+export const forgotPasswordSendCode = async (req: Request, res: Response) => {
+  try {
+    const { email, role } = req.body;
+    if (!email || !role) {
+      return res.status(400).json({ error: 'Email and role (user or consultant) are required' });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanRole = role.trim().toLowerCase();
+
+    if (cleanRole !== 'user' && cleanRole !== 'consultant') {
+      return res.status(400).json({ error: 'Invalid role. Must be user or consultant.' });
+    }
+
+    let record: any = null;
+    if (cleanRole === 'consultant') {
+      record = db.prepare('SELECT id, display_name FROM consultants WHERE LOWER(email) = ?').get(cleanEmail);
+    } else {
+      record = db.prepare('SELECT id, display_name FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+    }
+
+    if (!record) {
+      return res.status(404).json({ error: 'Yeh email address registered nahi hai hamare system me. (This email is not registered in our system.)' });
+    }
+
+    // Generate 6 digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 mins
+
+    const key = `${cleanRole}:${cleanEmail}`;
+    forgotPasswordCodes.set(key, { code, expiresAt, email: cleanEmail, role: cleanRole as 'user' | 'consultant' });
+
+    // Send the email
+    const subject = `Your Password Reset Verification Code - CallMint 🔐`;
+    const textBody = `
+Dear ${record.display_name || 'User'},
+
+We received a request to reset your password on CallMint.
+
+Your verification code is: ${code}
+
+This code is valid for 10 minutes. If you did not request a password reset, you can safely ignore this email.
+
+Best Regards,
+The CallMint Team
+    `.trim();
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Reset Code</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0f172a; font-family: 'Segoe UI', sans-serif; color: #f8fafc;">
+  <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 40px auto; background-color: #1e293b; border-radius: 12px; border: 1px solid #334155;">
+    <tr>
+      <td align="center" style="padding: 30px 20px; background-color: #10b981; border-top-left-radius: 11px; border-top-right-radius: 11px;">
+        <h1 style="margin: 0; font-size: 24px; color: #0f172a; font-weight: 800;">CallMint Password Reset</h1>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 30px 20px;">
+        <p style="font-size: 16px; color: #cbd5e1;">Hello ${record.display_name || 'User'},</p>
+        <p style="font-size: 15px; color: #cbd5e1; line-height: 1.6;">We received a request to reset your account password. Use the verification code below to generate a new password:</p>
+        <div style="background-color: #0f172a; padding: 20px; border-radius: 8px; text-align: center; margin: 25px 0; border: 1px solid #334155;">
+          <span style="font-size: 32px; font-weight: 800; color: #10b981; letter-spacing: 4px; font-family: monospace;">${code}</span>
+        </div>
+        <p style="font-size: 14px; color: #94a3b8; line-height: 1.6;">This code is valid for <strong>10 minutes</strong>. If you did not make this request, please secure your account immediately or contact support.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 15px 20px; background-color: #0f172a; border-bottom-left-radius: 11px; border-bottom-right-radius: 11px; font-size: 12px; color: #64748b; text-align: center;">
+        &copy; 2026 CallMint Inc. All rights reserved.
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `.trim();
+
+    await sendEmail(cleanEmail, subject, textBody, htmlBody);
+
+    res.json({ success: true, message: 'Verification code has been sent to your registered email.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const forgotPasswordVerifyAndReset = async (req: Request, res: Response) => {
+  try {
+    const { email, role, code, new_password } = req.body;
+    if (!email || !role || !code || !new_password) {
+      return res.status(400).json({ error: 'All fields are required (email, role, verification code, and new password)' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanRole = role.trim().toLowerCase();
+    const cleanCode = code.trim();
+
+    if (cleanRole !== 'user' && cleanRole !== 'consultant') {
+      return res.status(400).json({ error: 'Invalid role. Must be user or consultant.' });
+    }
+
+    const key = `${cleanRole}:${cleanEmail}`;
+    const record = forgotPasswordCodes.get(key);
+
+    if (!record || record.code !== cleanCode) {
+      return res.status(400).json({ error: 'Galat verification code hai. Kripya check karein. (Incorrect verification code. Please check again.)' });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      forgotPasswordCodes.delete(key);
+      return res.status(400).json({ error: 'Verification code expire ho chuka hai. Kripya naya code request karein. (Verification code has expired. Please request a new one.)' });
+    }
+
+    // Success! Update password
+    if (cleanRole === 'consultant') {
+      db.prepare('UPDATE consultants SET password = ? WHERE LOWER(email) = ?').run(new_password, cleanEmail);
+    } else {
+      db.prepare('UPDATE users SET password = ? WHERE LOWER(email) = ?').run(new_password, cleanEmail);
+    }
+
+    // Fetch user/consultant details for the email response
+    let displayName = 'User';
+    if (cleanRole === 'consultant') {
+      const c = db.prepare('SELECT display_name FROM consultants WHERE LOWER(email) = ?').get(cleanEmail) as any;
+      if (c) displayName = c.display_name;
+    } else {
+      const u = db.prepare('SELECT display_name FROM users WHERE LOWER(email) = ?').get(cleanEmail) as any;
+      if (u) displayName = u.display_name;
+    }
+
+    // Clear code from map
+    forgotPasswordCodes.delete(key);
+
+    // Send confirmation email with the new password
+    const subject = `Your CallMint Password Has Been Reset Successfully ✅`;
+    const textBody = `
+Dear ${displayName},
+
+Your password for CallMint (${cleanRole === 'consultant' ? 'Consultant' : 'User'} Account) has been successfully reset.
+
+Here are your updated account details:
+- Registered Email: ${cleanEmail}
+- New Password: ${new_password}
+
+For security reasons, we recommend keeping this password confidential and not sharing it with anyone.
+
+Best Regards,
+The CallMint Team
+    `.trim();
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Reset Successful</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0f172a; font-family: 'Segoe UI', sans-serif; color: #f8fafc;">
+  <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 40px auto; background-color: #1e293b; border-radius: 12px; border: 1px solid #334155;">
+    <tr>
+      <td align="center" style="padding: 30px 20px; background-color: #10b981; border-top-left-radius: 11px; border-top-right-radius: 11px;">
+        <h1 style="margin: 0; font-size: 24px; color: #0f172a; font-weight: 800;">Password Reset Successful</h1>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 30px 20px;">
+        <p style="font-size: 16px; color: #cbd5e1;">Hello ${displayName || 'User'},</p>
+        <p style="font-size: 15px; color: #cbd5e1; line-height: 1.6;">Your CallMint password has been successfully updated. Here are your account details:</p>
+        
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f172a; border-radius: 8px; margin: 20px 0; border: 1px solid #334155; font-size: 14px;">
+          <tr>
+            <td style="padding: 15px; color: #cbd5e1;">
+              <strong>Account Type:</strong> ${cleanRole === 'consultant' ? 'Consultant' : 'User'}<br/>
+              <strong>Registered Email:</strong> ${cleanEmail}<br/>
+              <strong>New Password:</strong> <span style="font-family: monospace; color: #f59e0b; font-weight: bold; font-size: 15px;">${new_password}</span>
+            </td>
+          </tr>
+        </table>
+        
+        <p style="font-size: 14px; color: #94a3b8; line-height: 1.6;">You can now log in using these credentials. If you did not make this change, please contact CallMint Support immediately.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 15px 20px; background-color: #0f172a; border-bottom-left-radius: 11px; border-bottom-right-radius: 11px; font-size: 12px; color: #64748b; text-align: center;">
+        &copy; 2026 CallMint Inc. All rights reserved.
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `.trim();
+
+    await sendEmail(cleanEmail, subject, textBody, htmlBody);
+
+    res.json({ success: true, message: 'Password reset successfully! New password has been sent to your email.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export const userForgotPassword = (req: Request, res: Response) => {
+  // Legacy handler fallback
   try {
     const { username, new_password } = req.body;
     if (!username || !new_password) {

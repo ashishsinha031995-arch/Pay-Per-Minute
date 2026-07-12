@@ -1,9 +1,25 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import os from 'os';
 
-const dbPath = path.resolve(process.cwd(), 'database.sqlite');
-const originalDb = new Database(dbPath);
+const dbFilename = 'database.sqlite';
+const sourceDbPath = path.resolve(process.cwd(), dbFilename);
+const targetDbPath = process.env.NODE_ENV === 'production' 
+  ? path.resolve(os.tmpdir(), dbFilename)
+  : sourceDbPath;
+
+if (process.env.NODE_ENV === 'production' && fs.existsSync(sourceDbPath) && !fs.existsSync(targetDbPath)) {
+  try {
+    fs.copyFileSync(sourceDbPath, targetDbPath);
+    console.log(`[Database] Seed database copied to writable path: ${targetDbPath}`);
+  } catch (err) {
+    console.error(`[Database] Failed to copy seed database to writable path:`, err);
+  }
+}
+
+const originalDb = new Database(targetDbPath);
 
 // Enable WAL mode for performance
 originalDb.pragma('journal_mode = WAL');
@@ -144,7 +160,17 @@ async function syncFromMongoToSQLite() {
           _id: row[primaryKey],
           ...row
         }));
-        await Model.insertMany(docsToInsert);
+        if (docsToInsert.length > 0) {
+          await Model.bulkWrite(
+            docsToInsert.map(doc => ({
+              updateOne: {
+                filter: { _id: doc._id },
+                update: { $set: doc },
+                upsert: true
+              }
+            }))
+          );
+        }
       }
       continue;
     }
@@ -204,7 +230,15 @@ async function syncFromMongoToSQLite() {
           _id: row[primaryKey],
           ...row
         }));
-        await Model.insertMany(docsToInsert);
+        await Model.bulkWrite(
+          docsToInsert.map(doc => ({
+            updateOne: {
+              filter: { _id: doc._id },
+              update: { $set: doc },
+              upsert: true
+            }
+          }))
+        );
       }
     } catch (e) {
       console.error(`[MongoDB Sync] Error back-syncing table '${table}' to MongoDB:`, e);
@@ -232,7 +266,17 @@ async function syncFromSQLiteToMongo() {
       ...row
     }));
 
-    await Model.insertMany(docs);
+    if (docs.length > 0) {
+      await Model.bulkWrite(
+        docs.map(doc => ({
+          updateOne: {
+            filter: { _id: doc._id },
+            update: { $set: doc },
+            upsert: true
+          }
+        }))
+      );
+    }
   }
   console.log('[MongoDB] Database seeding to MongoDB completed successfully.');
 }

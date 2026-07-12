@@ -6,7 +6,9 @@ import {
   consultantLogin, 
   consultantRegister,
   consultantRegisterCreateOrder,
-  consultantBuyPlan
+  consultantBuyPlan,
+  forgotPasswordSendCode,
+  forgotPasswordVerifyAndReset
 } from '../controllers/auth.controller.js';
 
 const router = Router();
@@ -15,6 +17,8 @@ const router = Router();
 router.post('/user/signup', userSignUp);
 router.post('/user/login', userLogin);
 router.post('/user/forgot-password', userForgotPassword);
+router.post('/user/forgot-password/send-code', forgotPasswordSendCode);
+router.post('/user/forgot-password/verify-reset', forgotPasswordVerifyAndReset);
 
 router.post('/consultants/login', consultantLogin);
 router.post('/consultants/register', consultantRegister);

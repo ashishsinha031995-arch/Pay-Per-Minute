@@ -22,6 +22,20 @@ export const AuthService = {
     });
   },
 
+  async userForgotPasswordSendCode(body: { email: string; role: string }) {
+    return request("/user/forgot-password/send-code", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  async userForgotPasswordVerifyReset(body: { email: string; role: string; code: string; new_password: string }) {
+    return request("/user/forgot-password/verify-reset", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
   async consultantLogin(body: any) {
     return request("/consultants/login", {
       method: "POST",

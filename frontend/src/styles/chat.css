@@ -35,3 +35,45 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Special ultra-thin grey scrollbar for consultation history list (2x thinner than 4px) */
+.sessions-scrollbar::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+}
+
+.sessions-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sessions-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* gray for light mode */
+  border-radius: 4px;
+}
+
+.theme-light .sessions-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-300 */
+}
+
+/* For dark mode (default theme-dark, i.e. when not theme-light) */
+.sessions-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569; /* slate-600 */
+}
+
+.theme-light .sessions-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* slate-400 */
+}
+
+.sessions-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b; /* slate-500 */
+}
+
+.sessions-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+}
+
+.theme-light .sessions-scrollbar {
+  scrollbar-color: #cbd5e1 transparent;
+}
+

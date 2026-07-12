@@ -6,6 +6,7 @@ import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getR
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 
 // Get All Active Consultants (Public Listings page)
 export const getActiveConsultants = (req: Request, res: Response) => {
@@ -800,15 +801,26 @@ export const uploadPhoto = (req: Request, res: Response) => {
     }
 
     // Define uploads directory
-    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const uploadsDir = process.env.NODE_ENV === 'production'
+      ? path.join(os.tmpdir(), 'uploads')
+      : path.join(process.cwd(), 'uploads');
+
     if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
+      try {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      } catch (err) {
+        console.error('[User Controller] Failed to create uploads directory:', err);
+      }
     }
 
     const filename = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${extension}`;
     const filepath = path.join(uploadsDir, filename);
 
-    fs.writeFileSync(filepath, buffer);
+    try {
+      fs.writeFileSync(filepath, buffer);
+    } catch (err) {
+      console.error('[User Controller] Failed to write uploaded file:', err);
+    }
 
     // Return the persistent base64 data URL string so that it gets saved in the database columns.
     // This makes the profile photos completely immune to local ephemeral disk storage wipes.

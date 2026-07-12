@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone, ChevronRight, Wifi, MoreVertical, MessageCircle, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone, ChevronRight, Wifi, MoreVertical, MessageCircle, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
@@ -769,9 +769,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     try {
       if (!silent) setScheduleLoading(true);
       const res = await fetch(`/api/consultants/${consultantId}/schedules`);
-      if (res.ok) {
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
         const data = await res.json();
         setSchedules(data);
+      } else if (res.ok) {
+        console.warn('Received non-JSON response from schedules endpoint, skipping parsing.');
       }
     } catch (err: any) {
       if (err && err.message && err.message.includes('Failed to fetch')) {
@@ -1237,7 +1240,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
     try {
       const res = await fetch(`/api/consultants/${id}/stats`);
-      if (res.ok) {
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
         const data = await res.json();
         setWallet(data.wallet);
         setSessions(data.sessions);
@@ -1254,7 +1258,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
       // Fetch blocked users
       const blockedRes = await fetch(`/api/consultants/${id}/blocked`);
-      if (blockedRes.ok) {
+      const blockedContentType = blockedRes.headers.get('content-type');
+      if (blockedRes.ok && blockedContentType && blockedContentType.includes('application/json')) {
         const blockedData = await blockedRes.json();
         setBlockedUsers(blockedData);
       }
@@ -1266,7 +1271,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
       // Fetch complete profile info (including KYC and Bank statuses)
       const profileRes = await fetch(`/api/consultants/${id}/profile`);
-      if (profileRes.ok) {
+      const profileContentType = profileRes.headers.get('content-type');
+      if (profileRes.ok && profileContentType && profileContentType.includes('application/json')) {
         const matching = await profileRes.json() as Consultant;
         if (matching) {
           setIsOnline(matching.is_online === 1);
@@ -1919,14 +1925,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       if (!aadhaarNumber || !aadhaarPhotoUrl || !panNumber || !panPhotoUrl) {
         throw new Error("Aadhaar card number, Aadhaar photo, PAN number, and PAN photo are all required to submit KYC.");
       }
+
+      const trimmedAadhaar = aadhaarNumber.trim();
+      const trimmedPan = panNumber.trim().toUpperCase();
+
+      setAadhaarNumber(trimmedAadhaar);
+      setPanNumber(trimmedPan);
       
       const res = await fetch(`/api/consultants/${currentConsultant.id}/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          aadhaar_number: aadhaarNumber,
+          aadhaar_number: trimmedAadhaar,
           aadhaar_photo_url: aadhaarPhotoUrl,
-          pan_number: panNumber,
+          pan_number: trimmedPan,
           pan_photo_url: panPhotoUrl,
           kyc_status: 'pending'
         }),
@@ -1966,6 +1978,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       const trimmedNumber = bankAccountNumber.trim();
       const trimmedIfsc = bankIfscCode.trim().toUpperCase();
       const trimmedBank = bankName.trim();
+
+      setBankAccountHolderName(trimmedHolder);
+      setBankAccountNumber(trimmedNumber);
+      setBankIfscCode(trimmedIfsc);
+      setBankName(trimmedBank);
 
       // 1. Holder Name Validation: Only alphabets and spaces
       const holderNameRegex = /^[A-Za-z\s]+$/;
@@ -4152,7 +4169,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   <TrendingUp style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', fontSize: '16px', width: '16px', height: '16px' }} />
                                 </div>
                                 <div>
-                                  <p style={{ margin: 0, fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Current rate</p>
+                                  <p style={{ margin: 0, fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Current Rate</p>
                                   <p style={{ margin: '3px 0 0', fontSize: '16px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
                                     ₹{currentConsultant?.price_per_minute || 0}/min
                                   </p>
@@ -4168,7 +4185,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   height: '32px', 
                                   borderRadius: '9px', 
                                   background: isOnline 
-                                    ? (theme === 'light' ? '#e6f4ea' : '#0f2a24') 
+                                    ? (isBusy 
+                                        ? (theme === 'light' ? '#fff9db' : '#2d2006') 
+                                        : (theme === 'light' ? '#e6f4ea' : '#0f2a24')) 
                                     : (theme === 'light' ? '#fce8e6' : '#221515'), 
                                   display: 'flex', 
                                   alignItems: 'center', 
@@ -4176,38 +4195,40 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 }}>
                                   <Wifi style={{ 
                                     color: isOnline 
-                                      ? (theme === 'light' ? '#10b981' : '#5dcaa5') 
+                                      ? (isBusy 
+                                          ? (theme === 'light' ? '#f59e0b' : '#f59e0b') 
+                                          : (theme === 'light' ? '#10b981' : '#5dcaa5')) 
                                       : (theme === 'light' ? '#ef4444' : '#e08a8a'), 
                                     width: '16px', 
                                     height: '16px' 
                                   }} className={isOnline ? 'animate-pulse' : ''} />
                                 </div>
-                                <div>
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
                                   <p style={{ 
                                     margin: 0, 
                                     fontSize: '14px', 
                                     color: isOnline 
-                                      ? (theme === 'light' ? '#10b981' : '#5dcaa5') 
+                                      ? (isBusy 
+                                          ? (theme === 'light' ? '#f59e0b' : '#f59e0b') 
+                                          : (theme === 'light' ? '#10b981' : '#5dcaa5')) 
                                       : (theme === 'light' ? '#ef4444' : '#e08a8a'), 
                                     fontWeight: 500,
-                                    fontFamily: 'var(--font-sans)'
+                                    fontFamily: 'var(--font-sans)',
+                                    lineHeight: '1'
                                   }}>
-                                    {isOnline ? (isBusy ? 'Busy mode' : 'Online mode') : 'Offline mode'}
-                                  </p>
-                                  <p style={{ margin: '3px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>
-                                    Rate configured for this session
+                                    {isOnline ? (isBusy ? 'Busy Mode' : 'Online Mode') : 'Offline Mode'}
                                   </p>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Part 3: Toggle Button */}
+                            {/* Part 3: Online/Offline Button */}
                             <div 
                               onClick={handleToggleOnline}
                               className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'}`}
-                              style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                              style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a' }}
                             >
-                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Toggle button</span>
+                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Online/Offline Button</span>
                               <div style={{ 
                                 width: '36px', 
                                 height: '21px', 
@@ -4229,6 +4250,35 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 }}></div>
                               </div>
                             </div>
+
+                            {/* Part 4: Busy Button */}
+                            <div 
+                              onClick={handleToggleBusy}
+                              className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'}`}
+                              style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            >
+                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Busy Button</span>
+                              <div style={{ 
+                                width: '36px', 
+                                height: '21px', 
+                                borderRadius: '11px', 
+                                backgroundColor: isBusy ? (theme === 'light' ? '#f59e0b' : '#d97706') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
+                                position: 'relative',
+                                transition: 'all 0.2s ease'
+                              }}>
+                                <div style={{ 
+                                  width: '15px', 
+                                  height: '15px', 
+                                  borderRadius: '50%', 
+                                  backgroundColor: '#fff', 
+                                  position: 'absolute', 
+                                  top: '3px', 
+                                  left: isBusy ? 'auto' : '3px',
+                                  right: isBusy ? '3px' : 'auto',
+                                  transition: 'all 0.2s ease'
+                                }}></div>
+                              </div>
+                            </div>
                           </div>
 
                           {/* Your Wallet & Rolling Monthly Earnings Card */}
@@ -4239,45 +4289,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             padding: '16px', 
                             marginBottom: '16px' 
                           }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <div>
-                                <p style={{ margin: '0 0 6px', fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Your wallet</p>
-                                <p style={{ margin: 0, fontSize: '22px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
-                                  ₹{wallet?.wallet_monthly ? wallet.wallet_monthly.toFixed(2) : '0.00'}
-                                </p>
-                              </div>
-                              <button 
-                                onClick={() => {
-                                  if (currentConsultant) {
-                                    loadConsultantStatsAndStatus(currentConsultant.id);
-                                  }
-                                }}
-                                className="hover:scale-105 active:scale-95 transition-transform border-none outline-none"
-                                style={{ 
-                                  width: '30px', 
-                                  height: '30px', 
-                                  borderRadius: '8px', 
-                                  background: theme === 'light' ? '#e6f4ea' : '#0f2a24', 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center', 
-                                  cursor: 'pointer' 
-                                }}
-                              >
-                                <RefreshCw style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', width: '14px', height: '14px' }} />
-                              </button>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <p style={{ margin: 0, fontSize: '11px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Your wallet</p>
+                              <p style={{ margin: 0, fontSize: '12px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
+                                This month ({new Date().toLocaleString('default', { month: 'long' })})
+                              </p>
                             </div>
-                            <div style={{ borderTop: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a', marginTop: '12px', paddingTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <ShieldCheck style={{ color: theme === 'light' ? '#10b981' : '#5dcaa5', width: '15px', height: '15px' }} />
-                              <div>
-                                <p style={{ margin: 0, fontSize: '12px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-sans)' }}>
-                                  This month ({new Date().toLocaleString('default', { month: 'long' })})
-                                </p>
-                                <p style={{ margin: '1px 0 0', fontSize: '10px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>
-                                  Unbilled rolling earnings: <span style={{ fontFamily: 'var(--font-mono)' }}>₹{salaryInfo?.currentCycleEarnings ? salaryInfo.currentCycleEarnings.toFixed(2) : '0.00'}</span>
-                                </p>
-                              </div>
-                            </div>
+                            <p style={{ margin: 0, fontSize: '22px', color: theme === 'light' ? '#0f172a' : '#e8ecf1', fontWeight: 500, fontFamily: 'var(--font-mono)' }} className="font-mono">
+                              ₹{wallet?.wallet_monthly ? wallet.wallet_monthly.toFixed(2) : '0.00'}
+                            </p>
                           </div>
 
                           {/* Earnings Overview */}
@@ -5310,17 +5330,6 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             🔒 Phone number is locked after registration.
                           </p>
                         </div>
-
-                        <div className="space-y-1.5 md:col-span-2">
-                          <label className="block text-[11px] font-sans text-slate-400">Change Account Password (Khaali chhodein agar same rakhna hai)</label>
-                          <input
-                            type="password"
-                            placeholder="Type new secure password if you want to change it..."
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl px-4 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"
-                          />
-                        </div>
                       </div>
                     </div>
 
@@ -5551,134 +5560,191 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </button>
                     </div>
 
-                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1 thin-scrollbar">
+                    <div className="flex flex-col max-h-[550px] overflow-y-auto pr-1 sessions-scrollbar">
                       {sessions.length === 0 ? (
                         <div className="text-center py-12 text-slate-500 text-xs font-sans">No sessions recorded yet for your account.</div>
                       ) : (
-                        sessions.map((sess) => {
+                        sessions.map((sess, index) => {
                           const isUserBlocked = blockedUsers.some(b => b.user_name.toLowerCase() === sess.user_name.toLowerCase());
                           return (
-                            <div
-                              key={sess.id}
-                              className={`p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors border ${
-                                theme === 'light'
-                                  ? 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                                  : 'bg-slate-950 border-slate-850 hover:border-slate-750'
-                              }`}
-                            >
-                              <div className="space-y-1.5 flex-1">
-                                <div className="flex items-center space-x-2 flex-wrap gap-1">
-                                  <span className={`text-xs font-black ${theme === 'light' ? 'text-slate-900' : 'text-slate-200'}`}>{sess.user_name}</span>
-                                  <span className="text-[9px] font-sans text-slate-500">Session ID: #{sess.id}</span>
-                                  {isUserBlocked && (
-                                    <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[8px] font-extrabold uppercase">
-                                      Blocked
+                            <React.Fragment key={sess.id}>
+                              <div
+                                className="py-5 first:pt-0 last:pb-0 space-y-3.5 text-left"
+                              >
+                                {/* Header Area */}
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                                    theme === 'light'
+                                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'
+                                      : 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30'
+                                  }`}>
+                                    {sess.user_name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className={`font-semibold text-[13px] ${
+                                        theme === 'light' ? 'text-slate-800' : 'text-slate-100'
+                                      }`}>
+                                        {sess.user_name}
+                                      </p>
+                                      {isUserBlocked && (
+                                        <span className="bg-rose-500/10 text-rose-500 border border-rose-500/20 px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase leading-none">
+                                          Blocked
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-0.5 leading-none">
+                                      #sess_{sess.id}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Details Rows */}
+                                <div className="space-y-2 pt-1 text-[12px] font-sans">
+                                  <div className="flex justify-between items-center gap-4 whitespace-nowrap">
+                                    <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Duration</span>
+                                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'} flex-shrink-0`}>{sess.duration_minutes} mins</span>
+                                  </div>
+
+                                  <div className="flex justify-between items-center gap-4 whitespace-nowrap">
+                                    <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Rate</span>
+                                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'} flex-shrink-0`}>₹{sess.price_per_minute}/min</span>
+                                  </div>
+
+                                  <div className="flex justify-between items-center gap-4 whitespace-nowrap">
+                                    <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">
+                                      Earnings <span className="text-[10px] text-slate-400 font-normal">(after platform commission)</span>
                                     </span>
+                                    <span className="font-semibold text-emerald-500 dark:text-emerald-450 flex-shrink-0">₹{sess.consultant_earnings.toFixed(2)}</span>
+                                  </div>
+
+                                  {sess.refunded_amount > 0 && (
+                                    <div className="flex justify-between items-center gap-4 whitespace-nowrap">
+                                      <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Refund deducted</span>
+                                      <span className="font-semibold text-rose-500 dark:text-rose-400 flex-shrink-0">-₹{sess.refunded_amount.toFixed(2)} ({sess.refunded_minutes} mins)</span>
+                                    </div>
+                                  )}
+
+                                  <div className="flex justify-between items-center gap-4 whitespace-nowrap">
+                                    <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Date & Time</span>
+                                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'} flex-shrink-0`}>
+                                      {new Date(sess.created_at).toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'numeric',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                        hour12: true
+                                      })}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex justify-between items-center gap-4 whitespace-nowrap">
+                                    <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Status</span>
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      {sess.status === 'completed' && (
+                                        <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold">Completed</span>
+                                      )}
+                                      {sess.refunded_amount > 0 && (
+                                        <span className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold">Refunded</span>
+                                      )}
+                                      {sess.status === 'active' && (
+                                        <span className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold animate-pulse">Live Now</span>
+                                      )}
+                                      {sess.status === 'rejected' && (
+                                        <span className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold">Rejected</span>
+                                      )}
+                                      {sess.status === 'missed' && (
+                                        <span className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20 px-2 py-0.5 rounded-full text-[9px] font-bold">Missed</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {sess.rating && (
+                                    <div className="flex justify-between items-center gap-4 whitespace-nowrap text-[12px] font-sans">
+                                      <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">Rating & Review</span>
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        <div className="flex items-center text-amber-400">
+                                          {[...Array(5)].map((_, i) => (
+                                            <Star
+                                              key={i}
+                                              className={`w-2.5 h-2.5 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                                            />
+                                          ))}
+                                        </div>
+                                        {sess.review_text && (
+                                          <span className="text-[10px] italic text-slate-500 truncate max-w-[150px]" title={sess.review_text}>
+                                            "{sess.review_text}"
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
-                                <p className={`text-xs font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                                  Duration: <strong className={theme === 'light' ? 'text-slate-900 font-bold' : 'text-slate-200'}>{sess.duration_minutes} Mins</strong> • Rate: ₹{sess.price_per_minute}/min
-                                </p>
-                                <div className={`text-[11px] font-mono ${theme === 'light' ? 'text-emerald-700 font-bold' : 'text-emerald-400'}`}>
-                                  Net Earnings: <strong>₹{sess.consultant_earnings.toFixed(2)}</strong> (after platform commission)
-                                </div>
-                                {sess.refunded_amount > 0 && (
-                                  <div className="text-[11px] text-rose-400 font-mono font-bold mt-1">
-                                    ⚠ Refund Deducted: -₹{sess.refunded_amount.toFixed(2)} ({sess.refunded_minutes} Mins)
-                                  </div>
-                                )}
-                                {sess.rating && (
-                                  <div className={`flex items-center space-x-2 mt-1.5 p-1.5 rounded-lg border w-fit ${
-                                    theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-slate-900/50 border-slate-800/40'
-                                  }`}>
-                                    <div className="flex items-center text-amber-400">
-                                      {[...Array(5)].map((_, i) => (
-                                        <Star
-                                          key={i}
-                                          className={`w-3 h-3 ${i < sess.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
-                                        />
-                                      ))}
-                                    </div>
-                                    {sess.review_text && (
-                                      <span className={`text-[10px] italic font-sans ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`} title={sess.review_text}>
-                                        "{sess.review_text}"
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t text-[10px] text-slate-500 font-sans ${
-                                  theme === 'light' ? 'border-slate-200' : 'border-slate-900/60'
-                                }`}>
-                                  <span className="whitespace-nowrap">
-                                    Date & Time: {new Date(sess.created_at).toLocaleString()}
-                                  </span>
-                                  <div className="flex items-center space-x-1.5 shrink-0">
-                                    <span className="text-slate-500">Status:</span>
-                                    {sess.status === 'completed' && (
-                                      <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold">Completed</span>
-                                    )}
-                                    {sess.status === 'completed' && sess.refunded_amount > 0 && (
-                                      <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[9px] font-bold">Refunded</span>
-                                    )}
-                                    {sess.status === 'active' && (
-                                      <span className="bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded text-[9px] font-bold animate-pulse">Live Now</span>
-                                    )}
-                                    {sess.status === 'rejected' && (
-                                      <span className="bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded text-[9px] font-bold">Rejected</span>
-                                    )}
-                                    {sess.status === 'missed' && (
-                                      <span className="bg-slate-500/10 text-slate-400 px-2 py-0.5 rounded text-[9px] font-bold">Missed</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
 
-                              <div className="flex flex-row items-center sm:items-end justify-between sm:justify-center gap-2.5 shrink-0 border-t border-slate-800/50 sm:border-0 pt-3 sm:pt-0 w-full sm:w-auto">
-                                {sess.status === 'completed' && (
-                                  <button
-                                    onClick={() => {
-                                      onSelectSession(sess.id, currentConsultant?.display_name || 'Consultant', 'consultant', true);
-                                    }}
-                                    className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
-                                  >
-                                    <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                                    <span>View Chat</span>
-                                  </button>
-                                )}
-                                
-                                {sess.status === 'active' && (
-                                  <button
-                                    onClick={() => {
-                                      if (currentConsultant) {
-                                        onSelectSession(sess.id, currentConsultant.display_name, 'consultant');
-                                      }
-                                    }}
-                                    className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all text-center flex items-center justify-center space-x-1.5 shadow-md active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
-                                  >
-                                    <MessageCircle className="w-3.5 h-3.5 shrink-0 animate-pulse" />
-                                    <span>Join Room</span>
-                                  </button>
-                                )}
+                                {/* Actions Row */}
+                                {sess.status === 'completed' ? (
+                                  <div className="grid grid-cols-2 gap-3 pt-2">
+                                    <button
+                                      onClick={() => {
+                                        onSelectSession(sess.id, currentConsultant?.display_name || 'Consultant', 'consultant', true);
+                                      }}
+                                      className={`flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl transition-all active:scale-95 cursor-pointer border ${
+                                        theme === 'light'
+                                          ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border-emerald-500/15'
+                                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/15'
+                                      }`}
+                                    >
+                                      <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                                      <span>View Chat</span>
+                                    </button>
 
-                                {isUserBlocked ? (
-                                  <button
-                                    onClick={() => handleUnblockUser(sess.user_name)}
-                                    className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
-                                  >
-                                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                                    <span>Unblock</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleBlockUser(sess.user_name)}
-                                    className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all border border-rose-500/15 hover:border-rose-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer flex-1 sm:flex-initial sm:w-36 shrink-0 h-9"
-                                  >
-                                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                                    <span>Block Client</span>
-                                  </button>
-                                )}
+                                    {isUserBlocked ? (
+                                      <button
+                                        onClick={() => handleUnblockUser(sess.user_name)}
+                                        className={`flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl transition-all active:scale-95 cursor-pointer border ${
+                                          theme === 'light'
+                                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                            : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700'
+                                        }`}
+                                      >
+                                        <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                                        <span>Unblock</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleBlockUser(sess.user_name)}
+                                        className={`flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl transition-all active:scale-95 cursor-pointer border ${
+                                          theme === 'light'
+                                            ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border-rose-500/15'
+                                            : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/15'
+                                        }`}
+                                      >
+                                        <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                                        <span>Block Client</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : sess.status === 'active' ? (
+                                  <div className="pt-2">
+                                    <button
+                                      onClick={() => {
+                                        if (currentConsultant) {
+                                          onSelectSession(sess.id, currentConsultant.display_name, 'consultant');
+                                        }
+                                      }}
+                                      className="w-full bg-cyan-505 hover:bg-cyan-600 text-slate-950 text-xs font-bold py-2.5 px-3 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+                                    >
+                                      <MessageCircle className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+                                      <span>Join Room</span>
+                                    </button>
+                                  </div>
+                                ) : null}
                               </div>
-                            </div>
+                              {index < sessions.length - 1 && (
+                                <div className={`border-b ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`} />
+                              )}
+                            </React.Fragment>
                           );
                         })
                       )}
@@ -5889,9 +5955,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           maxLength={10}
                           placeholder="Enter your 10-character PAN Card number"
                           value={panNumber}
-                          onChange={(e) => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                          onChange={(e) => setPanNumber(e.target.value.replace(/[^A-Za-z0-9]/g, ''))}
                           disabled={kycStatus === 'approved' || kycStatus === 'pending'}
-                          className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono tracking-wider font-bold"
+                          className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono tracking-wider font-bold uppercase"
                         />
                       </div>
 
@@ -6292,10 +6358,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         type="text"
                         placeholder="e.g. SBIN0001234"
                         value={bankIfscCode}
-                        onChange={(e) => setBankIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+                        onChange={(e) => setBankIfscCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 11))}
                         disabled={bankStatus === 'approved' || bankStatus === 'pending'}
                         maxLength={11}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono tracking-wider font-bold"
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full font-mono tracking-wider font-bold uppercase"
                       />
                     </div>
 

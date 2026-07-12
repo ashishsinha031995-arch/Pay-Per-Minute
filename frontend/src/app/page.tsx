@@ -213,6 +213,11 @@ export default function AppPage() {
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [generatedCredentials, setGeneratedCredentials] = useState<{username: string, password: string, displayName: string} | null>(null);
 
+  // Forgot Password flow states
+  const [forgotStep, setForgotStep] = useState<'email' | 'code'>('email');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+
   // Sync user profile state from database
   const refreshUserProfile = async (id: number) => {
     if (!id || isNaN(id)) return;
@@ -550,24 +555,56 @@ export default function AppPage() {
     e.preventDefault();
     setAuthError(null);
     setAuthSuccess(null);
-    if (!username.trim() || !newPassword.trim()) {
-      setAuthError('Please fill in your username and new password.');
-      return;
-    }
-    try {
-      const res = await fetch('/api/user/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), new_password: newPassword })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Password reset failed');
-      setAuthSuccess('Password changed successfully! You can now login.');
-      setAuthTab('login');
-      setPassword('');
-      setNewPassword('');
-    } catch (err: any) {
-      setAuthError(err.message);
+
+    if (forgotStep === 'email') {
+      if (!forgotEmail.trim()) {
+        setAuthError('Please enter your registered email address.');
+        return;
+      }
+      try {
+        const res = await fetch('/api/user/forgot-password/send-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: forgotEmail.trim(), role: authRole })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to send verification code.');
+        
+        setAuthSuccess('Verification code has been sent to your registered email address.');
+        setForgotStep('code');
+      } catch (err: any) {
+        setAuthError(err.message);
+      }
+    } else {
+      if (!forgotEmail.trim() || !verificationCode.trim() || !newPassword.trim()) {
+        setAuthError('Please fill in all fields (Email, Verification Code, and New Password).');
+        return;
+      }
+      try {
+        const res = await fetch('/api/user/forgot-password/verify-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: forgotEmail.trim(),
+            role: authRole,
+            code: verificationCode.trim(),
+            new_password: newPassword
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Password reset failed.');
+
+        setAuthSuccess('Password reset successfully! Your updated credentials have been sent to your email.');
+        setAuthTab('login');
+        setForgotStep('email');
+        setForgotEmail('');
+        setVerificationCode('');
+        setPassword('');
+        setNewPassword('');
+        setUsername('');
+      } catch (err: any) {
+        setAuthError(err.message);
+      }
     }
   };
 
@@ -960,7 +997,7 @@ export default function AppPage() {
               <>
                 <form onSubmit={authTab === 'login' ? handleLogin : authTab === 'signup' ? handleSignUp : handleForgotPassword} className="space-y-4">
                   
-                  {authTab === 'login' && !targetUsername && (
+                  {(authTab === 'login' || authTab === 'forgot') && !targetUsername && (
                     <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center space-x-1">
                       <button
                         type="button"
@@ -969,7 +1006,7 @@ export default function AppPage() {
                           authRole === 'user' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        Login as User 👤
+                        {authTab === 'forgot' ? 'Reset as User 👤' : 'Login as User 👤'}
                       </button>
                       <button
                         type="button"
@@ -978,27 +1015,87 @@ export default function AppPage() {
                           authRole === 'consultant' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        Login as Consultant 💼
+                        {authTab === 'forgot' ? 'Reset as Consultant 💼' : 'Login as Consultant 💼'}
                       </button>
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">
-                      {authRole === 'user' ? 'Username or Email *' : 'Username or Consultant Email *'}
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-                      <input
-                        type="text"
-                        required
-                        placeholder={authRole === 'user' ? 'e.g. ashish_sinha or ashish@example.com' : 'e.g. expert_pandit or pandit@example.com'}
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
-                      />
+                  {authTab !== 'forgot' && (
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">
+                        {authRole === 'user' ? 'Username or Email *' : 'Username or Consultant Email *'}
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                        <input
+                          type="text"
+                          required
+                          placeholder={authRole === 'user' ? 'e.g. ashish_sinha or ashish@example.com' : 'e.g. expert_pandit or pandit@example.com'}
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {authTab === 'forgot' && (
+                    <>
+                      {forgotStep === 'email' ? (
+                        <div>
+                          <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">Registered Email Address *</label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">@</span>
+                            <input
+                              type="email"
+                              required
+                              placeholder="e.g. your_registered_email@example.com"
+                              value={forgotEmail}
+                              onChange={(e) => setForgotEmail(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase font-medium">Resetting Account</label>
+                            <div className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl px-4 py-2.5 opacity-80">
+                              {forgotEmail} ({authRole === 'consultant' ? 'Consultant' : 'User'})
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase font-medium">Verification Code (6-Digit) *</label>
+                            <div className="relative">
+                              <Key className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                              <input
+                                type="text"
+                                required
+                                placeholder="Enter 6-digit code"
+                                value={verificationCode}
+                                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase font-bold text-emerald-400">Choose New Password *</label>
+                            <div className="relative">
+                              <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                              <input
+                                type="password"
+                                required
+                                placeholder="Enter new password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
 
                   {authTab === 'signup' && (
                     <div>
@@ -1119,30 +1216,13 @@ export default function AppPage() {
                     </div>
                   )}
 
-                  {authTab === 'forgot' && (
-                    <div>
-                      <label className="block text-xs font-mono text-slate-400 mb-1.5 uppercase">New Password *</label>
-                      <div className="relative">
-                        <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-                        <input
-                          type="password"
-                          required
-                          placeholder="Enter new password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <button
+                   <button
                     type="submit"
                     className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-xl text-xs transition-all shadow-sm"
                   >
                     {authTab === 'login' && 'Log In Now'}
                     {authTab === 'signup' && 'Register Account'}
-                    {authTab === 'forgot' && 'Reset My Password'}
+                    {authTab === 'forgot' && (forgotStep === 'email' ? 'Send Verification Code 📩' : 'Verify & Reset Password 🔑')}
                   </button>
 
                 </form>
@@ -1152,7 +1232,19 @@ export default function AppPage() {
                   {authTab === 'login' && (
                     <>
                       <div className="flex justify-between items-center">
-                        <button onClick={() => { setAuthTab('forgot'); setAuthError(null); }} className="hover:text-emerald-400 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthTab('forgot');
+                            setForgotStep('email');
+                            setForgotEmail('');
+                            setVerificationCode('');
+                            setNewPassword('');
+                            setAuthError(null);
+                            setAuthSuccess(null);
+                          }}
+                          className="hover:text-emerald-400 text-[11px]"
+                        >
                           Forgot Password?
                         </button>
                         <button onClick={() => { setAuthTab('signup'); setSignUpType(targetUsername ? 'user' : 'choose'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold text-[11px]">
@@ -1179,7 +1271,19 @@ export default function AppPage() {
                   )}
 
                   {authTab === 'forgot' && (
-                    <button onClick={() => { setAuthTab('login'); setAuthError(null); }} className="text-slate-400 hover:text-white text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthTab('login');
+                        setForgotStep('email');
+                        setForgotEmail('');
+                        setVerificationCode('');
+                        setNewPassword('');
+                        setAuthError(null);
+                        setAuthSuccess(null);
+                      }}
+                      className="text-slate-400 hover:text-white text-xs"
+                    >
                       ← Back to Login
                     </button>
                   )}
