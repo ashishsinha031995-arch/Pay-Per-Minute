@@ -38,8 +38,8 @@
 
 /* Special ultra-thin grey scrollbar for consultation history list (2x thinner than 4px) */
 .sessions-scrollbar::-webkit-scrollbar {
-  width: 1px;
-  height: 1px;
+  width: 3px;
+  height: 3px;
 }
 
 .sessions-scrollbar::-webkit-scrollbar-track {
@@ -49,15 +49,18 @@
 .sessions-scrollbar::-webkit-scrollbar-thumb {
   background: #cbd5e1; /* gray for light mode */
   border-radius: 4px;
+  min-height: 40px;
 }
 
 .theme-light .sessions-scrollbar::-webkit-scrollbar-thumb {
   background: #cbd5e1; /* slate-300 */
+  min-height: 40px;
 }
 
 /* For dark mode (default theme-dark, i.e. when not theme-light) */
 .sessions-scrollbar::-webkit-scrollbar-thumb {
   background: #475569; /* slate-600 */
+  min-height: 40px;
 }
 
 .theme-light .sessions-scrollbar::-webkit-scrollbar-thumb:hover {

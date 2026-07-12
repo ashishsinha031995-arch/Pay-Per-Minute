@@ -532,7 +532,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   // Tab Navigation & Mobile Drawer States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules' | 'followers' | 'notifications'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules' | 'followers' | 'notifications' | 'blocked'>('dashboard');
   const [followersList, setFollowersList] = useState<any[]>([]);
   const [followersLoading, setFollowersLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -2101,8 +2101,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
+  const isFullScreenMobileTab = currentConsultant && (activeTab === 'sessions' || activeTab === 'notifications' || activeTab === 'blocked' || activeTab === 'followers' || activeTab === 'kyc' || activeTab === 'bank' || activeTab === 'profile' || activeTab === 'schedules');
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div className={`max-w-7xl mx-auto ${
+      isFullScreenMobileTab 
+        ? 'px-0 sm:px-6 lg:px-8 py-0 sm:py-6 space-y-0 sm:space-y-8' 
+        : 'px-4 sm:px-6 lg:px-8 py-6 space-y-8'
+    }`}>
 
       {/* Alert states */}
       {error && (
@@ -3415,6 +3421,35 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       onClick={() => {
                         setError(null);
                         setSuccess(null);
+                        if (!hasActivePlan) {
+                          setError("Please purchase a partner plan first to unlock Blocked Clients.");
+                          handleScrollToPlans();
+                        } else {
+                          setActiveTab('blocked');
+                        }
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`group flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left ${
+                        !hasActivePlan 
+                          ? 'text-slate-500 cursor-not-allowed opacity-60' 
+                          : activeTab === 'blocked'
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'text-slate-300 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <ShieldAlert className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${
+                          activeTab === 'blocked' && hasActivePlan ? 'text-slate-950' : 'text-rose-450'
+                        }`} />
+                        <span>Blocked Clients</span>
+                      </div>
+                      {!hasActivePlan && <Lock className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
                         setActiveTab('notifications');
                         setIsMobileMenuOpen(false);
                       }}
@@ -3705,6 +3740,24 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                 >
                   <HelpCircle className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'support' ? 'text-slate-950' : 'text-emerald-400'}`} />
                   <span>Customer Support</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    if (!hasActivePlan) {
+                      setError("Please purchase a partner plan first to unlock Blocked Clients.");
+                      handleScrollToPlans();
+                    } else {
+                      setActiveTab('blocked');
+                    }
+                  }}
+                  className={`group w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${!hasActivePlan ? 'text-slate-500 hover:bg-slate-850/40 cursor-not-allowed' : activeTab === 'blocked' ? 'bg-emerald-500 text-slate-950 shadow-md font-black translate-x-1' : 'text-slate-300 hover:bg-slate-850 hover:text-white'}`}
+                >
+                  <ShieldAlert className={`w-4 h-4 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6 ${activeTab === 'blocked' ? 'text-slate-950' : 'text-rose-400'}`} />
+                  <span>Blocked Clients</span>
+                  {!hasActivePlan && <Lock className="w-3.5 h-3.5 ml-auto text-amber-500/80 shrink-0" />}
                 </button>
 
                 <button
@@ -4124,6 +4177,137 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   ) : (
                     /* STANDARD ENHANCED DASHBOARD WHEN THEY HAVE ACTIVE PLAN */
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      {/* Dynamic Style Override for dashboard container on mobile */}
+                      <style>{`
+                        @media (max-w: 1023px) {
+                          /* 1. Remove background, border, shadow, padding of starting cards container */
+                          #starting-cards-container {
+                            background: transparent !important;
+                            border: none !important;
+                            padding: 0px !important;
+                            max-width: 100% !important;
+                            box-shadow: none !important;
+                            border-radius: 0px !important;
+                            margin: 0px !important;
+                          }
+
+                          /* 2. Style Rate & Mode card flat with a separator below it */
+                          #dashboard-rate-mode-card {
+                            background: transparent !important;
+                            border: none !important;
+                            border-bottom: 1px solid ${theme === 'light' ? '#e2e8f0' : '#1e293b'} !important;
+                            border-radius: 0px !important;
+                            padding: 0px 0px 16px 0px !important;
+                            margin-bottom: 16px !important;
+                            box-shadow: none !important;
+                          }
+
+                          /* Ensure borders are flat inside Rate & Mode card parts */
+                          #dashboard-rate-mode-card > div {
+                            background: transparent !important;
+                            border-top: none !important;
+                            border-left: none !important;
+                            border-right: none !important;
+                            border-bottom: 1px solid ${theme === 'light' ? '#f1f5f9' : '#1c2838'} !important;
+                            padding: 12px 0px !important;
+                          }
+
+                          #dashboard-rate-mode-card > div:last-child {
+                            border-bottom: none !important;
+                          }
+
+                          /* 3. Style Wallet card flat with a separator */
+                          #dashboard-wallet-card {
+                            background: transparent !important;
+                            border: none !important;
+                            border-bottom: 1px solid ${theme === 'light' ? '#e2e8f0' : '#1e293b'} !important;
+                            border-radius: 0px !important;
+                            padding: 12px 0px 16px 0px !important;
+                            margin-bottom: 16px !important;
+                            box-shadow: none !important;
+                          }
+
+                          /* 4. Earnings overview and Activity summary grids */
+                          #dashboard-earnings-overview-grid,
+                          #dashboard-activity-summary-grid {
+                            display: flex !important;
+                            flex-direction: column !important;
+                            gap: 0px !important;
+                            margin-bottom: 16px !important;
+                          }
+
+                          .dashboard-overview-subcard,
+                          .dashboard-activity-subcard {
+                            background: transparent !important;
+                            border: none !important;
+                            border-bottom: 1px solid ${theme === 'light' ? '#e2e8f0' : '#1e293b'} !important;
+                            border-radius: 0px !important;
+                            padding: 12px 0px !important;
+                            box-shadow: none !important;
+                          }
+
+                          /* 5. Right column widgets (Performance Chart, Speedometer, Salary cutoff, Recent Chats, Special Admin credits) */
+                          #earning-performance-chart-card,
+                          #repeat-user-speedometer-card,
+                          #payout-cycle-preview-card,
+                          #recent-chats-card,
+                          #special-admin-wallet-card {
+                            background: transparent !important;
+                            border: none !important;
+                            border-bottom: 1px solid ${theme === 'light' ? '#e2e8f0' : '#1e293b'} !important;
+                            padding: 16px 0px !important;
+                            border-radius: 0px !important;
+                            box-shadow: none !important;
+                          }
+
+                          #special-admin-wallet-card {
+                            border-bottom: none !important;
+                          }
+
+                          /* 6. Sub-elements layout adjustments */
+                          #payout-cycle-preview-card > .grid {
+                            display: flex !important;
+                            flex-direction: column !important;
+                            gap: 0px !important;
+                          }
+
+                          #payout-cycle-preview-card > .grid > div {
+                            background: transparent !important;
+                            border: none !important;
+                            border-bottom: 1px solid ${theme === 'light' ? '#f1f5f9' : '#111a29'} !important;
+                            padding: 12px 0px !important;
+                            border-radius: 0px !important;
+                          }
+
+                          #payout-cycle-preview-card > .grid > div:last-child {
+                            border-bottom: none !important;
+                          }
+
+                          /* Special Admin Wallet entries flattening */
+                          #special-admin-wallet-card .p-4 {
+                            background: transparent !important;
+                            border: none !important;
+                            border-bottom: 1px solid ${theme === 'light' ? '#f1f5f9' : '#111a29'} !important;
+                            padding: 12px 0px !important;
+                            border-radius: 0px !important;
+                          }
+
+                          #special-admin-wallet-card .p-4:last-child {
+                            border-bottom: none !important;
+                          }
+
+                          /* Live Repeat sub-card flat styling */
+                          #repeat-user-speedometer-card > div:last-of-type {
+                            border-top: none !important;
+                          }
+                          #repeat-user-speedometer-card > div:last-of-type > div {
+                            background: transparent !important;
+                            border: none !important;
+                            padding: 8px 0px !important;
+                            border-radius: 0px !important;
+                          }
+                        }
+                      `}</style>
                       {/* Left Column: The high-fidelity starting cards styled exactly like the HTML snippet */}
                       <div className="lg:col-span-5 xl:col-span-4 flex justify-center lg:justify-start w-full">
                         <div 
@@ -4147,7 +4331,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           </p>
 
                           {/* Rate & Mode Card */}
-                          <div style={{ 
+                          <div id="dashboard-rate-mode-card" style={{ 
                             background: theme === 'light' ? '#ffffff' : '#111a29', 
                             border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a', 
                             borderRadius: '18px', 
@@ -4282,7 +4466,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           </div>
 
                           {/* Your Wallet & Rolling Monthly Earnings Card */}
-                          <div style={{ 
+                          <div id="dashboard-wallet-card" style={{ 
                             background: theme === 'light' ? '#ffffff' : '#111a29', 
                             border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a', 
                             borderRadius: '16px', 
@@ -4302,8 +4486,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                           {/* Earnings Overview */}
                           <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px', fontFamily: 'var(--font-sans)' }}>Earnings overview</p>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-                            <div style={{ 
+                          <div id="dashboard-earnings-overview-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                            <div className="dashboard-overview-subcard" style={{ 
                               background: theme === 'light' ? '#ffffff' : '#111a29', 
                               borderRadius: '14px', 
                               padding: '14px', 
@@ -4314,7 +4498,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 ₹{wallet?.wallet_today ? wallet.wallet_today.toFixed(2) : '0.00'}
                               </p>
                             </div>
-                            <div style={{ 
+                            <div className="dashboard-overview-subcard" style={{ 
                               background: theme === 'light' ? '#ffffff' : '#111a29', 
                               borderRadius: '14px', 
                               padding: '14px', 
@@ -4329,8 +4513,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                           {/* Activity Summary */}
                           <p style={{ margin: '0 0 8px', fontSize: '12px', color: theme === 'light' ? '#475569' : '#7a8699', paddingLeft: '2px', fontFamily: 'var(--font-sans)' }}>Activity summary</p>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <div style={{ 
+                          <div id="dashboard-activity-summary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <div className="dashboard-activity-subcard" style={{ 
                               background: theme === 'light' ? '#ffffff' : '#111a29', 
                               borderRadius: '14px', 
                               padding: '14px', 
@@ -4341,7 +4525,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                 {sessions.filter((s: any) => s.status === 'completed').length}
                               </p>
                             </div>
-                            <div style={{ 
+                            <div className="dashboard-activity-subcard" style={{ 
                               background: theme === 'light' ? '#ffffff' : '#111a29', 
                               borderRadius: '14px', 
                               padding: '14px', 
@@ -4392,10 +4576,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch pt-2 text-left">
                           {/* Left: Dynamic Weekly/Monthly Earnings Performance Chart */}
                           <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
-                            <div className={`p-5 rounded-2xl border relative flex flex-col justify-between h-full min-h-[220px] ${
+                            <div id="earning-performance-chart-card" className={`p-5 rounded-2xl border relative flex flex-col justify-between h-full min-h-[220px] ${
                               theme === 'light'
                                 ? 'bg-white border-slate-200 shadow-sm text-slate-800'
-                                : 'bg-slate-950/60 border-slate-850/85 text-slate-100'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-100'
                             }`}>
                               <div className="flex items-center justify-between mb-4">
                                 <span className={`text-xs font-bold uppercase tracking-wider ${
@@ -4439,7 +4623,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   }`}>
                                     {/* Week-wise Slider and Selector */}
                                     <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border ${
-                                      theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/50 border-slate-850'
+                                      theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/50 border-slate-800'
                                     }`}>
                                       <div className="flex flex-col text-left">
                                         <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-extrabold">Performance Week</span>
@@ -4478,7 +4662,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                     <div className="flex flex-col text-left">
                                       <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-extrabold mb-1.5">Filter by Specific Day</span>
                                       <div className={`flex flex-wrap gap-1 p-1 rounded-xl border ${
-                                        theme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-950 border-slate-850'
+                                        theme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-950 border-slate-800'
                                       }`}>
                                         {['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
                                           <button
@@ -4586,14 +4770,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                       <div className={`mt-4 p-3 rounded-xl border grid grid-cols-3 gap-2.5 text-center ${
                                         theme === 'light'
                                           ? 'bg-slate-50 border-slate-200 text-slate-800'
-                                          : 'bg-slate-900/50 border-slate-850/80 text-slate-100'
+                                          : 'bg-slate-900/50 border-slate-800 text-slate-100'
                                       }`}>
                                         <div className="flex flex-col justify-center">
                                           <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
                                           <span className={`text-[10px] font-bold block mt-0.5 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Earnings</span>
                                           <span className={`text-xs font-mono font-black mt-0.5 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>₹{Math.round(displayedEarnings).toLocaleString()}</span>
                                         </div>
-                                        <div className={`flex flex-col justify-center border-x ${theme === 'light' ? 'border-slate-200' : 'border-slate-850'}`}>
+                                        <div className={`flex flex-col justify-center border-x ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
                                           <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest block font-bold">{displayLabel}</span>
                                           <span className={`text-[10px] font-bold block mt-0.5 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Consultations</span>
                                           <span className={`text-xs font-mono font-black mt-0.5 ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>{displayedCalls} calls</span>
@@ -4750,10 +4934,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               const needleRotation = (repeatUserPct / 100) * 180 - 90;
                               
                               return (
-                                <div className={`p-5 rounded-2xl border flex flex-col justify-between h-full shadow-lg text-center space-y-4 ${
+                                <div id="repeat-user-speedometer-card" className={`p-5 rounded-2xl border flex flex-col justify-between h-full shadow-lg text-center space-y-4 ${
                                   theme === 'light'
                                     ? 'bg-white border-slate-200 text-slate-800'
-                                    : 'bg-slate-950 border-slate-850 text-slate-100'
+                                    : 'bg-slate-950 border-slate-800 text-slate-100'
                                 }`}>
                                   <div className={`flex items-center justify-between border-b pb-2 flex-wrap gap-2 ${
                                     theme === 'light' ? 'border-slate-100' : 'border-slate-900'
@@ -4856,7 +5040,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   {/* Only Repeat User Indicator */}
                                   <div className={`flex justify-center items-center pt-2 border-t ${theme === 'light' ? 'border-slate-100' : 'border-slate-900'}`}>
                                     <div className={`py-2 px-6 rounded-xl border text-center ${
-                                      theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/60 border-slate-850'
+                                      theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/60 border-slate-800'
                                     }`}>
                                       <span className={`text-[10px] uppercase font-sans tracking-wider block ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Target Repeat Rate</span>
                                       <strong className={`text-xs font-mono block mt-0.5 ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
@@ -4876,7 +5060,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                       {/* Section 6: Payout cycle preview */}
                       {salaryInfo && (
-                        <div className={`rounded-3xl p-6 shadow-sm space-y-4 text-left border ${
+                        <div id="payout-cycle-preview-card" className={`rounded-3xl p-6 shadow-sm space-y-4 text-left border ${
                           theme === 'light'
                             ? 'bg-white border-slate-200 text-slate-800'
                             : 'bg-slate-900 border-slate-800 text-slate-100'
@@ -4903,7 +5087,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className={`p-4 rounded-xl border ${
-                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
                             }`}>
                               <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Estimated Salary Payout</span>
                               <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>₹{salaryInfo.prevCycleEarnings.toFixed(2)}</strong>
@@ -4911,7 +5095,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             </div>
 
                             <div className={`p-4 rounded-xl border ${
-                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
                             }`}>
                               <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Credit Target Date</span>
                               <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>By {salaryInfo.payoutDay}th of {salaryInfo.payoutMonthName}</strong>
@@ -4919,7 +5103,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             </div>
 
                             <div className={`p-4 rounded-xl border ${
-                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
                             }`}>
                               <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider block">Accumulating Unbilled</span>
                               <strong className={`text-lg font-mono block mt-1 ${theme === 'light' ? 'text-slate-950 font-black' : 'text-slate-200'}`}>₹{salaryInfo.currentCycleEarnings.toFixed(2)}</strong>
@@ -4930,7 +5114,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       )}
 
                       {/* Section 7: Recent Chats Quick List */}
-                      <div className={`border rounded-3xl p-6 shadow-sm space-y-4 text-left ${
+                      <div id="recent-chats-card" className={`border rounded-3xl p-6 shadow-sm space-y-4 text-left ${
                         theme === 'light'
                           ? 'bg-white border-slate-200 text-slate-800'
                           : 'bg-slate-900 border-slate-800 text-slate-100'
@@ -5001,7 +5185,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                       {/* Section 8: Special Admin Wallet Additions */}
                       {manualAdjustments && manualAdjustments.length > 0 && (
-                        <div className={`border rounded-3xl p-6 shadow-sm space-y-4 text-left ${
+                        <div id="special-admin-wallet-card" className={`border rounded-3xl p-6 shadow-sm space-y-4 text-left ${
                           theme === 'light'
                             ? 'bg-white border-slate-200 text-slate-800'
                             : 'bg-slate-900 border-slate-800 text-slate-100'
@@ -5249,24 +5433,50 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                  className="w-full"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Settings2 className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Edit Profile</h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('dashboard')}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Home</span>
-                    </button>
-                  </div>
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
 
-                  <form onSubmit={handleUpdateProfile} className="space-y-6">
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                        <Settings2 className="w-5 h-5 text-emerald-400" />
+                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Edit Profile</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                            : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back to Home</span>
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUpdateProfile} className="flex-1 flex flex-col min-h-0">
+                      {/* Scrollable container */}
+                      <div className="flex-1 flex flex-col max-h-none sm:max-h-[600px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0 space-y-6 sm:mt-6">
                     {/* ACCOUNT CREDENTIALS & SECURITY */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
                       <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-sans">🔒 Account Credentials & Secure Info</h4>
@@ -5515,24 +5725,41 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         ✗ {profileFeedbackError}
                       </p>
                     )}
-                  </form>
+                      </div>
+                    </form>
+                  </div>
                 </motion.div>
               )}
 
-              {/* TAB 4: CONSULTATIONS & CLIENT HISTORY & BLOCKLIST */}
+              {/* TAB 4: CONSULTATIONS & CLIENT HISTORY */}
               {activeTab === 'sessions' && (
                 <motion.div
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="space-y-6"
+                  className="w-full"
                 >
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
+
                   {/* Chat Session Table */}
-                  <div className={`border rounded-2xl p-6 shadow-lg space-y-4 text-left ${
-                    theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-880 text-slate-100'
-                  }`}>
-                    <div className={`flex items-center justify-between pb-2 border-b gap-2 ${
-                      theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+                    
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
                     }`}>
                       <div className="flex items-center space-x-2 min-w-0">
                         <FileText className={`w-6 h-6 shrink-0 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`} />
@@ -5551,7 +5778,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </button>
                     </div>
 
-                    <div className="flex flex-col max-h-[550px] overflow-y-auto overflow-x-hidden pr-1 sessions-scrollbar">
+                    {/* Scrollable list container */}
+                    <div className="flex-1 flex flex-col max-h-none sm:max-h-[550px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0">
                       {sessions.length === 0 ? (
                         <div className="text-center py-12 text-slate-500 text-xs font-sans">No sessions recorded yet for your account.</div>
                       ) : (
@@ -5741,21 +5969,59 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       )}
                     </div>
                   </div>
+                </motion.div>
+              )}
 
-                  {/* Blocked Users Card */}
-                  <div className={`border rounded-2xl p-6 shadow-lg space-y-4 text-left ${
-                    theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-880 text-slate-100'
-                  }`}>
-                    <div className={`flex items-center space-x-2 pb-2 border-b ${
-                      theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+              {/* TAB: Blocked Clients List */}
+              {activeTab === 'blocked' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="w-full"
+                >
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
+
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
                     }`}>
-                      <ShieldAlert className="w-5 h-5 text-rose-400" />
-                      <h3 className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Blocked Clients List</h3>
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
+                        <h3 className={`font-bold truncate text-sm sm:text-base ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Blocked Clients</h3>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shrink-0 ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                            : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Go Back</span>
+                      </button>
                     </div>
 
-                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                    {/* Scrollable list container */}
+                    <div className="flex-1 flex flex-col max-h-none sm:max-h-[500px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0 space-y-2">
                       {blockedUsers.length === 0 ? (
-                        <div className="text-center py-6 text-slate-500 text-xs font-sans">No clients are currently blocked.</div>
+                        <div className="text-center py-12 text-slate-500 text-xs font-sans">No clients are currently blocked.</div>
                       ) : (
                         blockedUsers.map((b) => (
                           <div key={b.id} className={`px-4 py-3 rounded-xl flex items-center justify-between border ${
@@ -5785,22 +6051,49 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                  className="w-full"
                   id="kyc-verification-tab"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
-                    <div className="flex items-center space-x-2">
-                      <UserCheck className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Aadhaar & PAN Verification (KYC Update)</h3>
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
+
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                        <UserCheck className="w-5 h-5 text-emerald-400" />
+                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>KYC Details</h3>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                            : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back to Dashboard</span>
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setActiveTab('dashboard')}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Dashboard</span>
-                    </button>
-                  </div>
+
+                    {/* Scrollable list container */}
+                    <div className="flex-1 flex flex-col max-h-none sm:max-h-[600px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0 space-y-6 sm:mt-6">
 
                   {/* KYC Status Indicator Banner */}
                   <div className="p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950 border-slate-850" id="kyc-status-banner">
@@ -6061,6 +6354,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
                     )}
                   </form>
+                    </div>
+                  </div>
                 </motion.div>
               )}
 
@@ -6070,22 +6365,49 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                  className="w-full"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Availability Schedule</h3>
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
+
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="w-5 h-5 text-emerald-400" />
+                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Availability Schedule</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                            : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Go Back</span>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('dashboard')}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Go Back</span>
-                    </button>
-                  </div>
+
+                    {/* Scrollable list container */}
+                    <div className="flex-1 flex flex-col max-h-none sm:max-h-[600px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0 space-y-6 sm:mt-6">
 
                   {/* Add / Edit Schedule Form */}
                   <form onSubmit={handleSaveSchedule} className="bg-slate-950/80 p-5 rounded-xl border border-slate-800/60 space-y-4">
@@ -6242,6 +6564,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
                     )}
                   </div>
+                    </div>
+                  </div>
                 </motion.div>
               )}
 
@@ -6251,22 +6575,49 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                  className="w-full"
                   id="bank-details-tab"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Wallet className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Bank Details For Payout</h3>
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
+
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                        <Wallet className="w-5 h-5 text-emerald-400" />
+                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Bank Details For Payout</h3>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                            : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back to Home</span>
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setActiveTab('dashboard')}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Home</span>
-                    </button>
-                  </div>
+
+                    {/* Scrollable list container */}
+                    <div className="flex-1 flex flex-col max-h-none sm:max-h-[600px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0 space-y-4 sm:mt-6">
 
                   {/* Bank Details Status Indicator Banner */}
                   <div className="p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950 border-slate-850" id="bank-status-banner">
@@ -6391,6 +6742,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </div>
                     )}
                   </form>
+                    </div>
+                  </div>
                 </motion.div>
               )}
 
@@ -6645,68 +6998,107 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-6 text-left"
+                  className="w-full"
                   id="consultant-followers-tab"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Users className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-slate-100 font-sans">Your Followers</h3>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('dashboard')}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700 hover:border-slate-600"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Go Back</span>
-                    </button>
-                  </div>
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
 
-                  <div className="bg-slate-950 rounded-xl border border-slate-850 overflow-hidden">
-                    {followersLoading ? (
-                      <div className="p-8 text-center text-slate-500 text-xs font-mono">
-                        Followers load ho rahe hain...
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                        <Users className="w-5 h-5 text-emerald-400" />
+                        <h3 className={`font-bold font-sans ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Your Followers</h3>
                       </div>
-                    ) : followersList.length === 0 ? (
-                      <div className="p-12 text-center text-slate-500 space-y-2">
-                        <Users className="w-8 h-8 mx-auto text-slate-700" />
-                        <p className="text-sm font-bold text-slate-400">Abhi tak koi followers nahi hain</p>
-                        <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                          Jaise hi users aapko follow karenge, unki profiles aur details yahan show hone lagengi.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-850">
-                        {followersList.map((follower: any, idx: number) => (
-                          <div key={follower.id || idx} className="p-4 flex items-center justify-between hover:bg-slate-900/40 transition-colors">
-                            <div className="flex items-center space-x-3.5">
-                              {follower.photo_url ? (
-                                <img
-                                  src={follower.photo_url}
-                                  alt={follower.display_name}
-                                  className="w-10 h-10 rounded-full object-cover border border-slate-800"
-                                  referrerPolicy="no-referrer"
-                                  onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold font-sans">
-                                  {(follower.display_name || 'U')[0].toUpperCase()}
-                                </div>
-                              )}
-                              <div>
-                                <h4 className="font-bold text-sm text-slate-200">{follower.display_name || 'Anonymous User'}</h4>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[10px] text-slate-500 block uppercase font-sans tracking-wider">Followed on</span>
-                              <span className="text-xs text-slate-300 font-sans">
-                                {follower.created_at ? new Date(follower.created_at).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
+                      <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                            : 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Go Back</span>
+                      </button>
+                    </div>
+
+                    {/* Scrollable list container */}
+                    <div className="flex-1 flex flex-col max-h-none sm:max-h-[550px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0">
+                      <div className={`rounded-xl border overflow-hidden ${
+                        theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
+                      }`}>
+                        {followersLoading ? (
+                          <div className="p-8 text-center text-slate-500 text-xs font-mono">
+                            Followers load ho rahe hain...
                           </div>
-                        ))}
+                        ) : followersList.length === 0 ? (
+                          <div className="p-12 text-center text-slate-500 space-y-2">
+                            <Users className="w-8 h-8 mx-auto text-slate-700" />
+                            <p className="text-sm font-bold text-slate-400">Abhi tak koi followers nahi hain</p>
+                            <p className="text-xs text-slate-500 max-w-sm mx-auto font-sans">
+                              Jaise hi users aapko follow karenge, unki profiles aur details yahan show hone lagengi.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className={`divide-y ${theme === 'light' ? 'divide-slate-200' : 'divide-slate-850'}`}>
+                            {followersList.map((follower: any, idx: number) => (
+                              <div 
+                                key={follower.id || idx} 
+                                className={`p-4 flex items-center justify-between transition-colors ${
+                                  theme === 'light' 
+                                    ? 'hover:bg-slate-100/50' 
+                                    : 'hover:bg-slate-900/40'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-3.5">
+                                  {follower.photo_url ? (
+                                    <img
+                                      src={follower.photo_url}
+                                      alt={follower.display_name}
+                                      className="w-10 h-10 rounded-full object-cover border border-slate-800"
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'; }}
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold font-sans">
+                                      {(follower.display_name || 'U')[0].toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <h4 className={`font-bold text-sm ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>
+                                      {follower.display_name || 'Anonymous User'}
+                                    </h4>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] text-slate-500 block uppercase font-sans tracking-wider">Followed on</span>
+                                  <span className={`text-xs font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
+                                    {follower.created_at ? new Date(follower.created_at).toLocaleDateString() : 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -6717,86 +7109,113 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-left"
+                  className="w-full"
                   id="consultant-notifications-tab"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-850">
-                    <div className="flex items-center space-x-2.5">
-                      <div className="bg-amber-500/15 p-2 rounded-xl border border-amber-500/20 text-amber-400">
-                        <Bell className="w-5 h-5 animate-pulse" />
-                      </div>
-                      <div>
-                        <h3 className="font-extrabold text-lg text-slate-100 font-sans tracking-tight leading-normal">Notifications</h3>
-                        <p className="text-xs text-slate-400">Official updates, policy announcements, and platform-wide alerts.</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {unreadNotifCount > 0 && (
-                        <button
-                          onClick={handleMarkAllAsRead}
-                          className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-3.5 py-2 rounded-xl border border-emerald-500/20 cursor-pointer"
-                        >
-                          Mark All As Read ✓
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className="text-xs font-bold text-slate-300 hover:text-slate-100 transition-all bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-2 shadow-md active:scale-95 cursor-pointer"
-                      >
-                        <ArrowLeft className="w-4 h-4 text-emerald-400 animate-pulse" />
-                        <span>Back to Dashboard</span>
-                      </button>
-                    </div>
-                  </div>
+                  {/* Dynamic Style Override for main element padding on mobile */}
+                  <style>{`
+                    @media (max-w: 640px) {
+                      main {
+                        padding-bottom: 0px !important;
+                      }
+                    }
+                  `}</style>
 
-                  <div className="space-y-4">
-                    {clientNotifications.length === 0 ? (
-                      <div className="text-center py-20 bg-slate-950/40 border border-slate-850 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center space-y-3">
-                        <Bell className="w-8 h-8 text-slate-600 animate-pulse" />
-                        <div>
-                          <span className="font-bold text-slate-400">No Notifications Yet</span>
-                          <p className="text-[10px] text-slate-500 mt-1">Platform administrators will alert you here when there are updates or policy changes.</p>
+                  <div className={`text-left w-full sm:border sm:rounded-2xl sm:shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white border-transparent sm:border-slate-200 text-slate-800' 
+                      : 'bg-slate-900 border-transparent sm:border-slate-880 text-slate-100'
+                  } min-h-[calc(100vh-57px)] sm:min-h-0 flex flex-col`}>
+
+                    {/* Sticky Sub-header right below main sticky top bar */}
+                    <div className={`sticky top-[56px] sm:relative sm:top-0 z-30 flex items-center justify-between p-4 sm:p-0 sm:pb-4 border-b gap-4 ${
+                      theme === 'light' 
+                        ? 'bg-white border-slate-100' 
+                        : 'bg-slate-900 border-slate-800'
+                    }`}>
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div className="bg-amber-500/15 p-2 rounded-xl border border-amber-500/20 text-amber-400 shrink-0">
+                          <Bell className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <div className="min-w-0 text-left">
+                          <h3 className={`font-extrabold text-sm sm:text-base font-sans tracking-tight leading-normal truncate ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>Notifications</h3>
+                          <p className="text-[10px] text-slate-400 truncate hidden sm:block">Official updates and policy announcements.</p>
                         </div>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-4">
-                        {clientNotifications.map((n: any) => (
-                          <div
-                            key={n.id}
-                            className={`p-5 rounded-2xl border transition-all relative ${
-                              n.is_read
-                                ? 'bg-slate-950/40 border-slate-850/60 opacity-80'
-                                : 'bg-slate-900/90 border-emerald-500/20 shadow-lg shadow-emerald-500/[0.02]'
-                            }`}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {unreadNotifCount > 0 && (
+                          <button
+                            onClick={handleMarkAllAsRead}
+                            className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20 cursor-pointer"
                           >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                              <div className="flex items-center space-x-2">
-                                <span className={`text-[8px] font-black font-mono tracking-wider px-2 py-0.5 rounded-full ${
-                                  n.is_read
-                                    ? 'text-slate-500 bg-slate-950 border border-slate-850'
-                                    : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/15'
-                                }`}>
-                                  {n.is_read ? 'READ' : 'NEW UPDATE'}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-sans">
-                                  {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
-                                </span>
-                              </div>
-                              {!n.is_read && (
-                                <button
-                                  onClick={() => handleMarkAsRead(n.id)}
-                                  className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-2.5 py-1 rounded-lg cursor-pointer transition-colors"
-                                >
-                                  Mark as Read ✓
-                                </button>
-                              )}
-                            </div>
-                            <h4 className="text-sm font-bold text-slate-200 mb-1">{n.title}</h4>
-                            <p className="text-xs text-slate-400 leading-relaxed font-sans">{n.message}</p>
-                          </div>
-                        ))}
+                            Mark All ✓
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setActiveTab('dashboard')}
+                          className={`text-xs font-bold transition-all border rounded-xl px-3 py-1.5 flex items-center space-x-1.5 shadow-md active:scale-95 cursor-pointer ${
+                            theme === 'light'
+                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                              : 'bg-slate-950 hover:bg-slate-900 text-slate-300 hover:text-slate-100 border-slate-800'
+                          }`}
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Go Back</span>
+                        </button>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Scrollable list container */}
+                    <div className="flex-1 flex flex-col max-h-none sm:max-h-[600px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0 space-y-4">
+                      {clientNotifications.length === 0 ? (
+                        <div className="text-center py-20 bg-slate-950/40 border border-slate-850 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center space-y-3">
+                          <Bell className="w-8 h-8 text-slate-600 animate-pulse" />
+                          <div>
+                            <span className="font-bold text-slate-400 text-xs">No Notifications Yet</span>
+                            <p className="text-[10px] text-slate-500 mt-1">Platform administrators will alert you here when there are updates or policy changes.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-4">
+                          {clientNotifications.map((n: any) => (
+                            <div
+                              key={n.id}
+                              className={`p-5 rounded-2xl border transition-all relative ${
+                                n.is_read
+                                  ? 'bg-slate-950/40 border-slate-850/60 opacity-80'
+                                  : 'bg-slate-900/90 border-emerald-500/20 shadow-lg shadow-emerald-500/[0.02]'
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                                <div className="flex items-center space-x-2">
+                                  <span className={`text-[8px] font-black font-mono tracking-wider px-2 py-0.5 rounded-full ${
+                                    n.is_read
+                                      ? 'text-slate-500 bg-slate-950 border border-slate-850'
+                                      : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/15'
+                                  }`}>
+                                    {n.is_read ? 'READ' : 'NEW UPDATE'}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-sans">
+                                    {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                                  </span>
+                                </div>
+                                {!n.is_read && (
+                                  <button
+                                    onClick={() => handleMarkAsRead(n.id)}
+                                    className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 px-2.5 py-1 rounded-lg cursor-pointer transition-colors self-start sm:self-auto"
+                                  >
+                                    Mark as Read ✓
+                                  </button>
+                                )}
+                              </div>
+                              <h4 className="text-sm font-bold text-slate-200 mb-1">{n.title}</h4>
+                              <p className="text-xs text-slate-400 leading-relaxed font-sans">{n.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 </motion.div>
               )}
