@@ -174,6 +174,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [salaryInfo, setSalaryInfo] = useState<any>(null);
   const [manualAdjustments, setManualAdjustments] = useState<any[]>([]);
   const [loginHours, setLoginHours] = useState<{ daily: number, weekly: number, monthly: number } | null>(null);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [isTabVisible, setIsTabVisible] = useState(true);
+
+  // Monitor tab focus / active visibility state
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVisibility = () => {
+      setIsTabVisible(document.visibilityState === 'visible');
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
 
   // --- REAL-TIME IN-APP ALERTS & BROADCASTS ---
   const [clientNotifications, setClientNotifications] = useState<any[]>([]);
@@ -557,6 +571,93 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   );
   const lastNotifiedRequestIdRef = useRef<string | null>(null);
+
+  // --- AUDIO KEEP-ALIVE TO PREVENT BACKGROUND SOCKET SUSPENSION ---
+  const backgroundAudioCtxRef = useRef<any>(null);
+  const backgroundSilenceSourceRef = useRef<any>(null);
+
+  const startSilentKeepAlive = () => {
+    try {
+      if (typeof window === 'undefined') return;
+      
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      // Create AudioContext if it doesn't exist
+      if (!backgroundAudioCtxRef.current) {
+        backgroundAudioCtxRef.current = new AudioContextClass();
+        (window as any).backgroundAudioCtx = backgroundAudioCtxRef.current;
+      }
+
+      const ctx = backgroundAudioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      // If already playing, don't start another source
+      if (backgroundSilenceSourceRef.current) return;
+
+      // Generate a short buffer of silence (0.5s) to loop
+      const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      
+      // Use low gain to ensure it is completely silent
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0.001, ctx.currentTime);
+      
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      source.start();
+      backgroundSilenceSourceRef.current = source;
+      console.log('[Audio Keep-Alive] Started silent background audio loop successfully.');
+    } catch (err) {
+      console.warn('[Audio Keep-Alive] Silent loop creation blocked/unsupported:', err);
+    }
+  };
+
+  const stopSilentKeepAlive = () => {
+    try {
+      if (backgroundSilenceSourceRef.current) {
+        backgroundSilenceSourceRef.current.stop();
+        backgroundSilenceSourceRef.current = null;
+      }
+      if (backgroundAudioCtxRef.current && backgroundAudioCtxRef.current.state !== 'closed') {
+        backgroundAudioCtxRef.current.close().catch(() => {});
+        backgroundAudioCtxRef.current = null;
+        (window as any).backgroundAudioCtx = null;
+      }
+      console.log('[Audio Keep-Alive] Stopped silent background audio.');
+    } catch (err) {
+      console.error('[Audio Keep-Alive] Error stopping silent audio:', err);
+    }
+  };
+
+  // Keep Audio active in background whenever Consultant is Online
+  useEffect(() => {
+    if (!isOnline) {
+      stopSilentKeepAlive();
+      return;
+    }
+
+    // Try starting immediately
+    startSilentKeepAlive();
+
+    const handleUnlockAndResume = () => {
+      startSilentKeepAlive();
+    };
+
+    window.addEventListener('click', handleUnlockAndResume);
+    window.addEventListener('touchstart', handleUnlockAndResume);
+
+    return () => {
+      window.removeEventListener('click', handleUnlockAndResume);
+      window.removeEventListener('touchstart', handleUnlockAndResume);
+      stopSilentKeepAlive();
+    };
+  }, [isOnline]);
 
   const handleRequestNotificationPermission = () => {
     if (typeof Notification === 'undefined') {
@@ -1118,14 +1219,41 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   }, [selectedPlanId, plans]);
 
-  // Poll stats and sessions list every 4 seconds for incoming chat requests
+  // Smart Dynamic Polling to avoid hammering the server/database with frequent API hits
   useEffect(() => {
     if (!currentConsultant) return;
+
+    // We calculate a smart dynamic interval based on status:
+    // 1. Offline: No need to poll fast, 45 seconds is plenty.
+    // 2. Online but Tab is in Background (Hidden): We sleep the polling (90 seconds)
+    //    and rely strictly on WebSockets and background Service Worker Push/Audio chimes!
+    // 3. Online & Tab Active & Socket Connected: WebSocket is healthy and active. Since we get 
+    //    instant push-driven updates, we can relax HTTP polling to 45 seconds just to sync numbers.
+    // 4. Online & Tab Active & Socket Disconnected: We fall back to 15 seconds safe polling as a backup
+    //    until the socket auto-connects.
+    let intervalTime = 45000;
+
+    if (isOnline) {
+      if (!isTabVisible) {
+        intervalTime = 90000; // Sleep polling in background
+      } else if (isSocketConnected) {
+        intervalTime = 45000; // Relaxed sync polling when WebSocket is healthy
+      } else {
+        intervalTime = 15000; // Safe backup polling only when Socket is disconnected
+      }
+    }
+
+    console.log(`[Smart Polling] Set interval to ${intervalTime}ms (Online: ${isOnline}, Socket Connected: ${isSocketConnected}, Tab Visible: ${isTabVisible})`);
+
+    // Initial load when state changes
+    loadConsultantStatsAndStatus(currentConsultant.id, true);
+
     const interval = setInterval(() => {
       loadConsultantStatsAndStatus(currentConsultant.id, true);
-    }, 30000);
+    }, intervalTime);
+
     return () => clearInterval(interval);
-  }, [currentConsultant?.id]);
+  }, [currentConsultant?.id, isOnline, isSocketConnected, isTabVisible]);
 
   // Fluctuating real-time earning index & performance values
   useEffect(() => {
@@ -1147,14 +1275,60 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Real-time instant notification via WebSockets
   useEffect(() => {
     if (!currentConsultant) return;
-    const socket = io({ transports: ['websocket'] });
+    
+    console.log('[WebSocket] Initializing robust socket connection for background keep-alive...');
+    const socket = io({ 
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity,
+      timeout: 20000,
+      autoConnect: true
+    });
+
+    socket.on('connect', () => {
+      console.log('[WebSocket] Connected! ID:', socket.id);
+      setIsSocketConnected(true);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('[WebSocket] Disconnected! Reason:', reason);
+      setIsSocketConnected(false);
+      if (reason === 'io server disconnect') {
+        socket.connect();
+      }
+    });
+
     socket.on('session:created', (data) => {
       if (Number(data.consultant_id) === Number(currentConsultant.id)) {
         console.log('[WebSocket] Instant incoming chat request detected! Refreshing sessions immediately...');
         loadConsultantStatsAndStatus(currentConsultant.id, true);
       }
     });
+
+    // Send a client-side heartbeat every 15 seconds to keep any background connection active
+    const pingInterval = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('ping:heartbeat', { client_time: Date.now() });
+      }
+    }, 15000);
+
+    // Reconnect/Sync instantly when tab becomes visible or gets focused
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Visibility] Tab focused! Syncing socket and fetching active stats...');
+        if (!socket.connected) {
+          socket.connect();
+        }
+        loadConsultantStatsAndStatus(currentConsultant.id, true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      clearInterval(pingInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.disconnect();
     };
   }, [currentConsultant?.id]);

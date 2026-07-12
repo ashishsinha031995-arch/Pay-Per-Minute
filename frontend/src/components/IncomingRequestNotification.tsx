@@ -73,17 +73,22 @@ export const IncomingRequestNotification: React.FC<IncomingRequestNotificationPr
       const playRingPulse = () => {
         try {
           if (!audioCtxRef.current) {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            if (!AudioContextClass) {
-              setAudioError('AudioContext not supported in this browser.');
-              return;
+            if ((window as any).backgroundAudioCtx && (window as any).backgroundAudioCtx.state !== 'closed') {
+              audioCtxRef.current = (window as any).backgroundAudioCtx;
+              console.log('[Web Audio API] Reusing already active and unlocked background AudioContext for ringer.');
+            } else {
+              const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+              if (!AudioContextClass) {
+                setAudioError('AudioContext not supported in this browser.');
+                return;
+              }
+              audioCtxRef.current = new AudioContextClass();
             }
-            audioCtxRef.current = new AudioContextClass();
           }
 
           const ctx = audioCtxRef.current;
           if (ctx.state === 'suspended') {
-            ctx.resume();
+            ctx.resume().catch(e => console.warn('[Web Audio API] Autoplay block on resume:', e));
           }
 
           const now = ctx.currentTime;
@@ -166,7 +171,9 @@ export const IncomingRequestNotification: React.FC<IncomingRequestNotificationPr
       ringIntervalRef.current = null;
     }
     if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
+      if (audioCtxRef.current !== (window as any).backgroundAudioCtx) {
+        audioCtxRef.current.close().catch(() => {});
+      }
       audioCtxRef.current = null;
     }
   };
