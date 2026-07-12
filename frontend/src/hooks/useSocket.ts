@@ -6,7 +6,7 @@ export function useSocket() {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const s = io();
+    const s = io({ transports: ['websocket'] });
     setSocket(s);
 
     s.on('connect', () => setConnected(true));

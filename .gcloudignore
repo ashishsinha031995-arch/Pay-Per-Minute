@@ -1,0 +1,29 @@
+# This file specifies files and directories that should be ignored by gcloud commands (like gcloud run deploy)
+.gcloudignore
+.git
+.gitignore
+
+# Ignore node_modules because it is installed on the Cloud Build server inside the container
+node_modules/
+**/node_modules/
+
+# Ignore local builds - Cloud Build will run its own build
+dist/
+**/dist/
+
+# Ignore active/locked SQLite databases and journal files to avoid file corruption during archive packaging
+*.sqlite*
+database.sqlite*
+database.sqlite-wal
+database.sqlite-shm
+
+# Ignore large backup and temporary upload folders
+uploads/
+backups/
+*.log
+.cache/
+.vite/
+.npm/
+
+# Ignore environment files containing secret configurations
+.env*

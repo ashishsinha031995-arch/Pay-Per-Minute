@@ -1147,7 +1147,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Real-time instant notification via WebSockets
   useEffect(() => {
     if (!currentConsultant) return;
-    const socket = io();
+    const socket = io({ transports: ['websocket'] });
     socket.on('session:created', (data) => {
       if (Number(data.consultant_id) === Number(currentConsultant.id)) {
         console.log('[WebSocket] Instant incoming chat request detected! Refreshing sessions immediately...');

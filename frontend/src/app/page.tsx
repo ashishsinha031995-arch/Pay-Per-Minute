@@ -242,7 +242,7 @@ export default function AppPage() {
 
   // Background Socket.IO ping monitoring and Deep Link Parsing
   useEffect(() => {
-    const socket = io();
+    const socket = io({ transports: ['websocket'] });
 
     socket.on('connect', () => {
       setSocketConnected(true);

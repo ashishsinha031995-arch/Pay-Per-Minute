@@ -494,7 +494,7 @@ export function ChatRoom({
   useEffect(() => {
     if (isReadOnly) return;
     // Connect to current origin
-    const socket = io();
+    const socket = io({ transports: ['websocket'] });
     socketRef.current = socket;
 
     let heartbeatInterval: NodeJS.Timeout | null = null;
