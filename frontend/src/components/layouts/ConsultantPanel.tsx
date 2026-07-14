@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone, ChevronRight, Wifi, MoreVertical, MessageCircle, Eye, EyeOff, AlertTriangle, Clock } from 'lucide-react';
+import { Sparkles, Key, LogIn, LogOut, Wallet, ShieldCheck, UserCheck, RefreshCw, Copy, Check, FileText, Star, Settings2, Globe, Flame, ShieldAlert, ArrowLeft, ArrowRight, Shield, Award, Users, CheckCircle, Zap, Coins, TrendingUp, Menu, X, HelpCircle, Calendar, Lock, Bell, Volume2, Gauge, Sun, Moon, Smartphone, ChevronRight, Wifi, MoreVertical, MessageCircle, MessageSquare, Eye, EyeOff, AlertTriangle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
@@ -448,7 +448,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     return `${hours}:${minutes} ${ampm}`;
   };
 
-  const formatToYYYYMMDD = (dateStr: string | null) => {
+  const formatToDDMMYYYY = (dateStr: string | null) => {
     if (!dateStr) return '';
     try {
       const d = new Date(dateStr);
@@ -456,7 +456,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      return `${day}/${month}/${year}`;
     } catch {
       return dateStr;
     }
@@ -755,7 +755,15 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [simulatedRate, setSimulatedRate] = useState(30);
 
   // Helper to determine if the consultant has an active plan
-  const hasActivePlan = !!(wallet?.plan_id || (currentConsultant && currentConsultant.plan_id));
+  const isSubscriptionExpired = (() => {
+    const expiryStr = wallet?.plan_expiry || currentConsultant?.plan_expiry;
+    if (!expiryStr) return false;
+    const expiryDate = new Date(expiryStr);
+    const today = new Date();
+    return expiryDate < today;
+  })();
+
+  const hasActivePlan = !!(wallet?.plan_id || (currentConsultant && currentConsultant.plan_id)) && !isSubscriptionExpired;
 
   const handleScrollToPlans = () => {
     setActiveTab('dashboard');
@@ -1534,8 +1542,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           if (data.loginHours) {
             setLoginHours(data.loginHours);
           }
-        } catch (e) {
-          console.error('Error parsing stats JSON:', e);
+        } catch (e: any) {
+          const errMsg = e && e.message ? String(e.message) : '';
+          if (errMsg.includes('Failed to fetch') || errMsg.includes('abort') || errMsg.includes('stream') || errMsg.includes('network')) {
+            console.warn('Network connection or stream interrupted while parsing stats JSON.');
+          } else {
+            console.error('Error parsing stats JSON:', e);
+          }
         }
       } else if (res.status === 404 || res.status === 401) {
         // Stale session, clean it up!
@@ -1550,8 +1563,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           const blockedData = await blockedRes.json();
           setBlockedUsers(blockedData);
           localStorage.setItem(`blocked_users_${id}`, JSON.stringify(blockedData));
-        } catch (e) {
-          console.error('Error parsing blocked list JSON:', e);
+        } catch (e: any) {
+          const errMsg = e && e.message ? String(e.message) : '';
+          if (errMsg.includes('Failed to fetch') || errMsg.includes('abort') || errMsg.includes('stream') || errMsg.includes('network')) {
+            console.warn('Network connection or stream interrupted while parsing blocked list JSON.');
+          } else {
+            console.error('Error parsing blocked list JSON:', e);
+          }
         }
       }
 
@@ -2356,6 +2374,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Toggle Online/Offline State
   const handleToggleOnline = async () => {
     if (!currentConsultant) return;
+    if (isSubscriptionExpired) {
+      setError("Your subscription has expired. Please renew your plan to toggle presence.");
+      handleScrollToPlans();
+      return;
+    }
     try {
       const nextOnline = !isOnline;
       const res = await fetch(`/api/consultants/${currentConsultant.id}/status`, {
@@ -2365,15 +2388,25 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       });
       if (res.ok) {
         setIsOnline(nextOnline);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Failed to update presence status.");
+        handleScrollToPlans();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err?.message || "Failed to update presence status.");
     }
   };
 
   // Toggle Busy State
   const handleToggleBusy = async () => {
     if (!currentConsultant) return;
+    if (isSubscriptionExpired) {
+      setError("Your subscription has expired. Please renew your plan to toggle presence.");
+      handleScrollToPlans();
+      return;
+    }
     try {
       const nextBusy = !isBusy;
       const res = await fetch(`/api/consultants/${currentConsultant.id}/status`, {
@@ -2383,9 +2416,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       });
       if (res.ok) {
         setIsBusy(nextBusy);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Failed to update presence status.");
+        handleScrollToPlans();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err?.message || "Failed to update presence status.");
     }
   };
 
@@ -3270,16 +3308,39 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
       {/* 2. CONSULTANT IS LOGGED IN BUT STATS ARE LOADING */}
       {currentConsultant && !wallet && (
-        <div className="flex flex-col items-center justify-center py-20 px-4 space-y-4 bg-slate-900 border border-slate-800 rounded-2xl max-w-xl mx-auto shadow-xl text-center">
-          <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
-          <h3 className="font-bold text-slate-200">Loading Consultant Portal...</h3>
-          <p className="text-xs text-slate-400 max-w-xs">Connecting securely and fetching your wallet & active sessions...</p>
-          <button
-            onClick={handleLogout}
-            className="text-xs text-rose-400 hover:underline hover:text-rose-300 font-bold font-sans mt-4"
-          >
-            Reset Session / Login Again
-          </button>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 max-w-md mx-auto">
+          <div className="flex flex-col items-center justify-center space-y-6 w-full text-center">
+            <div className="relative">
+              {/* Pulsing/glowing background effect */}
+              <div className="absolute inset-0 bg-emerald-500/20 blur-2xl rounded-full animate-pulse"></div>
+              {/* Animated outer spinning border */}
+              <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 opacity-30 blur-sm animate-spin [animation-duration:8s]"></div>
+              
+              <div className="relative bg-gradient-to-tr from-emerald-500 to-teal-400 p-5 rounded-2xl text-slate-950 shadow-xl shadow-emerald-500/10 flex items-center justify-center animate-bounce [animation-duration:3s]">
+                <MessageSquare className="w-9 h-9 font-bold" />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black tracking-wider bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                CallMint
+              </h3>
+              <div className="flex items-center justify-center space-x-2 text-xs text-slate-400 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <span className="tracking-wide">Decrypting consultant portal...</span>
+              </div>
+              <p className="text-[11px] text-slate-500 max-w-xs mx-auto pt-1">
+                Connecting securely and synchronizing your real-time booking channels...
+              </p>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="text-xs text-rose-400 hover:underline hover:text-rose-300 font-medium font-sans mt-4 transition-all"
+            >
+              Reset Session / Login Again
+            </button>
+          </div>
         </div>
       )}
 
@@ -3292,8 +3353,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             const activeLiveChat = sessions.find(s => s.status === 'active');
             
             if (pendingRequest) {
-              const activePlan = plans.find(p => p.id === wallet?.plan_id);
-              const commissionRate = activePlan ? activePlan.commission_rate : 20;
+              const activePlanId = wallet?.plan_id !== undefined && wallet?.plan_id !== null ? wallet.plan_id : currentConsultant?.plan_id;
+              const activePlan = plans.find(p => Number(p.id) === Number(activePlanId));
+              const commissionRate = pendingRequest.commission_rate !== undefined && pendingRequest.commission_rate !== null
+                ? pendingRequest.commission_rate
+                : (activePlan ? activePlan.commission_rate : 30);
               return (
                 <IncomingRequestNotification
                   request={pendingRequest}
@@ -4733,63 +4797,69 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                               </div>
                             </div>
 
-                            {/* Part 3: Online/Offline Button */}
-                            <div 
-                              onClick={handleToggleOnline}
-                              className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'}`}
-                              style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a' }}
-                            >
-                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Online/Offline Button</span>
-                              <div style={{ 
-                                width: '36px', 
-                                height: '21px', 
-                                borderRadius: '11px', 
-                                backgroundColor: isOnline ? (theme === 'light' ? '#10b981' : '#1d9e75') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
-                                position: 'relative',
-                                transition: 'all 0.2s ease'
-                              }}>
-                                <div style={{ 
-                                  width: '15px', 
-                                  height: '15px', 
-                                  borderRadius: '50%', 
-                                  backgroundColor: '#fff', 
-                                  position: 'absolute', 
-                                  top: '3px', 
-                                  left: isOnline ? 'auto' : '3px',
-                                  right: isOnline ? '3px' : 'auto',
-                                  transition: 'all 0.2s ease'
-                                }}></div>
-                              </div>
-                            </div>
-
-                            {/* Part 4: Busy Button */}
-                            <div 
-                              onClick={handleToggleBusy}
-                              className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'}`}
-                              style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                            >
-                              <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)' }}>Busy Button</span>
-                              <div style={{ 
-                                width: '36px', 
-                                height: '21px', 
-                                borderRadius: '11px', 
-                                backgroundColor: isBusy ? (theme === 'light' ? '#f59e0b' : '#d97706') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
-                                position: 'relative',
-                                transition: 'all 0.2s ease'
-                              }}>
-                                <div style={{ 
-                                  width: '15px', 
-                                  height: '15px', 
-                                  borderRadius: '50%', 
-                                  backgroundColor: '#fff', 
-                                  position: 'absolute', 
-                                  top: '3px', 
-                                  left: isBusy ? 'auto' : '3px',
-                                  right: isBusy ? '3px' : 'auto',
-                                  transition: 'all 0.2s ease'
-                                }}></div>
-                              </div>
-                            </div>
+                             {/* Part 3: Online/Offline Button */}
+                             <div 
+                               onClick={handleToggleOnline}
+                               className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'} ${isSubscriptionExpired ? 'opacity-50 !cursor-not-allowed' : ''}`}
+                               style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a' }}
+                             >
+                               <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                 Online/Offline Button
+                                 {isSubscriptionExpired && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-bold font-mono">🔒</span>}
+                               </span>
+                               <div style={{ 
+                                 width: '36px', 
+                                 height: '21px', 
+                                 borderRadius: '11px', 
+                                 backgroundColor: isOnline && !isSubscriptionExpired ? (theme === 'light' ? '#10b981' : '#1d9e75') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
+                                 position: 'relative',
+                                 transition: 'all 0.2s ease'
+                               }}>
+                                 <div style={{ 
+                                   width: '15px', 
+                                   height: '15px', 
+                                   borderRadius: '50%', 
+                                   backgroundColor: '#fff', 
+                                   position: 'absolute', 
+                                   top: '3px', 
+                                   left: isOnline && !isSubscriptionExpired ? 'auto' : '3px',
+                                   right: isOnline && !isSubscriptionExpired ? '3px' : 'auto',
+                                   transition: 'all 0.2s ease'
+                                 }}></div>
+                               </div>
+                             </div>
+ 
+                             {/* Part 4: Busy Button */}
+                             <div 
+                               onClick={handleToggleBusy}
+                               className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'} ${isSubscriptionExpired ? 'opacity-50 !cursor-not-allowed' : ''}`}
+                               style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                             >
+                               <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                 Busy Button
+                                 {isSubscriptionExpired && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-bold font-mono">🔒</span>}
+                               </span>
+                               <div style={{ 
+                                 width: '36px', 
+                                 height: '21px', 
+                                 borderRadius: '11px', 
+                                 backgroundColor: isBusy && !isSubscriptionExpired ? (theme === 'light' ? '#f59e0b' : '#d97706') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
+                                 position: 'relative',
+                                 transition: 'all 0.2s ease'
+                               }}>
+                                 <div style={{ 
+                                   width: '15px', 
+                                   height: '15px', 
+                                   borderRadius: '50%', 
+                                   backgroundColor: '#fff', 
+                                   position: 'absolute', 
+                                   top: '3px', 
+                                   left: isBusy && !isSubscriptionExpired ? 'auto' : '3px',
+                                   right: isBusy && !isSubscriptionExpired ? '3px' : 'auto',
+                                   transition: 'all 0.2s ease'
+                                 }}></div>
+                               </div>
+                             </div>
                           </div>
 
                           {/* Your Wallet & Rolling Monthly Earnings Card */}
@@ -5686,34 +5756,42 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         {/* Online visible toggle */}
                         <div className={`flex items-center justify-between p-4 rounded-xl border ${
                           theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
-                        }`}>
+                        } ${isSubscriptionExpired ? 'opacity-60' : ''}`}>
                           <div>
-                            <span className="text-xs font-bold block text-slate-200">Online / Visible on Portal</span>
+                            <span className="text-xs font-bold block text-slate-200 flex items-center gap-1.5">
+                              Online / Visible on Portal
+                              {isSubscriptionExpired && <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold font-mono">LOCKED 🔒</span>}
+                            </span>
                             <span className="text-[10px] text-slate-500">Clients can view you and initiate chat requests</span>
                           </div>
                           <button
                             type="button"
                             onClick={handleToggleOnline}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isOnline ? 'bg-emerald-500' : 'bg-slate-800'}`}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isOnline && !isSubscriptionExpired ? 'bg-emerald-500' : 'bg-slate-800'} ${isSubscriptionExpired ? 'cursor-not-allowed' : ''}`}
+                            disabled={isSubscriptionExpired}
                           >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isOnline ? 'translate-x-6' : 'translate-x-1'}`} />
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isOnline && !isSubscriptionExpired ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
                         </div>
 
                         {/* Busy toggle */}
                         <div className={`flex items-center justify-between p-4 rounded-xl border ${
                           theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-850'
-                        }`}>
+                        } ${isSubscriptionExpired ? 'opacity-60' : ''}`}>
                           <div>
-                            <span className="text-xs font-bold block text-slate-200">Busy / Engaged Status</span>
+                            <span className="text-xs font-bold block text-slate-200 flex items-center gap-1.5">
+                              Busy / Engaged Status
+                              {isSubscriptionExpired && <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold font-mono">LOCKED 🔒</span>}
+                            </span>
                             <span className="text-[10px] text-slate-500">Puts a busy badge on your public booking profile</span>
                           </div>
                           <button
                             type="button"
                             onClick={handleToggleBusy}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isBusy ? 'bg-amber-500' : 'bg-slate-800'}`}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isBusy && !isSubscriptionExpired ? 'bg-amber-500' : 'bg-slate-800'} ${isSubscriptionExpired ? 'cursor-not-allowed' : ''}`}
+                            disabled={isSubscriptionExpired}
                           >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isBusy ? 'translate-x-6' : 'translate-x-1'}`} />
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isBusy && !isSubscriptionExpired ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
                         </div>
                       </div>
@@ -6850,7 +6928,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <div key={sch.id} className="bg-slate-950 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
                             <div className="space-y-1">
                               <span className="inline-block text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
-                                {sch.date ? formatToYYYYMMDD(sch.date) : sch.day}
+                                {sch.date ? formatToDDMMYYYY(sch.date) : sch.day}
                               </span>
                               <div className="text-xs font-bold text-slate-200">
                                 {formatTimeTo12Hour(sch.from_time)} to {formatTimeTo12Hour(sch.to_time)}

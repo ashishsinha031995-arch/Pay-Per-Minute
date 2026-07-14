@@ -17,6 +17,8 @@ interface HeaderProps {
 export function Header({ currentRole, onChangeRole, socketConnected, currentUser, currentConsultant, onLogout, onOpenAuth, theme, onToggleTheme, onNavigateToUserView }: HeaderProps) {
   const [copiedConsultantUrl, setCopiedConsultantUrl] = React.useState(false);
 
+  const isLoggedOut = (currentRole === 'user' && !currentUser) || (currentRole === 'consultant' && !currentConsultant);
+
   const handleCopyConsultantLink = () => {
     if (!currentConsultant) return;
     const bookingUrl = `${window.location.origin}/u/${currentConsultant.username}`;
@@ -135,59 +137,61 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                   <Menu className="w-4 h-4" />
                 </button>
               </div>
-            ) : currentRole === 'user' ? (
+            ) : isLoggedOut ? (
               <button
                 onClick={onOpenAuth}
                 className="hidden lg:flex bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-xl text-xs transition-all shadow-sm items-center space-x-1"
               >
                 <User className="w-3.5 h-3.5" />
-                <span>Login / Sign Up</span>
+                <span>Login</span>
               </button>
             ) : null}
 
             {/* Desktop-only Role Switcher */}
-            <div className="hidden lg:flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
-              <button
-                id="switch-to-user"
-                onClick={() => onChangeRole('user')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  currentRole === 'user'
-                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>Consultants Page</span>
-              </button>
-
-              <button
-                id="switch-to-consultant"
-                onClick={() => onChangeRole('consultant')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  currentRole === 'consultant'
-                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Consultant Portal</span>
-              </button>
-
-              {currentRole === 'admin' && (
+            {!isLoggedOut && (
+              <div className="hidden lg:flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
                 <button
-                  id="switch-to-admin"
-                  onClick={() => onChangeRole('admin')}
+                  id="switch-to-user"
+                  onClick={() => onChangeRole('user')}
                   className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    currentRole === 'admin'
+                    currentRole === 'user'
                       ? 'bg-emerald-500 text-slate-950 shadow-sm'
                       : 'text-slate-400 hover:text-white hover:bg-slate-900'
                   }`}
                 >
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Super Admin</span>
+                  <User className="w-3.5 h-3.5" />
+                  <span>Consultants Page</span>
                 </button>
-              )}
-            </div>
+
+                <button
+                  id="switch-to-consultant"
+                  onClick={() => onChangeRole('consultant')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    currentRole === 'consultant'
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Consultant Portal</span>
+                </button>
+
+                {currentRole === 'admin' && (
+                  <button
+                    id="switch-to-admin"
+                    onClick={() => onChangeRole('admin')}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      currentRole === 'admin'
+                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                    }`}
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Super Admin</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Mobile Actions Container (hidden on desktop, flex-centered elements) */}
             <div className="lg:hidden flex items-center justify-end gap-x-2.5 pr-1.5">
@@ -292,7 +296,7 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                     </button>
                   </div>
                 </>
-              ) : currentRole === 'user' ? (
+              ) : isLoggedOut ? (
                 <button 
                   onClick={onOpenAuth} 
                   className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-extrabold px-3.5 py-2 rounded-xl text-xs transition-all shadow-md h-10 flex items-center justify-center"

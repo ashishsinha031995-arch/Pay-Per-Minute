@@ -94,6 +94,15 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
     const { id } = req.params;
     const { is_online, is_busy } = req.body;
 
+    // Check if consultant's plan has expired
+    const consultant = db.prepare('SELECT plan_expiry, plan_id FROM consultants WHERE id = ?').get(id) as any;
+    if (consultant) {
+      const isExpired = consultant.plan_expiry ? new Date(consultant.plan_expiry) < new Date() : false;
+      if (!consultant.plan_id || isExpired) {
+        return res.status(403).json({ error: 'Your subscription has expired. Please buy or renew your subscription to toggle presence states.' });
+      }
+    }
+
     if (is_online !== undefined) {
       const current = db.prepare('SELECT is_online FROM consultants WHERE id = ?').get(id) as { is_online: number } | undefined;
       const isCurrentlyOnline = current?.is_online === 1;

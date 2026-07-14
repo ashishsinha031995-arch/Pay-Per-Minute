@@ -50,16 +50,17 @@ export default function AppPage() {
       if (path === '/super-secret-owner-portal') {
         return 'admin';
       }
-      const sessionRole = sessionStorage.getItem('current_role');
-      if (sessionRole === 'consultant' || sessionRole === 'admin' || sessionRole === 'user') {
-        return sessionRole;
+      if (path === '/consultant-portal') {
+        return 'consultant';
       }
-      const savedRole = localStorage.getItem('current_role');
+      if (path.startsWith('/u/')) {
+        return 'user';
+      }
+      const savedRole = localStorage.getItem('current_role') as 'user' | 'consultant' | 'admin' | null;
       if (savedRole === 'consultant' || savedRole === 'admin' || savedRole === 'user') {
         return savedRole;
       }
-      const hasConsultantSession = localStorage.getItem('consultant_session');
-      if (hasConsultantSession) {
+      if (localStorage.getItem('consultant_session') && !localStorage.getItem('logged_user_id')) {
         return 'consultant';
       }
     }
@@ -190,6 +191,7 @@ export default function AppPage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<'login' | 'signup' | 'forgot'>('login');
   const [authRole, setAuthRole] = useState<'user' | 'consultant'>('user');
+  const [loginType, setLoginType] = useState<'choose' | 'user' | 'consultant'>('choose');
   const [signUpType, setSignUpType] = useState<'choose' | 'user' | 'consultant'>('choose');
   const [consultantCategory, setConsultantCategory] = useState('Consultants');
   const [showConsultantLogoutWarning, setShowConsultantLogoutWarning] = useState(false);
@@ -200,6 +202,7 @@ export default function AppPage() {
     if (authModalOpen && targetUsername) {
       setAuthRole('user');
       setSignUpType('user');
+      setLoginType('user');
     }
   }, [authModalOpen, targetUsername]);
 
@@ -283,11 +286,22 @@ export default function AppPage() {
     const path = window.location.pathname;
     if (path === '/super-secret-owner-portal') {
       setCurrentRole('admin');
+    } else if (path === '/consultant-portal') {
+      setCurrentRole('consultant');
     } else if (path.startsWith('/u/')) {
       const username = path.slice(3).trim();
       if (username) {
         setTargetUsername(username);
         localStorage.setItem('clicked_consultant_username', username);
+        setCurrentRole('user');
+      }
+    } else {
+      const savedRole = localStorage.getItem('current_role') as 'user' | 'consultant' | 'admin' | null;
+      if (savedRole === 'consultant' || savedRole === 'admin' || savedRole === 'user') {
+        setCurrentRole(savedRole);
+      } else if (localStorage.getItem('consultant_session') && !localStorage.getItem('logged_user_id')) {
+        setCurrentRole('consultant');
+      } else {
         setCurrentRole('user');
       }
     }
@@ -300,6 +314,40 @@ export default function AppPage() {
 
     return () => {
       socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path === '/super-secret-owner-portal') {
+        setCurrentRole('admin');
+        setTargetUsername(undefined);
+      } else if (path === '/consultant-portal') {
+        setCurrentRole('consultant');
+        setTargetUsername(undefined);
+      } else if (path.startsWith('/u/')) {
+        const username = path.slice(3).trim();
+        setTargetUsername(username || undefined);
+        setCurrentRole('user');
+      } else {
+        const savedRole = localStorage.getItem('current_role') as 'user' | 'consultant' | 'admin' | null;
+        if (savedRole === 'consultant' || savedRole === 'admin' || savedRole === 'user') {
+          setCurrentRole(savedRole);
+        } else if (localStorage.getItem('consultant_session') && !localStorage.getItem('logged_user_id')) {
+          setCurrentRole('consultant');
+        } else {
+          setCurrentRole('user');
+        }
+        setTargetUsername(undefined);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
     };
   }, []);
 
@@ -404,6 +452,9 @@ export default function AppPage() {
   const handleNavigateToUserView = (username: string) => {
     setTargetUsername(username);
     setCurrentRole('user');
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', `/u/${username}`);
+    }
   };
 
   // Consultant Sign Up handler to register directly without storing locally
@@ -537,6 +588,9 @@ export default function AppPage() {
         localStorage.setItem('logged_user_id', data.user.id.toString());
         localStorage.setItem('current_role', 'user');
         sessionStorage.setItem('current_role', 'user');
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/u/')) {
+          window.history.pushState({}, '', '/');
+        }
         setAuthSuccess('Welcome back! Logging in...');
         setTimeout(() => {
           setAuthModalOpen(false);
@@ -557,6 +611,9 @@ export default function AppPage() {
         localStorage.setItem('current_role', 'consultant');
         sessionStorage.setItem('current_role', 'consultant');
         setCurrentRole('consultant');
+        if (typeof window !== 'undefined') {
+          window.history.pushState({}, '', '/consultant-portal');
+        }
         setAuthSuccess(`Welcome, ${data.consultant.display_name}! Redirecting to Consultant Dashboard...`);
         
         // Dispatch window event so ConsultantPanel reloads its session
@@ -661,6 +718,7 @@ export default function AppPage() {
     localStorage.removeItem('current_role');
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('current_role');
+      window.history.pushState({}, '', '/');
     }
     setTargetUsername(undefined);
     setCurrentUser(null);
@@ -715,10 +773,21 @@ export default function AppPage() {
           setCurrentRole(role);
           localStorage.setItem('current_role', role);
           sessionStorage.setItem('current_role', role);
-          // If switching role, reset target profile links
-          if (role !== 'user') setTargetUsername(undefined);
-          if (role !== 'admin' && window.location.pathname === '/super-secret-owner-portal') {
-            window.history.pushState({}, '', '/');
+          if (role === 'user') {
+            setTargetUsername(undefined);
+            if (typeof window !== 'undefined') {
+              window.history.pushState({}, '', '/');
+            }
+          } else if (role === 'consultant') {
+            setTargetUsername(undefined);
+            if (typeof window !== 'undefined') {
+              window.history.pushState({}, '', '/consultant-portal');
+            }
+          } else if (role === 'admin') {
+            setTargetUsername(undefined);
+            if (typeof window !== 'undefined') {
+              window.history.pushState({}, '', '/super-secret-owner-portal');
+            }
           }
         }}
         socketConnected={socketConnected}
@@ -729,6 +798,7 @@ export default function AppPage() {
           setAuthError(null);
           setAuthSuccess(null);
           setAuthTab('login');
+          setLoginType('choose');
           setSignUpType('choose');
           setAuthModalOpen(true);
         }}
@@ -775,6 +845,7 @@ export default function AppPage() {
                 setAuthError(null);
                 setAuthSuccess(null);
                 setAuthTab('login');
+                setLoginType('choose');
                 setSignUpType('choose');
                 setAuthModalOpen(true);
               }}
@@ -823,7 +894,10 @@ export default function AppPage() {
               <h3 className="text-xl font-black flex items-center space-x-2 text-emerald-400">
                 <Sparkles className="w-5 h-5 animate-pulse" />
                 <span>
-                  {authTab === 'login' && (authRole === 'user' ? 'User Login' : 'Consultant Login')}
+                  {authTab === 'login' && (
+                    loginType === 'choose' ? 'Login to CallMint' :
+                    authRole === 'user' ? 'User Login' : 'Consultant Login'
+                  )}
                   {authTab === 'signup' && (
                     signUpType === 'choose' ? 'Join CallMint' : 
                     signUpType === 'consultant' ? 'Consultant Sign Up' : 'User Sign Up'
@@ -832,7 +906,10 @@ export default function AppPage() {
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                {authTab === 'login' && 'Log in to start high-quality secured audio chats instantly.'}
+                {authTab === 'login' && (
+                  loginType === 'choose' ? 'Select an account type to log in.' :
+                  'Log in to start high-quality secured audio chats instantly.'
+                )}
                 {authTab === 'signup' && (
                   signUpType === 'choose' ? 'Select an account type to get started.' : 
                   signUpType === 'consultant' ? 'Enter your professional details to create a consultant account.' : 
@@ -857,7 +934,93 @@ export default function AppPage() {
             )}
 
             {/* Tab Content & Choice Screen */}
-            {authTab === 'signup' && signUpType === 'choose' ? (
+            {authTab === 'login' && loginType === 'choose' ? (
+              <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <p className="text-sm text-slate-300 font-medium text-center">
+                  Select how you would like to log in:
+                </p>
+                
+                <div className="space-y-3">
+                  {/* Option 1: Login as a User */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthRole('user');
+                      setLoginType('user');
+                      setAuthError(null);
+                    }}
+                    className="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-4 text-left transition-all duration-200 group active:scale-[0.98] flex items-center justify-between"
+                  >
+                    <div className="space-y-1">
+                      <div className="text-sm font-bold text-slate-200 flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
+                        <span>Login as a User</span>
+                        <span className="text-xs">👤</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 leading-relaxed max-w-[280px]">
+                        Consult with professional advisors, manage your wallet, and recharge.
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 p-2 rounded-xl group-hover:bg-emerald-500 group-hover:text-slate-950 group-hover:border-transparent transition-all">
+                      <User className="w-4 h-4 text-emerald-400 group-hover:text-slate-950 transition-colors" />
+                    </div>
+                  </button>
+
+                  {/* Option 2: Login as a Consultant */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthRole('consultant');
+                      setLoginType('consultant');
+                      setAuthError(null);
+                    }}
+                    className="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-4 text-left transition-all duration-200 group active:scale-[0.98] flex items-center justify-between"
+                  >
+                    <div className="space-y-1">
+                      <div className="text-sm font-bold text-slate-200 flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
+                        <span>Login as a Consultant</span>
+                        <span className="text-xs">💼</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 leading-relaxed max-w-[280px]">
+                        Access your advisor dashboard, manage live calls, and view earnings.
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 p-2 rounded-xl group-hover:bg-emerald-500 group-hover:text-slate-950 group-hover:border-transparent transition-all">
+                      <Sparkles className="w-4 h-4 text-emerald-400 group-hover:text-slate-950 transition-colors" />
+                    </div>
+                  </button>
+                </div>
+
+                <div className="flex justify-between items-center pt-3 border-t border-slate-800/60 text-xs text-slate-400 font-mono">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthTab('forgot');
+                      setForgotStep('email');
+                      setForgotEmail('');
+                      setVerificationCode('');
+                      setNewPassword('');
+                      setAuthError(null);
+                      setAuthSuccess(null);
+                    }}
+                    className="hover:text-emerald-400 text-[11px]"
+                  >
+                    Forgot Password?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthTab('signup');
+                      setSignUpType('choose');
+                      setAuthError(null);
+                      setAuthSuccess(null);
+                    }}
+                    className="text-emerald-400 hover:underline font-bold text-[11px]"
+                  >
+                    Create Account
+                  </button>
+                </div>
+              </div>
+            ) : authTab === 'signup' && signUpType === 'choose' ? (
               <div className="space-y-4">
                 <p className="text-sm text-slate-300 font-medium text-center">
                   Select how you would like to join CallMint:
@@ -964,6 +1127,9 @@ export default function AppPage() {
                     onClick={() => {
                       // Trigger routing update and close modal
                       setCurrentRole('consultant');
+                      if (typeof window !== 'undefined') {
+                        window.history.pushState({}, '', '/consultant-portal');
+                      }
                       setAuthModalOpen(false);
                       setDisplayName('');
                       setEmail('');
@@ -1068,7 +1234,7 @@ export default function AppPage() {
                     </button>
                     <div className="flex space-x-1 text-[11px]">
                       <span>Already have an account?</span>
-                      <button type="button" onClick={() => { setAuthTab('login'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold">
+                      <button type="button" onClick={() => { setAuthTab('login'); setLoginType('choose'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold">
                         Login
                       </button>
                     </div>
@@ -1079,7 +1245,7 @@ export default function AppPage() {
               <>
                 <form onSubmit={authTab === 'login' ? handleLogin : authTab === 'signup' ? handleSignUp : handleForgotPassword} className="space-y-4">
                   
-                  {(authTab === 'login' || authTab === 'forgot') && !targetUsername && (
+                  {authTab === 'forgot' && !targetUsername && (
                     <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center space-x-1">
                       <button
                         type="button"
@@ -1088,7 +1254,7 @@ export default function AppPage() {
                           authRole === 'user' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        {authTab === 'forgot' ? 'Reset as User 👤' : 'Login as User 👤'}
+                        Reset as User 👤
                       </button>
                       <button
                         type="button"
@@ -1097,7 +1263,7 @@ export default function AppPage() {
                           authRole === 'consultant' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        {authTab === 'forgot' ? 'Reset as Consultant 💼' : 'Login as Consultant 💼'}
+                        Reset as Consultant 💼
                       </button>
                     </div>
                   )}
@@ -1328,6 +1494,18 @@ export default function AppPage() {
                   {authTab === 'login' && (
                     <>
                       <div className="flex justify-between items-center">
+                        {!targetUsername && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLoginType('choose');
+                              setAuthError(null);
+                            }}
+                            className="text-slate-400 hover:text-white flex items-center gap-1 text-[11px]"
+                          >
+                            ← Change Type
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -1359,7 +1537,7 @@ export default function AppPage() {
                       )}
                       <div className="flex space-x-1 text-[11px]">
                         <span>Already have an account?</span>
-                        <button onClick={() => { setAuthTab('login'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold">
+                        <button onClick={() => { setAuthTab('login'); setLoginType('choose'); setAuthError(null); }} className="text-emerald-400 hover:underline font-bold">
                           Login
                         </button>
                       </div>
@@ -1371,6 +1549,7 @@ export default function AppPage() {
                       type="button"
                       onClick={() => {
                         setAuthTab('login');
+                        setLoginType('choose');
                         setForgotStep('email');
                         setForgotEmail('');
                         setVerificationCode('');

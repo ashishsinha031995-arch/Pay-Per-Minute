@@ -218,16 +218,42 @@ async function syncFromMongoToSQLite() {
       }
     });
 
+    // 1. Fetch current SQLite rows and identify any rows missing from the MongoDB sync batch BEFORE wiping the table
+    let missingInMongo: any[] = [];
+    try {
+      const sqliteRowsBefore = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+      const mongoIds = new Set(docs.map(doc => String(doc._id || doc[primaryKey])));
+      missingInMongo = sqliteRowsBefore.filter(row => !mongoIds.has(String(row[primaryKey])));
+    } catch (e) {
+      console.error(`[MongoDB Sync] Error identifying missing rows for table '${table}' before sync:`, e);
+    }
+
+    // 2. Safely wipe and load the MongoDB records into SQLite
     originalDb.prepare(`DELETE FROM ${table}`).run();
     transaction(docs);
 
-    // Securely sync any local SQLite rows that are missing in MongoDB back to MongoDB
-    try {
-      const sqliteRows = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
-      const mongoIds = new Set(docs.map(doc => String(doc._id || doc[primaryKey])));
-      const missingInMongo = sqliteRows.filter(row => !mongoIds.has(String(row[primaryKey])));
-      if (missingInMongo.length > 0) {
-        console.log(`[MongoDB Sync] Back-syncing ${missingInMongo.length} local rows of table '${table}' missing in MongoDB...`);
+    // 3. Restore and sync back any locally created/updated records that were missing from MongoDB to avoid losing any registration data
+    if (missingInMongo.length > 0) {
+      console.log(`[MongoDB Sync] Preserving and back-syncing ${missingInMongo.length} local rows of table '${table}' missing in MongoDB...`);
+      try {
+        // Restore back to SQLite
+        const reinsertTransaction = originalDb.transaction((rowsToRestore: any[]) => {
+          for (const row of rowsToRestore) {
+            const values = allKeys.map(k => {
+              let val = row[k];
+              if (k === primaryKey && (val === undefined || val === null)) {
+                val = row._id;
+              }
+              if (val === undefined || val === null) return null;
+              if (typeof val === 'object') return JSON.stringify(val);
+              return val;
+            });
+            stmt.run(...values);
+          }
+        });
+        reinsertTransaction(missingInMongo);
+
+        // Sync back to MongoDB
         const docsToInsert = missingInMongo.map(row => ({
           _id: row[primaryKey],
           ...row
@@ -241,9 +267,9 @@ async function syncFromMongoToSQLite() {
             }
           }))
         );
+      } catch (e) {
+        console.error(`[MongoDB Sync] Error preserving/back-syncing missing rows for table '${table}':`, e);
       }
-    } catch (e) {
-      console.error(`[MongoDB Sync] Error back-syncing table '${table}' to MongoDB:`, e);
     }
   }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone, ArrowUpRight, ArrowDownLeft, RefreshCw, Download, TrendingUp, Check, FileText, Filter, Crop, Search, Mail } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, MessageSquare, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone, ArrowUpRight, ArrowDownLeft, RefreshCw, Download, TrendingUp, Check, FileText, Filter, Crop, Search, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -80,7 +80,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     return `${hours}:${minutes} ${ampm}`;
   };
 
-  const formatToYYYYMMDD = (dateStr: string | null) => {
+  const formatToDDMMYYYY = (dateStr: string | null) => {
     if (!dateStr) return '';
     try {
       const d = new Date(dateStr);
@@ -88,7 +88,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      return `${day}/${month}/${year}`;
     } catch {
       return dateStr;
     }
@@ -1348,8 +1348,29 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
   if (loading && consultants.length === 0) {
     return (
-      <div className="flex justify-center items-center py-20">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
+        <div className="flex flex-col items-center justify-center space-y-6 max-w-sm w-full text-center">
+          <div className="relative">
+            {/* Pulsing/glowing background effect */}
+            <div className="absolute inset-0 bg-emerald-500/20 blur-2xl rounded-full animate-pulse"></div>
+            {/* Animated outer spinning border */}
+            <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 opacity-30 blur-sm animate-spin [animation-duration:8s]"></div>
+            
+            <div className="relative bg-gradient-to-tr from-emerald-500 to-teal-400 p-5 rounded-2xl text-slate-950 shadow-xl shadow-emerald-500/10 flex items-center justify-center animate-bounce [animation-duration:3s]">
+              <MessageSquare className="w-9 h-9 font-bold" />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="text-2xl font-black tracking-wider bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+              CallMint
+            </h3>
+            <div className="flex items-center justify-center space-x-2 text-xs text-slate-400 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+              <span className="tracking-wide">Connecting securely...</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -4048,7 +4069,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           {selectedConsSchedules.map((sch) => (
                             <div key={sch.id} className="flex items-center justify-between py-1 border-b border-slate-800/30 text-xs font-mono last:border-0 last:pb-0">
                               <span className="text-emerald-400 font-medium">
-                                {sch.date ? formatToYYYYMMDD(sch.date) : sch.day}
+                                {sch.date ? formatToDDMMYYYY(sch.date) : sch.day}
                               </span>
                               <span className="text-slate-400">{formatTimeTo12Hour(sch.from_time)} - {formatTimeTo12Hour(sch.to_time)}</span>
                             </div>

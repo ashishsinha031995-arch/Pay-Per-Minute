@@ -231,6 +231,15 @@ export function ChatRoom({
   }, [activeChatRemainingSeconds]);
 
   useEffect(() => {
+    if (remainingSeconds !== null && remainingSeconds > 0 && !sessionCompleted) {
+      const timer = setInterval(() => {
+        setRemainingSeconds(prev => (prev !== null && prev > 0) ? prev - 1 : 0);
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [remainingSeconds, sessionCompleted]);
+
+  useEffect(() => {
     if (userQueueWaitSeconds > 0) {
       const timer = setInterval(() => {
         setUserQueueWaitSeconds(prev => Math.max(0, prev - 1));

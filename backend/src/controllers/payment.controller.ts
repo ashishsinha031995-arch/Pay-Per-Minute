@@ -145,18 +145,18 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
 
     // Fetch consultant's plan specific commission rate
     const consultantObj = db.prepare('SELECT plan_id FROM consultants WHERE id = ?').get(consultant_id) as { plan_id: number | null } | undefined;
-    let commission_rate = 20.0;
+    let commission_rate = 30.0; // Default to Starter Launchpad commission rate (30%) if no plan is set
     if (consultantObj && consultantObj.plan_id) {
       const plan = db.prepare('SELECT commission_rate FROM plans WHERE id = ?').get(consultantObj.plan_id) as { commission_rate: number } | undefined;
       if (plan && plan.commission_rate !== undefined && plan.commission_rate !== null) {
         commission_rate = plan.commission_rate;
       } else {
-        const commissionSetting = db.prepare("SELECT value FROM admin_settings WHERE key = 'commission_percentage'").get() as { value: string };
-        commission_rate = parseFloat(commissionSetting?.value || '20');
+        const defaultPlan = db.prepare("SELECT commission_rate FROM plans WHERE LOWER(name) LIKE '%starter%'").get() as { commission_rate: number } | undefined;
+        commission_rate = defaultPlan ? defaultPlan.commission_rate : 30.0;
       }
     } else {
-      const commissionSetting = db.prepare("SELECT value FROM admin_settings WHERE key = 'commission_percentage'").get() as { value: string };
-      commission_rate = parseFloat(commissionSetting?.value || '20');
+      const defaultPlan = db.prepare("SELECT commission_rate FROM plans WHERE LOWER(name) LIKE '%starter%'").get() as { commission_rate: number } | undefined;
+      commission_rate = defaultPlan ? defaultPlan.commission_rate : 30.0;
     }
 
     const commission_amount = total_paid * (commission_rate / 100);

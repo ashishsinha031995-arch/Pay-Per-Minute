@@ -150,7 +150,7 @@ export function startChatExpiryJob(io: Server) {
     } catch (error) {
       console.error('Error in Server-Authoritative Timer Loop:', error);
     }
-  }, 2000); // Check every 2 seconds
+  }, 1000); // Check every 1 second
 }
 
 function reconcileConsultantBusyStates(io: Server) {
