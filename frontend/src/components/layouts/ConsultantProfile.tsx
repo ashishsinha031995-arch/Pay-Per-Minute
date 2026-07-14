@@ -359,6 +359,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   // User past chat history states
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historySearchName, setHistorySearchName] = useState('');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<'all' | 'completed' | 'rejected' | 'cancelled' | 'missed'>('all');
   const [userPastSessions, setUserPastSessions] = useState<any[]>([]);
   const [isSearchingHistory, setIsSearchingHistory] = useState(false);
   const [viewingPastSessionMessages, setViewingPastSessionMessages] = useState<any[] | null>(null);
@@ -371,6 +372,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [walletTxFilter, setWalletTxFilter] = useState<'all' | 'recharge' | 'consultation' | 'refund' | 'admin_credit'>('all');
+
+  // Helper to safely get the consultant's name for a session
+  const getConsultantNameOfSession = (sess: any) => {
+    if (!sess) return 'Expert Advisor';
+    if (sess.consultant_name && sess.consultant_name.trim()) {
+      return sess.consultant_name;
+    }
+    // Try to find in consultants state
+    const found = consultants.find(c => Number(c.id) === Number(sess.consultant_id));
+    if (found && found.display_name) {
+      return found.display_name;
+    }
+    return `Consultant #${sess.consultant_id || ''}`;
+  };
 
   // Support ticket states
   const [userTickets, setUserTickets] = useState<any[]>([]);
@@ -1422,7 +1437,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               <div className="text-left">
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-400">⚡ LIVE NOW / ONGOING</span>
                 <h4 className="text-sm font-bold text-cyan-200">Aapka active consultation session chal raha hai!</h4>
-                <p className="text-xs text-slate-400">Consultant: <strong className="text-slate-200">{activeUserSession.consultant_name}</strong> (Session ID: #{activeUserSession.id})</p>
+                <p className="text-xs text-slate-400">Consultant: <strong className="text-slate-200">{getConsultantNameOfSession(activeUserSession)}</strong> (Session ID: #{activeUserSession.id})</p>
               </div>
             </div>
             <button
@@ -2286,37 +2301,69 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
           {!viewingPastSessionMessages ? (
             <div className="space-y-6">
-              {/* Search query block */}
-              <div className="space-y-2 max-w-xl text-left">
-                <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search By Consultant Name</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter consultant name to search past history..."
-                    value={historySearchName}
-                    onChange={(e) => setHistorySearchName(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
-                  />
-                  <button
-                    onClick={() => {
-                      setIsSearchingHistory(true);
-                      setTimeout(() => {
-                        setIsSearchingHistory(false);
-                      }, 200);
-                    }}
-                    disabled={isSearchingHistory}
-                    className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 rounded-xl transition-all flex items-center justify-center min-w-[80px]"
-                  >
-                    {isSearchingHistory ? 'Searching...' : 'Search'}
-                  </button>
+              {/* Search and Filter query block */}
+              <div className="flex flex-col sm:flex-row sm:items-end gap-3 max-w-2xl text-left">
+                <div className="space-y-2 flex-1">
+                  <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search By Consultant Name</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter consultant name to search past history..."
+                      value={historySearchName}
+                      onChange={(e) => setHistorySearchName(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
+                    />
+                    <button
+                      onClick={() => {
+                        setIsSearchingHistory(true);
+                        setTimeout(() => {
+                          setIsSearchingHistory(false);
+                        }, 200);
+                      }}
+                      disabled={isSearchingHistory}
+                      className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 rounded-xl transition-all flex items-center justify-center min-w-[80px]"
+                    >
+                      {isSearchingHistory ? 'Searching...' : 'Search'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 min-w-[150px]">
+                  <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <Filter className="w-3 h-3 text-slate-400" />
+                    <span>Filter Status</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <select
+                      value={historyStatusFilter}
+                      onChange={(e) => setHistoryStatusFilter(e.target.value as any)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 appearance-none cursor-pointer pr-8 font-medium"
+                    >
+                      <option value="all">All</option>
+                      <option value="completed">Completed</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="missed">Missed</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none text-slate-500">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* List of sessions */}
               {(() => {
                 const filteredSessions = userPastSessions.filter(sess => {
-                  if (!historySearchName.trim()) return true;
-                  return String(sess.consultant_name || '').toLowerCase().includes(historySearchName.trim().toLowerCase());
+                  const matchesName = !historySearchName.trim() || 
+                    getConsultantNameOfSession(sess).toLowerCase().includes(historySearchName.trim().toLowerCase());
+                  
+                  const matchesStatus = historyStatusFilter === 'all' || 
+                    String(sess.status).toLowerCase() === historyStatusFilter;
+
+                  return matchesName && matchesStatus;
                 });
 
                 return (
@@ -2324,25 +2371,27 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider">Consultation log sessions ({filteredSessions.length})</span>
                     {filteredSessions.length === 0 ? (
                       <p className="text-xs text-slate-500 py-16 text-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/60 font-sans leading-relaxed">
-                        {historySearchName.trim() ? "No sessions found matching this consultant name." : "No past consultations logged."}
+                        {historySearchName.trim() || historyStatusFilter !== 'all' ? "No sessions found matching current search or status filter." : "No past consultations logged."}
                       </p>
                     ) : (
                       <div className="grid grid-cols-1 gap-4">
-                        {filteredSessions.map((sess) => (
-                      <div
-                        key={sess.id}
-                        className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
-                      >
-                        {/* Details */}
-                        <div className="space-y-2 flex-1 min-w-0 w-full">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-black text-slate-100 truncate max-w-[150px] sm:max-w-[200px]" title={sess.consultant_name}>
-                              {sess.consultant_name}
-                            </span>
-                            <span className="text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-lg border border-slate-800/50">
-                              ID: #{sess.id}
-                            </span>
-                          </div>
+                        {filteredSessions.map((sess) => {
+                          const consName = getConsultantNameOfSession(sess);
+                          return (
+                            <div
+                              key={sess.id}
+                              className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
+                            >
+                              {/* Details */}
+                              <div className="space-y-2 flex-1 min-w-0 w-full">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm font-black text-slate-100 truncate max-w-[150px] sm:max-w-[200px]" title={consName}>
+                                    {consName}
+                                  </span>
+                                  <span className="text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-lg border border-slate-800/50">
+                                    ID: #{sess.id}
+                                  </span>
+                                </div>
 
                           <div className="flex items-center space-x-1.5 text-xs text-slate-400">
                             <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">Status:</span>
@@ -2416,15 +2465,17 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                         {/* Right Side: Action Buttons */}
                         <div className="flex sm:flex-row md:flex-col gap-2 shrink-0 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-800/50">
-                          <button
-                            onClick={() => {
-                              onSelectSession(sess.id, currentUser?.display_name || currentUser?.username || 'User', 'user', true);
-                            }}
-                            className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            <span>View Chat</span>
-                          </button>
+                          {!(sess.status === 'rejected' || sess.status === 'cancelled' || sess.status === 'missed') && (
+                            <button
+                              onClick={() => {
+                                onSelectSession(sess.id, currentUser?.display_name || currentUser?.username || 'User', 'user', true);
+                              }}
+                              className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span>View Chat</span>
+                            </button>
+                          )}
                           <button
                             onClick={async () => {
                               try {
@@ -2451,12 +2502,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           </button>
                         </div>
                       </div>
-                    ))}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })()}
+                );
+              })()}
             </div>
           ) : (
             /* Past Chat Messages details View */
@@ -2473,7 +2525,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-850/60 text-xs text-left">
                 <span className="text-[10px] font-mono text-slate-500 uppercase block">Consultation with</span>
-                <strong className="text-sm text-slate-100">{viewingPastSessionInfo?.consultant_name || 'Expert Advisor'}</strong>
+                <strong className="text-sm text-slate-100">{getConsultantNameOfSession(viewingPastSessionInfo)}</strong>
                 <span className="block text-[10px] text-slate-400 font-mono mt-0.5">Date: {new Date(viewingPastSessionInfo?.created_at).toLocaleString()}</span>
               </div>
 
@@ -2603,7 +2655,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     <option value="">-- No Specific Chat / General Query --</option>
                     {userPastSessions.map(s => (
                       <option key={s.id} value={s.id}>
-                        Chat with {s.consultant_name} ({new Date(s.created_at).toLocaleDateString()}) - Status: {s.status}
+                        Chat with {getConsultantNameOfSession(s)} ({new Date(s.created_at).toLocaleDateString()}) - Status: {s.status}
                       </option>
                     ))}
                   </select>
@@ -2796,37 +2848,69 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               
               {!viewingPastSessionMessages ? (
                 <>
-                  {/* Search query block */}
-                  <div className="space-y-2">
-                    <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search By Consultant Name</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Enter consultant name to search past history..."
-                        value={historySearchName}
-                        onChange={(e) => setHistorySearchName(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
-                      />
-                      <button
-                        onClick={() => {
-                          setIsSearchingHistory(true);
-                          setTimeout(() => {
-                            setIsSearchingHistory(false);
-                          }, 200);
-                        }}
-                        disabled={isSearchingHistory}
-                        className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 rounded-xl transition-all flex items-center justify-center min-w-[80px]"
-                      >
-                        {isSearchingHistory ? 'Searching...' : 'Search'}
-                      </button>
+                  {/* Search and Filter query block */}
+                  <div className="flex flex-col sm:flex-row sm:items-end gap-3 text-left">
+                    <div className="space-y-2 flex-1">
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Search By Consultant Name</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Enter consultant name to search past history..."
+                          value={historySearchName}
+                          onChange={(e) => setHistorySearchName(e.target.value)}
+                          className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1"
+                        />
+                        <button
+                          onClick={() => {
+                            setIsSearchingHistory(true);
+                            setTimeout(() => {
+                              setIsSearchingHistory(false);
+                            }, 200);
+                          }}
+                          disabled={isSearchingHistory}
+                          className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 rounded-xl transition-all flex items-center justify-center min-w-[80px]"
+                        >
+                          {isSearchingHistory ? 'Searching...' : 'Search'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 min-w-[150px]">
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Filter className="w-3 h-3 text-slate-400" />
+                        <span>Filter Status</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <select
+                          value={historyStatusFilter}
+                          onChange={(e) => setHistoryStatusFilter(e.target.value as any)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 appearance-none cursor-pointer pr-8 font-medium"
+                        >
+                          <option value="all">All</option>
+                          <option value="completed">Completed</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="cancelled">Cancelled</option>
+                          <option value="missed">Missed</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none text-slate-500">
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                          </svg>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {/* List of sessions */}
                   {(() => {
                     const filteredSessions = userPastSessions.filter(sess => {
-                      if (!historySearchName.trim()) return true;
-                      return String(sess.consultant_name || '').toLowerCase().includes(historySearchName.trim().toLowerCase());
+                      const matchesName = !historySearchName.trim() || 
+                        getConsultantNameOfSession(sess).toLowerCase().includes(historySearchName.trim().toLowerCase());
+                      
+                      const matchesStatus = historyStatusFilter === 'all' || 
+                        String(sess.status).toLowerCase() === historyStatusFilter;
+
+                      return matchesName && matchesStatus;
                     });
 
                     return (
@@ -2834,21 +2918,23 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                         <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider text-left">Consultation log sessions ({filteredSessions.length})</span>
                         {filteredSessions.length === 0 ? (
                           <p className="text-xs text-slate-500 py-12 text-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/60 font-sans leading-relaxed">
-                            {historySearchName.trim() ? "No sessions found matching this consultant name." : "No past consultations logged."}
+                            {historySearchName.trim() || historyStatusFilter !== 'all' ? "No sessions found matching current search or status filter." : "No past consultations logged."}
                           </p>
                         ) : (
                           <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
-                            {filteredSessions.map((sess) => (
-                          <div
-                            key={sess.id}
-                            className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
-                          >
-                            {/* Details */}
-                            <div className="space-y-2 flex-1 min-w-0 w-full">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-black text-slate-100 truncate max-w-[140px] sm:max-w-[180px]" title={sess.consultant_name}>
-                                  {sess.consultant_name}
-                                </span>
+                            {filteredSessions.map((sess) => {
+                              const consName = getConsultantNameOfSession(sess);
+                              return (
+                                <div
+                                  key={sess.id}
+                                  className="relative overflow-hidden bg-slate-950/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-850 hover:border-emerald-500/30 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group"
+                                >
+                                  {/* Details */}
+                                  <div className="space-y-2 flex-1 min-w-0 w-full">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-black text-slate-100 truncate max-w-[140px] sm:max-w-[180px]" title={consName}>
+                                        {consName}
+                                      </span>
                                 <span className="text-[9px] font-mono font-bold bg-slate-900 text-emerald-400 px-2 py-0.5 rounded-lg border border-slate-800/50">
                                   ID: #{sess.id}
                                 </span>
@@ -2926,15 +3012,17 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                             {/* Right Side: Action Buttons */}
                             <div className="flex sm:flex-row md:flex-col gap-2 shrink-0 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-800/50">
-                              <button
-                                onClick={() => {
-                                  onSelectSession(sess.id, currentUser?.display_name || currentUser?.username || 'User', 'user', true);
-                                }}
-                                className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                                <span>View Chat</span>
-                              </button>
+                              {!(sess.status === 'rejected' || sess.status === 'cancelled' || sess.status === 'missed') && (
+                                <button
+                                  onClick={() => {
+                                    onSelectSession(sess.id, currentUser?.display_name || currentUser?.username || 'User', 'user', true);
+                                  }}
+                                  className="flex-1 md:flex-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl transition-all border border-emerald-500/15 hover:border-emerald-500/30 text-center flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>View Chat</span>
+                                </button>
+                              )}
                               <button
                                 onClick={async () => {
                                   try {
@@ -2962,9 +3050,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                               </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                              );
+                            })}
+                          </div>
+                        )}
                   </div>
                 );
               })()}
@@ -2984,7 +3073,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-850/60 text-xs text-left">
                     <span className="text-[10px] font-mono text-slate-500 uppercase block">Consultation with</span>
-                    <strong className="text-sm text-slate-100">{viewingPastSessionInfo?.consultant_name || 'Expert Advisor'}</strong>
+                    <strong className="text-sm text-slate-100">{getConsultantNameOfSession(viewingPastSessionInfo)}</strong>
                     <span className="block text-[10px] text-slate-400 font-mono mt-0.5">Date: {new Date(viewingPastSessionInfo?.created_at).toLocaleString()}</span>
                   </div>
 
