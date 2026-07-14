@@ -30,13 +30,25 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
         <div className="flex justify-between items-center w-full">
           
           {/* Left Side (Logo CallMint) */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div 
+            role="button"
+            tabIndex={0}
+            onClick={() => window.dispatchEvent(new CustomEvent('logo-click'))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('logo-click'));
+              }
+            }}
+            className="flex items-center gap-2 flex-shrink-0 cursor-pointer hover:opacity-90 active:scale-95 transition-all outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-xl p-1"
+            title="Go to Home"
+          >
             <div className="flex items-center gap-2 flex-shrink-0">
               <div className="bg-gradient-to-tr from-emerald-500 to-teal-400 p-2 rounded-xl text-slate-900 shadow-md">
                 <MessageSquare className="w-6 h-6 font-bold" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent select-none">
                   CallMint
                 </h1>
               </div>

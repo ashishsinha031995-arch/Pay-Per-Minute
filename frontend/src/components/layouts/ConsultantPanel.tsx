@@ -862,7 +862,41 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
 
   // Blocked users state
-  const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('consultant_session');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.id) {
+            const stored = localStorage.getItem(`blocked_users_${parsed.id}`);
+            if (stored) {
+              return JSON.parse(stored);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  // Sync blockedUsers from localStorage on currentConsultant change
+  useEffect(() => {
+    if (currentConsultant && currentConsultant.id) {
+      const stored = localStorage.getItem(`blocked_users_${currentConsultant.id}`);
+      if (stored) {
+        try {
+          setBlockedUsers(JSON.parse(stored));
+        } catch (e) {
+          setBlockedUsers([]);
+        }
+      } else {
+        setBlockedUsers([]);
+      }
+    } else {
+      setBlockedUsers([]);
+    }
+  }, [currentConsultant?.id]);
 
   // Schedules state
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -1148,13 +1182,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
   }, [registerDisplayName, usernameSuffix]);
 
-  // Hamburger drawer toggling event from global Header
+  // Hamburger drawer toggling and logo-click event from global Header
   useEffect(() => {
     const handleToggle = () => {
       setIsMobileMenuOpen(prev => !prev);
     };
+    const handleLogoClick = () => {
+      setActiveTab('dashboard');
+    };
     window.addEventListener('toggle-hamburger-menu', handleToggle);
-    return () => window.removeEventListener('toggle-hamburger-menu', handleToggle);
+    window.addEventListener('logo-click', handleLogoClick);
+    return () => {
+      window.removeEventListener('toggle-hamburger-menu', handleToggle);
+      window.removeEventListener('logo-click', handleLogoClick);
+    };
   }, []);
 
   // Sync currentConsultant state with localStorage and notify global AppPage Header
@@ -1378,6 +1419,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     setCurrentConsultant(null);
     setWallet(null);
     setSessions([]);
+    setBlockedUsers([]);
     setCredentialsGenerated(null);
     setUsernameInput('');
     setPasswordInput('');
@@ -1431,7 +1473,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         // Refresh the blocked list
         const listRes = await fetch(`/api/consultants/${currentConsultant.id}/blocked`);
         if (listRes.ok) {
-          setBlockedUsers(await listRes.json());
+          try {
+            const data = await listRes.json();
+            setBlockedUsers(data);
+            localStorage.setItem(`blocked_users_${currentConsultant.id}`, JSON.stringify(data));
+          } catch (e) {
+            console.error('Failed to parse refreshed blocked list:', e);
+          }
         }
       }
     } catch (err) {
@@ -1455,7 +1503,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         // Refresh the blocked list
         const listRes = await fetch(`/api/consultants/${currentConsultant.id}/blocked`);
         if (listRes.ok) {
-          setBlockedUsers(await listRes.json());
+          try {
+            const data = await listRes.json();
+            setBlockedUsers(data);
+            localStorage.setItem(`blocked_users_${currentConsultant.id}`, JSON.stringify(data));
+          } catch (e) {
+            console.error('Failed to parse refreshed blocked list after unblock:', e);
+          }
         }
       }
     } catch (err) {
@@ -1470,15 +1524,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     }
     try {
       const res = await fetch(`/api/consultants/${id}/stats`);
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        setWallet(data.wallet);
-        setSessions(data.sessions);
-        setSalaryInfo(data.salaryInfo);
-        setManualAdjustments(data.manualAdjustments || []);
-        if (data.loginHours) {
-          setLoginHours(data.loginHours);
+      if (res.ok) {
+        try {
+          const data = await res.json();
+          setWallet(data.wallet);
+          setSessions(data.sessions);
+          setSalaryInfo(data.salaryInfo);
+          setManualAdjustments(data.manualAdjustments || []);
+          if (data.loginHours) {
+            setLoginHours(data.loginHours);
+          }
+        } catch (e) {
+          console.error('Error parsing stats JSON:', e);
         }
       } else if (res.status === 404 || res.status === 401) {
         // Stale session, clean it up!
@@ -1488,10 +1545,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
       // Fetch blocked users
       const blockedRes = await fetch(`/api/consultants/${id}/blocked`);
-      const blockedContentType = blockedRes.headers.get('content-type');
-      if (blockedRes.ok && blockedContentType && blockedContentType.includes('application/json')) {
-        const blockedData = await blockedRes.json();
-        setBlockedUsers(blockedData);
+      if (blockedRes.ok) {
+        try {
+          const blockedData = await blockedRes.json();
+          setBlockedUsers(blockedData);
+          localStorage.setItem(`blocked_users_${id}`, JSON.stringify(blockedData));
+        } catch (e) {
+          console.error('Error parsing blocked list JSON:', e);
+        }
       }
 
       // Fetch availability schedules only when not polling

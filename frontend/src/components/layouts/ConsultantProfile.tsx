@@ -530,7 +530,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     }
   }, [currentUser?.id]);
 
-  // Listen for navigation requests to the wallet tab (e.g., when clicking wallet balance in Header)
+  // Listen for navigation requests to the wallet tab or logo click
   useEffect(() => {
     const handleNavigateWallet = () => {
       setSelectedConsultant(null);
@@ -544,15 +544,24 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
         setLightboxImage(e.detail);
       }
     };
+    const handleLogoClick = () => {
+      setSelectedConsultant(null);
+      setActiveDashboardTab('advisors');
+      if (onClearTargetUsername) {
+        onClearTargetUsername();
+      }
+    };
     window.addEventListener('navigate-to-wallet-tab', handleNavigateWallet);
     window.addEventListener('toggle-hamburger-menu', handleToggleHamburger);
     window.addEventListener('view-user-photo', handleViewUserPhoto);
+    window.addEventListener('logo-click', handleLogoClick);
     return () => {
       window.removeEventListener('navigate-to-wallet-tab', handleNavigateWallet);
       window.removeEventListener('toggle-hamburger-menu', handleToggleHamburger);
       window.removeEventListener('view-user-photo', handleViewUserPhoto);
+      window.removeEventListener('logo-click', handleLogoClick);
     };
-  }, []);
+  }, [onClearTargetUsername]);
 
   // Load past consultations from both username (if logged in) and localStorage
   const loadPastHistoryFromLocalStorage = async () => {
