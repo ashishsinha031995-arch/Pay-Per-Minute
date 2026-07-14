@@ -627,14 +627,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 if (Array.isArray(data)) {
                   data.forEach(s => {
                     if (!sessionMap.has(s.id)) {
-                      if (currentUser) {
-                        const isMatch = s.user_id === currentUser.id || String(s.user_name).toLowerCase() === String(currentUser.username).toLowerCase();
-                        if (isMatch) {
-                          sessionMap.set(s.id, s);
-                        }
-                      } else {
-                        sessionMap.set(s.id, s);
-                      }
+                      sessionMap.set(s.id, s);
                     }
                   });
                 }

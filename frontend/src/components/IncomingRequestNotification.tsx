@@ -11,6 +11,7 @@ interface IncomingRequestNotificationProps {
     created_at: string;
     user_photo?: string | null;
   };
+  commissionRate?: number;
   onAccept: () => Promise<void>;
   onReject: () => Promise<void>;
   onTimeout: () => Promise<void>;
@@ -18,6 +19,7 @@ interface IncomingRequestNotificationProps {
 
 export const IncomingRequestNotification: React.FC<IncomingRequestNotificationProps> = ({
   request,
+  commissionRate,
   onAccept,
   onReject,
   onTimeout,
@@ -298,7 +300,9 @@ export const IncomingRequestNotification: React.FC<IncomingRequestNotificationPr
           {/* Est. Earn Card */}
           <div className="bg-amber-500/10 border border-amber-500/20 shadow-sm p-2 sm:p-3 rounded-2xl flex flex-col items-center justify-center transition-all hover:bg-amber-500/15 duration-350">
             <span className="text-[9px] sm:text-[10px] font-mono uppercase font-black text-amber-400 tracking-wider">Est. Earn</span>
-            <strong className="text-xs sm:text-sm text-amber-300 font-black mt-1 font-sans">₹{(request.duration_minutes * request.price_per_minute * 0.9).toFixed(1)}</strong>
+            <strong className="text-xs sm:text-sm text-amber-300 font-black mt-1 font-sans">
+              ₹{(request.duration_minutes * request.price_per_minute * (1 - (commissionRate !== undefined ? commissionRate : 20) / 100)).toFixed(1)}
+            </strong>
           </div>
         </div>
 

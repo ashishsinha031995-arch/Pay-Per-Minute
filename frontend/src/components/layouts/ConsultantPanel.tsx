@@ -3292,9 +3292,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             const activeLiveChat = sessions.find(s => s.status === 'active');
             
             if (pendingRequest) {
+              const activePlan = plans.find(p => p.id === wallet?.plan_id);
+              const commissionRate = activePlan ? activePlan.commission_rate : 20;
               return (
                 <IncomingRequestNotification
                   request={pendingRequest}
+                  commissionRate={commissionRate}
                   onAccept={async () => {
                     try {
                       const res = await fetch(`/api/sessions/${pendingRequest.id}/accept`, { method: 'POST' });

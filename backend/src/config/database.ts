@@ -42,7 +42,9 @@ const tables = [
   'manual_wallet_adjustments',
   'consultant_schedules',
   'consultant_followers',
-  'archived_history'
+  'archived_history',
+  'admin_notifications',
+  'notification_reads'
 ];
 
 const mongoSchemas: Record<string, mongoose.Schema> = {};

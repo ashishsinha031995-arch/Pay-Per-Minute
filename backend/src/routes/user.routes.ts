@@ -45,8 +45,10 @@ router.param('id', (req, res, next, id) => {
   const numId = parseInt(id, 10);
   if (!isNaN(numId)) {
     const fullPath = req.originalUrl || req.path;
-    // Check if the route is a consultant route
-    if (fullPath.includes('/consultants/')) {
+    // Check if the route is a notification route and skip mapping
+    if (fullPath.includes('/notifications/')) {
+      // Keep notification ID unchanged
+    } else if (fullPath.includes('/consultants/')) {
       if (numId < 20000) {
         const mappedId = numId < 10000 ? numId + 20000 : numId + 10000;
         req.params.id = mappedId.toString();

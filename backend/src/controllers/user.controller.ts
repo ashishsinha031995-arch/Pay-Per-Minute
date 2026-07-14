@@ -733,9 +733,9 @@ export const getUserPastSessions = (req: Request, res: Response) => {
         FROM sessions s
         LEFT JOIN consultants c ON s.consultant_id = c.id
         LEFT JOIN reviews r ON s.id = r.session_id
-        WHERE LOWER(s.user_name) = LOWER(?)
+        WHERE LOWER(s.user_name) = LOWER(?) OR s.user_id = (SELECT id FROM users WHERE LOWER(username) = LOWER(?))
         ORDER BY s.id DESC
-      `).all(String(user_name).trim());
+      `).all(String(user_name).trim(), String(user_name).trim());
     } else if (ids) {
       const idArr = String(ids).split(',').map(x => x.trim()).filter(Boolean);
       if (idArr.length > 0) {
