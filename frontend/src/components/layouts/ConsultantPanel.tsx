@@ -566,6 +566,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   const [isOnline, setIsOnline] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [buyingPlanId, setBuyingPlanId] = useState<number | null>(null);
+  const [showLogoutWarningModal, setShowLogoutWarningModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // --- NATIVE OS PUSH NOTIFICATIONS FOR BACKGROUND CALLS ---
   const [notifPermission, setNotifPermission] = useState<string>(
@@ -1376,6 +1378,34 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       onLogout();
     }
   }
+
+  const triggerLogout = () => {
+    if (isOnline || isBusy) {
+      setShowLogoutWarningModal(true);
+    } else {
+      handleLogout();
+    }
+  };
+
+  const handleGoOfflineAndLogout = async () => {
+    if (!currentConsultant) return;
+    setIsLoggingOut(true);
+    try {
+      await fetch(`/api/consultants/${currentConsultant.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_online: false, is_busy: false }),
+      });
+      setIsOnline(false);
+      setIsBusy(false);
+    } catch (err) {
+      console.error('Error going offline before logout:', err);
+    } finally {
+      setIsLoggingOut(false);
+      setShowLogoutWarningModal(false);
+      handleLogout();
+    }
+  };
 
   // Block User Handler
   const handleBlockUser = async (userName: string) => {
@@ -3699,7 +3729,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     <button
                       onClick={() => {
                         setIsMobileMenuOpen(false);
-                        handleLogout();
+                        triggerLogout();
                       }}
                       className="flex items-center space-x-3 w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all text-left text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 border border-transparent hover:border-rose-500/20 mt-2"
                     >
@@ -4005,7 +4035,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                 <div className="border-t border-slate-800/80 pt-4 mt-4">
                   <button
-                    onClick={handleLogout}
+                    onClick={triggerLogout}
                     className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition-all border border-rose-500/15"
                   >
                     <LogOut className="w-4 h-4 shrink-0" />
@@ -7904,6 +7934,61 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             <div className="mt-4 text-center">
               <p className="text-xs text-slate-400 font-medium">KYC Document Preview</p>
               <p className="text-[10px] text-slate-500 font-mono mt-1 truncate">{previewImageUrl}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Consultant Online/Busy Logout Warning Modal */}
+      {showLogoutWarningModal && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-slate-100">
+            
+            <div className="flex items-start space-x-3.5">
+              <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/25 shrink-0 text-amber-400">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-slate-100 font-sans tracking-tight">Active Status Warning</h3>
+                <p className="text-[11px] text-amber-500 font-mono tracking-wider uppercase">Go Offline First</p>
+              </div>
+            </div>
+
+            <div className="space-y-3.5 leading-relaxed text-xs text-slate-300">
+              <p className="font-sans font-medium text-slate-200">
+                Aap abhi Online ya Busy hain. Safaltapoorvak logout karne ke liye, kripya pehle offline ho jaein. 
+                <strong> 'Go Offline & Logout'</strong> par click karke aap automatically offline hokar logout kar sakte hain.
+              </p>
+              <div className="border-l-2 border-amber-500/40 pl-3 italic text-slate-400 font-sans">
+                You are currently Online or Busy. To logout safely, please go offline first. 
+                Clicking <strong>'Go Offline & Logout'</strong> will automatically set you offline & free, then log you out.
+              </div>
+            </div>
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLogoutWarningModal(false)}
+                disabled={isLoggingOut}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-750 font-bold rounded-xl text-xs transition-all active:scale-95 cursor-pointer text-center"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleGoOfflineAndLogout}
+                disabled={isLoggingOut}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer shadow-lg shadow-rose-500/10"
+              >
+                {isLoggingOut ? (
+                  <RefreshCw className="animate-spin w-4 h-4 text-white" />
+                ) : (
+                  <>
+                    <LogOut className="w-4 h-4" />
+                    <span>Go Offline & Logout</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

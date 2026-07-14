@@ -982,6 +982,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       return;
     }
 
+    if (selectedConsultant.is_online !== 1) {
+      setError("Yeh consultant abhi offline hain. Kripya unke online aane ka intezar karein ya kisi aur active consultant se juden. (This consultant is currently offline. Please wait for them to come online or select another active consultant.)");
+      setIsProcessingPayment(false);
+      return;
+    }
+
     const packagePrice = selectedMinutes * selectedConsultant.price_per_minute;
     if (currentUser.wallet_balance < packagePrice) {
       setError(`Insufficient balance. You need at least ₹${packagePrice} in your wallet to start the chat. Please recharge your wallet.`);
@@ -1119,6 +1125,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     if (!selectedConsultant) return;
     if (!currentUser) {
       onOpenAuth();
+      return;
+    }
+
+    if (selectedConsultant.is_online !== 1) {
+      setError("Yeh consultant abhi offline hain. Kripya unke online aane ka intezar karein ya kisi aur active consultant se juden. (This consultant is currently offline. Please wait for them to come online or select another active consultant.)");
+      setIsProcessingPayment(false);
       return;
     }
 
@@ -4002,10 +4014,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                     {/* Action Buttons */}
                     <div className="space-y-2.5 pt-4">
+                      {error && (
+                        <div className="text-[11px] text-rose-400 text-center bg-rose-500/10 py-2 px-3 rounded-xl border border-rose-500/20 mb-2 leading-relaxed font-sans">
+                          {error}
+                        </div>
+                      )}
+
                       {/* Wallet button */}
                       <button
                         type="button"
                         onClick={() => {
+                          if (selectedConsultant.is_online !== 1) {
+                            setError("Yeh consultant abhi offline hain. Kripya unke online aane ka intezar karein. (This consultant is currently offline. Please wait for them to come online.)");
+                            return;
+                          }
                           if (!currentUser) {
                             onOpenAuth();
                           } else if (currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute)) {
@@ -4014,11 +4036,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                             handleInitiateWalletPayment();
                           }
                         }}
-                        disabled={isProcessingPayment}
-                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/10"
+                        disabled={isProcessingPayment || selectedConsultant.is_online !== 1}
+                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/10"
                       >
                         {isProcessingPayment && pendingPaymentMethod === 'wallet' ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950" />
+                        ) : selectedConsultant.is_online !== 1 ? (
+                          <span>Consultant is Offline</span>
                         ) : (
                           <span>Book chat with wallet · ₹{selectedMinutes * selectedConsultant.price_per_minute}</span>
                         )}

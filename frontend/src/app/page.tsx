@@ -5,7 +5,7 @@ import { AdminPanel } from '../components/layouts/AdminPanel';
 import { ConsultantPanel } from '../components/layouts/ConsultantPanel';
 import { ConsultantProfile } from '../components/layouts/ConsultantProfile';
 import { ChatRoom } from '../components/modals/ChatRoom';
-import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy, Smartphone, Mail } from 'lucide-react';
+import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy, Smartphone, Mail, AlertTriangle, LogOut, RefreshCw } from 'lucide-react';
 
 const saveConsultantSession = (consultant: any) => {
   if (!consultant) {
@@ -192,6 +192,8 @@ export default function AppPage() {
   const [authRole, setAuthRole] = useState<'user' | 'consultant'>('user');
   const [signUpType, setSignUpType] = useState<'choose' | 'user' | 'consultant'>('choose');
   const [consultantCategory, setConsultantCategory] = useState('Consultants');
+  const [showConsultantLogoutWarning, setShowConsultantLogoutWarning] = useState(false);
+  const [isLoggingOutOffline, setIsLoggingOutOffline] = useState(false);
 
   // Force user-only registration and login if targetUsername is defined (visiting via consultant's link)
   useEffect(() => {
@@ -624,6 +626,42 @@ export default function AppPage() {
     setCurrentRole('user');
   };
 
+  const handleHeaderLogoutAttempt = async () => {
+    if (currentRole === 'consultant' && currentConsultant) {
+      try {
+        const res = await fetch(`/api/consultants/${currentConsultant.id}/profile`);
+        if (res.ok) {
+          const profile = await res.json();
+          if (profile.is_online === 1 || profile.is_busy === 1) {
+            setShowConsultantLogoutWarning(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking status on header logout:', err);
+      }
+    }
+    handleLogout();
+  };
+
+  const handleHeaderGoOfflineAndLogout = async () => {
+    if (!currentConsultant) return;
+    setIsLoggingOutOffline(true);
+    try {
+      await fetch(`/api/consultants/${currentConsultant.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_online: false, is_busy: false }),
+      });
+    } catch (err) {
+      console.error('Error going offline from header logout:', err);
+    } finally {
+      setIsLoggingOutOffline(false);
+      setShowConsultantLogoutWarning(false);
+      handleLogout();
+    }
+  };
+
   return (
     <div className={`min-h-screen ${theme === 'light' ? 'theme-light bg-sky-50 text-slate-900' : 'bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-sky-500 selection:text-white`}>
       
@@ -643,7 +681,7 @@ export default function AppPage() {
         socketConnected={socketConnected}
         currentUser={currentUser}
         currentConsultant={currentConsultant}
-        onLogout={handleLogout}
+        onLogout={handleHeaderLogoutAttempt}
         onOpenAuth={() => {
           setAuthError(null);
           setAuthSuccess(null);
@@ -1342,6 +1380,61 @@ export default function AppPage() {
                 className="w-full mt-6 bg-slate-950 border border-slate-850 hover:border-slate-700 text-slate-200 hover:text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-sm active:scale-95 cursor-pointer"
               >
                 Close Guide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER LOGOUT WARNING MODAL FOR CONSULTANTS */}
+      {showConsultantLogoutWarning && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-slate-100">
+            
+            <div className="flex items-start space-x-3.5">
+              <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/25 shrink-0 text-amber-400">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-slate-100 font-sans tracking-tight">Active Status Warning</h3>
+                <p className="text-[11px] text-amber-500 font-mono tracking-wider uppercase">Go Offline First</p>
+              </div>
+            </div>
+
+            <div className="space-y-3.5 leading-relaxed text-xs text-slate-300">
+              <p className="font-sans font-medium text-slate-200">
+                Aap abhi Online ya Busy hain. Safaltapoorvak logout karne ke liye, kripya pehle offline ho jaein. 
+                <strong> 'Go Offline & Logout'</strong> par click karke aap automatically offline hokar logout kar sakte hain.
+              </p>
+              <div className="border-l-2 border-amber-500/40 pl-3 italic text-slate-400 font-sans">
+                You are currently Online or Busy. To logout safely, please go offline first. 
+                Clicking <strong>'Go Offline & Logout'</strong> will automatically set you offline & free, then log you out.
+              </div>
+            </div>
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConsultantLogoutWarning(false)}
+                disabled={isLoggingOutOffline}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-750 font-bold rounded-xl text-xs transition-all active:scale-95 cursor-pointer text-center"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleHeaderGoOfflineAndLogout}
+                disabled={isLoggingOutOffline}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer shadow-lg shadow-rose-500/10"
+              >
+                {isLoggingOutOffline ? (
+                  <RefreshCw className="animate-spin w-4 h-4 text-white" />
+                ) : (
+                  <>
+                    <LogOut className="w-4 h-4" />
+                    <span>Go Offline & Logout</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

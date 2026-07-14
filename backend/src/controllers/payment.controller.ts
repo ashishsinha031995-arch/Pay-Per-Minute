@@ -30,6 +30,10 @@ export const createRazorpayOrMockOrder = async (req: Request, res: Response) => 
       return res.status(404).json({ error: 'Consultant not found or deactivated' });
     }
 
+    if (consultant.is_online === 0) {
+      return res.status(400).json({ error: 'Yeh consultant abhi offline hain. Kripya unke online aane ka intezar karein ya kisi aur active consultant se juden. (This consultant is currently offline. Please wait for them to come online or select another active consultant.)' });
+    }
+
     const total_amount_inr = consultant.price_per_minute * duration_minutes;
     const amount_in_paise = Math.round(total_amount_inr * 100);
 
@@ -92,9 +96,13 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Aap is consultant ke sath chat nahi kar sakte kyunki aap blocked hain. (You have been blocked by this consultant.)' });
     }
 
-    const consultant = db.prepare('SELECT price_per_minute, display_name FROM consultants WHERE id = ?').get(consultant_id) as any;
+    const consultant = db.prepare('SELECT price_per_minute, display_name, is_online FROM consultants WHERE id = ?').get(consultant_id) as any;
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found' });
+    }
+
+    if (consultant.is_online === 0) {
+      return res.status(400).json({ error: 'Yeh consultant abhi offline hain. Kripya unke online aane ka intezar karein ya kisi aur active consultant se juden. (This consultant is currently offline. Please wait for them to come online or select another active consultant.)' });
     }
 
     const price_per_minute = consultant.price_per_minute;
