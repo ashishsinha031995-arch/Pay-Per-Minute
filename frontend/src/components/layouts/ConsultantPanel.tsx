@@ -666,6 +666,57 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     };
   }, [isOnline]);
 
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  const subscribeToPushNotifications = async (registration: ServiceWorkerRegistration, consultantId: number) => {
+    try {
+      const keyRes = await fetch('/api/push/vapid-public-key');
+      if (!keyRes.ok) throw new Error('Failed to fetch VAPID public key');
+      const { publicKey } = await keyRes.json();
+      if (!publicKey) {
+        console.warn('[Push Notification] VAPID public key was empty.');
+        return;
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+
+      console.log('[Push Notification] Subscribed successfully:', subscription);
+
+      const saveRes = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultant_id: consultantId,
+          subscription
+        })
+      });
+
+      if (saveRes.ok) {
+        console.log('[Push Notification] Subscription saved on backend.');
+      } else {
+        console.error('[Push Notification] Failed to save subscription on backend.');
+      }
+    } catch (err) {
+      console.error('[Push Notification] Subscription error:', err);
+    }
+  };
+
   const handleRequestNotificationPermission = () => {
     if (typeof Notification === 'undefined') {
       alert('Your browser does not support Web Notifications.');
@@ -676,8 +727,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setNotifPermission(permission);
         if (permission === 'granted') {
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then(() => {
+            navigator.serviceWorker.register('/sw.js').then((reg) => {
               console.log('[Notification API] Registered Service Worker for ConsultantPanel.');
+              if (currentConsultant) {
+                subscribeToPushNotifications(reg, currentConsultant.id);
+              }
             });
           }
           new Notification("🎉 CallMint Alerts Active!", {
@@ -692,6 +746,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         console.error('Error requesting permission:', err);
       });
   };
+
+  useEffect(() => {
+    if (currentConsultant && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((reg) => {
+          subscribeToPushNotifications(reg, currentConsultant.id);
+        }).catch(err => {
+          console.error('[Push Notification] Service worker ready error:', err);
+        });
+      }
+    }
+  }, [currentConsultant]);
 
   useEffect(() => {
     const pendingRequest = sessions.find(s => s.status === 'pending');

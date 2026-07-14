@@ -684,6 +684,14 @@ export function initDb() {
       data_json TEXT NOT NULL,
       timestamp TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      consultant_id INTEGER NOT NULL,
+      subscription_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (consultant_id) REFERENCES consultants (id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate existing tables if they are missing newer columns

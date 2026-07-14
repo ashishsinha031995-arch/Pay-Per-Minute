@@ -18,7 +18,7 @@ const io = new Server(server, socketConfig);
 // Make socket.io available globally to HTTP route handlers
 app.set('io', io);
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 
 // Set up WebSocket handlers & background authoritative timers
 registerSocketHandlers(io);

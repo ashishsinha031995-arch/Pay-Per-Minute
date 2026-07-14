@@ -4,6 +4,7 @@ import { db, logWalletTransaction } from '../config/database.js';
 import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
 import { ChatMemoryService } from '../services/chatMemory.js';
 import { checkAndResetMonthlyWallets } from '../utils/salary.js';
+import { sendWebPushNotification } from '../helpers/push.helper.js';
 
 export function getMicrosecondISO(): string {
   const now = new Date();
@@ -210,6 +211,14 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
     if (io) {
       console.log(`[REST Server] Emitting session:created for consultant ${consultant_id} and session ${session_id}`);
       io.emit('session:created', { consultant_id: Number(consultant_id), session_id });
+    }
+
+    if (sessionStatus === 'pending') {
+      sendWebPushNotification(Number(consultant_id), {
+        title: `🚨 INCOMING CHAT: ${user_name}`,
+        body: `Duration: ${duration_minutes} Mins | Rate: ₹${price_per_minute}/min. Tap here to accept!`,
+        session_id
+      }).catch(err => console.error('[Push Notification] Error sending in verifyPaymentAndInitSession:', err));
     }
 
     res.json({
@@ -611,6 +620,12 @@ export function processNextInQueue(consultantId: number, io: any) {
         io.emit('session:created', { consultant_id: Number(consultantId), session_id: nextQueuedSess.id });
         io.to(nextQueuedSess.id).emit('queue:activated', { session_id: nextQueuedSess.id });
       }
+
+      sendWebPushNotification(Number(consultantId), {
+        title: `🚨 INCOMING CHAT: ${nextQueuedSess.user_name}`,
+        body: `Duration: ${nextQueuedSess.duration_minutes} Mins | Rate: ₹${nextQueuedSess.price_per_minute}/min. Tap here to accept!`,
+        session_id: nextQueuedSess.id
+      }).catch(err => console.error('[Push Notification] Error sending in processNextInQueue:', err));
     } else {
       // Check if they are manually busy
       const cons = db.prepare('SELECT manual_busy FROM consultants WHERE id = ?').get(consultantId) as { manual_busy: number } | undefined;
