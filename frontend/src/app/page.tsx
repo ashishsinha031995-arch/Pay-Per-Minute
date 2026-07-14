@@ -219,6 +219,24 @@ export default function AppPage() {
   const [forgotStep, setForgotStep] = useState<'email' | 'code'>('email');
   const [forgotEmail, setForgotEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
+  const [resendCountdown, setResendCountdown] = useState<number>(60);
+  const [isResending, setIsResending] = useState(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (authTab === 'forgot' && forgotStep === 'code' && resendCountdown > 0) {
+      timer = setTimeout(() => {
+        setResendCountdown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [authTab, forgotStep, resendCountdown]);
+
+  useEffect(() => {
+    if (authTab === 'forgot' && forgotStep === 'code') {
+      setResendCountdown(60);
+    }
+  }, [authTab, forgotStep]);
 
   // Sync user profile state from database
   const refreshUserProfile = async (id: number) => {
@@ -515,6 +533,7 @@ export default function AppPage() {
         if (!res.ok) throw new Error(data.error || 'Login failed');
         
         setCurrentUser(data.user);
+        setCurrentRole('user');
         localStorage.setItem('logged_user_id', data.user.id.toString());
         localStorage.setItem('current_role', 'user');
         sessionStorage.setItem('current_role', 'user');
@@ -610,6 +629,29 @@ export default function AppPage() {
     }
   };
 
+  const handleResendOTP = async () => {
+    if (isResending) return;
+    setAuthError(null);
+    setAuthSuccess(null);
+    setIsResending(true);
+    try {
+      const res = await fetch('/api/user/forgot-password/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim(), role: authRole })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to resend verification code.');
+      
+      setAuthSuccess('Verification code has been resent to your registered email address.');
+      setResendCountdown(60);
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   // Logout handler
   const handleLogout = () => {
     localStorage.removeItem('logged_user_id');
@@ -622,6 +664,7 @@ export default function AppPage() {
     }
     setTargetUsername(undefined);
     setCurrentUser(null);
+    setCurrentConsultant(null);
     setActiveSession(null);
     setCurrentRole('user');
   };
@@ -1104,7 +1147,21 @@ export default function AppPage() {
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold tracking-wide text-slate-400 mb-1.5 uppercase">Verification Code (6-Digit) *</label>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <label className="block text-xs font-semibold tracking-wide text-slate-400 uppercase">Verification Code (6-Digit) *</label>
+                              {resendCountdown > 0 ? (
+                                <span className="text-[10px] text-slate-500 font-mono bg-slate-900/50 px-2 py-0.5 rounded-md border border-slate-850">Resend in {resendCountdown}s</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={handleResendOTP}
+                                  disabled={isResending}
+                                  className="text-[10px] text-emerald-400 hover:text-emerald-350 font-mono font-bold bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-0.5 rounded-md border border-emerald-500/15 transition-all cursor-pointer disabled:opacity-50"
+                                >
+                                  {isResending ? 'Resending...' : 'Resend OTP 📩'}
+                                </button>
+                              )}
+                            </div>
                             <div className="relative">
                               <Key className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
                               <input

@@ -153,7 +153,11 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   };
 
   useEffect(() => {
-    if (!currentUser || !currentUser.id) return;
+    if (!currentUser || !currentUser.id) {
+      setClientNotifications([]);
+      setUnreadNotifCount(0);
+      return;
+    }
 
     const fetchNotifications = async (isFirstLoad = false) => {
       try {
@@ -425,6 +429,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   };
 
   useEffect(() => {
+    if (!currentUser?.id) {
+      setUserTickets([]);
+      return;
+    }
     if (activeDashboardTab === 'support' && currentUser?.id) {
       fetchUserTickets();
       loadPastHistoryFromLocalStorage();
@@ -452,6 +460,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   };
 
   useEffect(() => {
+    if (!currentUser?.id) {
+      setFollowingList([]);
+      return;
+    }
     if (activeDashboardTab === 'following' && currentUser?.id) {
       fetchFollowingList();
     }
@@ -491,6 +503,15 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       setEditLanguages(currentUser.languages || '');
       setEditPhone(currentUser.phone || '');
       fetchWalletTransactions();
+    } else {
+      setEditDisplayName('');
+      setEditPhotoUrl('');
+      setEditDob('');
+      setEditGender('Male');
+      setEditLocation('');
+      setEditLanguages('');
+      setEditPhone('');
+      setWalletTransactions([]);
     }
   }, [currentUser?.id]);
 

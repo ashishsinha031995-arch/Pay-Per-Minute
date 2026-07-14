@@ -210,7 +210,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   useEffect(() => {
-    if (!currentConsultant || !currentConsultant.id) return;
+    if (!currentConsultant || !currentConsultant.id) {
+      setClientNotifications([]);
+      setUnreadNotifCount(0);
+      return;
+    }
 
     const fetchNotifications = async (isFirstLoad = false) => {
       try {
@@ -1045,6 +1049,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   useEffect(() => {
+    if (!currentConsultant?.id) {
+      setConsultantTickets([]);
+      return;
+    }
     if (activeTab === 'support' && currentConsultant?.id) {
       fetchConsultantTickets();
     }
