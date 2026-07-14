@@ -2293,6 +2293,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Copy Profile URL helper
   const handleCopyProfileUrl = () => {
     if (!currentConsultant) return;
+    if (!hasActivePlan) {
+      setError("Please purchase a partner plan first to unlock your shareable booking link. (Kripya booking link copy karne ke liye pehle plan purchase karein.)");
+      handleScrollToPlans();
+      return;
+    }
     const bookingUrl = `${window.location.origin}/u/${currentConsultant.username}`;
     navigator.clipboard.writeText(bookingUrl);
     setCopiedUrl(true);
@@ -3313,19 +3318,38 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                     <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block font-bold">CallMint Menu</span>
                     <strong className="text-slate-200 text-sm font-bold block mt-2 pr-12">{currentConsultant.display_name} (ID: {currentConsultant.id})</strong>
                     <div className="mt-3">
-                      <button
-                        onClick={handleCopyProfileUrl}
-                        className="w-full flex items-center justify-between px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-emerald-400 hover:text-emerald-300 transition-all active:scale-95 text-[11px] font-bold font-sans cursor-pointer"
-                        title="Copy Shareable Booking Link"
-                      >
-                        <div className="flex items-center space-x-1.5">
-                          <Copy className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span>Copy Share Link</span>
+                      {hasActivePlan ? (
+                        <button
+                          onClick={handleCopyProfileUrl}
+                          className="w-full flex items-center justify-between px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-emerald-400 hover:text-emerald-300 transition-all active:scale-95 text-[11px] font-bold font-sans cursor-pointer"
+                          title="Copy Shareable Booking Link"
+                        >
+                          <div className="flex items-center space-x-1.5">
+                            <Copy className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>Copy Share Link</span>
+                          </div>
+                          <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md uppercase font-bold">
+                            {copiedUrl ? 'Copied!' : 'Copy'}
+                          </span>
+                        </button>
+                      ) : (
+                        <div
+                          onClick={() => {
+                            setError("Please purchase a partner plan first to unlock your shareable booking link. (Kripya booking link copy karne ke liye pehle plan purchase karein.)");
+                            setIsMobileMenuOpen(false);
+                            handleScrollToPlans();
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 bg-slate-900/60 hover:bg-slate-900 border border-slate-850/50 hover:border-slate-800 rounded-xl text-slate-400 transition-all text-[11px] font-bold font-sans cursor-pointer"
+                        >
+                          <div className="flex items-center space-x-1.5">
+                            <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-pulse" />
+                            <span className="italic">Link Locked 🔒</span>
+                          </div>
+                          <span className="text-[9px] font-mono bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded font-black">
+                            Buy Plan
+                          </span>
                         </div>
-                        <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md uppercase font-bold">
-                          {copiedUrl ? 'Copied!' : 'Copy'}
-                        </span>
-                      </button>
+                      )}
                     </div>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800/80 gap-3">
                       <button
@@ -4049,7 +4073,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
                           <h2 className="text-3xl sm:text-4xl font-black font-sans text-white tracking-tight leading-tight">
                             Namaste, <span className="bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent">{currentConsultant.display_name}!</span> <br />
-                            Activate Your Partner Channel to <span className="text-emerald-400">Start Earning</span>
+                            Welcome to <span className="text-emerald-400">CallMint Partnership Portal</span>
                           </h2>
 
                           {/* Highly Animated Current Price Indicator */}
@@ -4072,9 +4096,12 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             </span>
                           </motion.div>
 
-                          <p className="text-sm text-slate-300 leading-relaxed">
-                            Your consultant account has been created! Currently, your public bio link <strong className="text-emerald-400 font-mono">/u/{currentConsultant.username}</strong> is inactive. To receive calls, answer chats, and start real-time earnings, please choose and subscribe to a suitable partner plan below.
-                          </p>
+                          <div className="space-y-3">
+                            <p className="text-sm text-slate-200 leading-relaxed font-sans">
+                              Your partner account has been successfully created! 🎉 Currently, your direct profile and custom chat booking link are locked. 
+                              To unlock your personal high-earning profile, start receiving direct calls & chats from clients, and begin generating real-time revenue, please select and subscribe to a suitable partner plan below.
+                            </p>
+                          </div>
 
                           <div className="flex flex-wrap gap-4 pt-2">
                             <a

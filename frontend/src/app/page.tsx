@@ -5,7 +5,7 @@ import { AdminPanel } from '../components/layouts/AdminPanel';
 import { ConsultantPanel } from '../components/layouts/ConsultantPanel';
 import { ConsultantProfile } from '../components/layouts/ConsultantProfile';
 import { ChatRoom } from '../components/modals/ChatRoom';
-import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy, Smartphone } from 'lucide-react';
+import { X, Lock, User, Key, Sparkles, CheckCircle, AlertCircle, Phone, ArrowRight, Copy, Smartphone, Mail } from 'lucide-react';
 
 const saveConsultantSession = (consultant: any) => {
   if (!consultant) {
@@ -757,7 +757,7 @@ export default function AppPage() {
                   signUpType === 'consultant' ? 'Enter your professional details to create a consultant account.' : 
                   'Create your client account with username & email address.'
                 )}
-                {authTab === 'forgot' && 'Enter your username and set a brand new password securely.'}
+                {authTab === 'forgot' && 'Enter your email to reset your password.'}
               </p>
             </div>
 
@@ -1046,7 +1046,7 @@ export default function AppPage() {
                         <div>
                           <label className="block text-xs font-semibold tracking-wide text-slate-400 mb-1.5 uppercase">Registered Email Address *</label>
                           <div className="relative">
-                            <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">@</span>
+                            <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
                             <input
                               type="email"
                               required
@@ -1062,7 +1062,7 @@ export default function AppPage() {
                           <div>
                             <label className="block text-xs font-semibold tracking-wide text-slate-400 mb-1.5 uppercase">Resetting Account</label>
                             <div className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl px-4 py-2.5 opacity-80">
-                              {forgotEmail} ({authRole === 'consultant' ? 'Consultant' : 'User'})
+                              {forgotEmail}
                             </div>
                           </div>
                           <div>
