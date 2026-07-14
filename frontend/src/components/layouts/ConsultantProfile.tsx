@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone, ArrowUpRight, ArrowDownLeft, RefreshCw, Download, TrendingUp, Check, FileText, Filter, Crop, Search } from 'lucide-react';
+import { Star, ShieldAlert, Sparkles, Clock, MessageCircle, ArrowLeft, Send, CheckCircle, HelpCircle, User, Calendar, Wallet, AlertTriangle, Edit3, Camera, X, Menu, LogOut, Phone, CreditCard, Bell, Volume2, Zap, ArrowRight, History, Sun, Moon, Smartphone, ArrowUpRight, ArrowDownLeft, RefreshCw, Download, TrendingUp, Check, FileText, Filter, Crop, Search, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant, Review } from '../../types';
 import { downloadInvoice } from '../../utils/invoiceHelper';
@@ -1764,7 +1764,26 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   />
                 </div>
                 <p className="text-[10px] text-amber-500/80 mt-1 font-mono">
-                  🔒 Mobile Number and Email are locked after registration.
+                  🔒 Mobile Number cannot be changed.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono text-slate-400 mb-1">Email Address</label>
+                <div className="relative flex rounded-xl border border-slate-800 bg-slate-950/60 items-center focus-within:border-emerald-500 transition-colors overflow-hidden opacity-70">
+                  <div className="flex items-center pl-3 pr-3 py-2.5 bg-slate-900 border-r border-slate-800 shrink-0 font-mono text-xs font-bold text-slate-500">
+                    <Mail className="w-3.5 h-3.5" />
+                  </div>
+                  <input
+                    type="email"
+                    placeholder="email@example.com"
+                    value={currentUser?.email || ''}
+                    disabled={true}
+                    className="w-full bg-transparent border-0 pl-3 pr-4 py-2 text-xs text-slate-400 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+                <p className="text-[10px] text-amber-500/80 mt-1 font-mono">
+                  🔒 Email ID cannot be changed.
                 </p>
               </div>
 
