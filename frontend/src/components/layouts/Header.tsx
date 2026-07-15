@@ -148,16 +148,12 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
             ) : null}
 
             {/* Desktop-only Role Switcher */}
-            {!isLoggedOut && (
+            {currentRole === 'admin' && (
               <div className="hidden lg:flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
                 <button
                   id="switch-to-user"
                   onClick={() => onChangeRole('user')}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    currentRole === 'user'
-                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-900"
                 >
                   <User className="w-3.5 h-3.5" />
                   <span>Consultants Page</span>
@@ -166,30 +162,20 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
                 <button
                   id="switch-to-consultant"
                   onClick={() => onChangeRole('consultant')}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    currentRole === 'consultant'
-                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-900"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Consultant Portal</span>
                 </button>
 
-                {currentRole === 'admin' && (
-                  <button
-                    id="switch-to-admin"
-                    onClick={() => onChangeRole('admin')}
-                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      currentRole === 'admin'
-                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                    }`}
-                  >
-                    <Shield className="w-3.5 h-3.5" />
-                    <span>Super Admin</span>
-                  </button>
-                )}
+                <button
+                  id="switch-to-admin"
+                  onClick={() => onChangeRole('admin')}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-emerald-500 text-slate-950 shadow-sm"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Super Admin</span>
+                </button>
               </div>
             )}
 
