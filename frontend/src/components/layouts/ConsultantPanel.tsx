@@ -691,10 +691,59 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         return;
       }
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey)
-      });
+      const targetKey = urlBase64ToUint8Array(publicKey);
+      let subscription: any = null;
+
+      try {
+        // First try to check existing subscription to see if key matches
+        const existingSub = await registration.pushManager.getSubscription();
+        if (existingSub) {
+          const existingKey = existingSub.options.applicationServerKey;
+          let keysMatch = false;
+          if (existingKey) {
+            const existingUint8 = new Uint8Array(existingKey);
+            if (existingUint8.length === targetKey.length) {
+              keysMatch = true;
+              for (let i = 0; i < targetKey.length; i++) {
+                if (existingUint8[i] !== targetKey[i]) {
+                  keysMatch = false;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!keysMatch) {
+            console.log('[Push Notification] Existing subscription key mismatch or missing. Unsubscribing first...');
+            await existingSub.unsubscribe();
+          } else {
+            subscription = existingSub;
+          }
+        }
+      } catch (checkErr) {
+        console.warn('[Push Notification] Error checking existing subscription:', checkErr);
+      }
+
+      if (!subscription) {
+        try {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: targetKey
+          });
+        } catch (subErr) {
+          console.warn('[Push Notification] Direct subscription failed, clearing existing subscription and retrying...', subErr);
+          const existingSub = await registration.pushManager.getSubscription();
+          if (existingSub) {
+            await existingSub.unsubscribe();
+            console.log('[Push Notification] Successfully unsubscribed old mismatching subscription.');
+          }
+          // Retry subscription
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: targetKey
+          });
+        }
+      }
 
       console.log('[Push Notification] Subscribed successfully:', subscription);
 

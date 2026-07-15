@@ -1236,6 +1236,17 @@ export function initDb() {
   // Run the migration initially for local SQLite
   migrateAndCleanDatabase();
 
+  // Run initial wallet recalculation for all consultants to fix any inconsistencies
+  try {
+    import('../utils/salary.js').then(({ recalculateAllConsultantWallets }) => {
+      recalculateAllConsultantWallets();
+    }).catch(err => {
+      console.error('[Database Startup] Failed to import recalculateAllConsultantWallets:', err);
+    });
+  } catch (err) {
+    console.error('[Database Startup] Error importing wallet recalculation:', err);
+  }
+
   // Connect to MongoDB asynchronously so it doesn't block server startup
   const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
   if (!mongoUri) {
@@ -1262,9 +1273,25 @@ export function initDb() {
           await syncFromMongoToSQLite();
           // Immediately run ID migration and URL cleanups on the synced data to keep them safe and 5-digit formatted
           migrateAndCleanDatabase();
+          
+          // Recalculate wallets after MongoDB sync to ensure correctness
+          try {
+            const { recalculateAllConsultantWallets } = await import('../utils/salary.js');
+            recalculateAllConsultantWallets();
+          } catch (e) {
+            console.error('[Database Sync] Failed to recalculate wallets after MongoDB sync:', e);
+          }
+
           // Write back the clean, migrated 5-digit formatted data to MongoDB, wiping any old IDs
           await syncFromSQLiteToMongo();
         } else {
+          // Recalculate wallets before syncing to MongoDB
+          try {
+            const { recalculateAllConsultantWallets } = await import('../utils/salary.js');
+            recalculateAllConsultantWallets();
+          } catch (e) {
+            console.error('[Database Sync] Failed to recalculate wallets before MongoDB sync:', e);
+          }
           await syncFromSQLiteToMongo();
         }
       })

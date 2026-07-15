@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { db, logWalletTransaction, calculateConsultantLoginHours } from '../config/database.js';
-import { getSalaryCycleInfo, checkAndResetMonthlyWallets } from '../utils/salary.js';
+import { getSalaryCycleInfo, checkAndResetMonthlyWallets, recalculateConsultantWallet } from '../utils/salary.js';
 import { processNextInQueue } from './payment.controller.js';
 import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
 import fs from 'fs';
@@ -313,6 +313,9 @@ export const getConsultantStats = (req: Request, res: Response) => {
     
     // Check and trigger monthly wallet reset if crossed cutoff day
     checkAndResetMonthlyWallets();
+
+    // Dynamically recalculate and heal any wallet drift/discrepancies
+    recalculateConsultantWallet(Number(id));
 
     const consultant = db.prepare('SELECT wallet_today, wallet_monthly, wallet_total, wallet_withdrawable, plan_expiry, plan_id FROM consultants WHERE id = ?').get(id) as any;
     if (!consultant) {
