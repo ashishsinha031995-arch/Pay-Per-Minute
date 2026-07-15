@@ -265,7 +265,7 @@ export const getSessionById = (req: Request, res: Response) => {
 export const postSessionMessageREST = (req: Request, res: Response) => {
   try {
     const { id: session_id } = req.params;
-    const { sender_type, sender_name, text } = req.body;
+    const { sender_type, sender_name, text, reply_to_id, reply_to_text, reply_to_sender } = req.body;
 
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Message text is required' });
@@ -281,7 +281,15 @@ export const postSessionMessageREST = (req: Request, res: Response) => {
     }
 
     // Save in-memory during active session
-    const savedMessage = ChatMemoryService.addMessage(session_id, sender_type, sender_name, text);
+    const savedMessage = ChatMemoryService.addMessage(
+      session_id,
+      sender_type,
+      sender_name,
+      text,
+      reply_to_id,
+      reply_to_text,
+      reply_to_sender
+    );
 
     const io = req.app.get('io');
     if (io) {

@@ -1,8 +1,197 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Send, Clock, User, Sparkles, MessageSquare, AlertTriangle, ArrowLeft, Check, CheckCheck, CheckCircle, ShieldAlert, XCircle, Ban, Mic, Square, Trash2, X, Minus } from 'lucide-react';
+import { Send, Clock, User, Sparkles, MessageSquare, AlertTriangle, ArrowLeft, Check, CheckCheck, CheckCircle, ShieldAlert, XCircle, Ban, Mic, Square, Trash2, X, Minus, CornerUpLeft } from 'lucide-react';
 import { Message, Session } from '../../types';
 import { useAuthContext } from '../../context/AuthContext';
+
+interface SwipeableMessageProps {
+  msg: Message;
+  isMe: boolean;
+  role: 'user' | 'consultant';
+  userName: string;
+  isReadOnly: boolean;
+  sessionCompleted: boolean;
+  safeFormatTime: (timeStr?: string) => string;
+  onReply: (msg: Message) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}
+
+export const SwipeableMessage: React.FC<SwipeableMessageProps> = ({
+  msg,
+  isMe,
+  role,
+  userName,
+  isReadOnly,
+  sessionCompleted,
+  safeFormatTime,
+  onReply,
+  inputRef
+}) => {
+  const [dragOffset, setDragOffset] = useState(0);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const isDragging = useRef(false);
+  const triggered = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isReadOnly || sessionCompleted) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isDragging.current = true;
+    triggered.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    
+    const diffX = currentX - touchStartX.current;
+    const diffY = Math.abs(currentY - touchStartY.current);
+    
+    // Only drag right (positive diffX) and only if it's primarily horizontal drag
+    if (Math.abs(diffX) > diffY && diffX > 10) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      
+      const offset = Math.min(diffX * 0.7, 75);
+      setDragOffset(offset);
+      
+      if (offset >= 50 && !triggered.current) {
+        triggered.current = true;
+        if ('vibrate' in navigator) {
+          try { navigator.vibrate(10); } catch (_) {}
+        }
+      } else if (offset < 50 && triggered.current) {
+        triggered.current = false;
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDragging.current = false;
+    if (triggered.current) {
+      onReply(msg);
+      inputRef.current?.focus();
+    }
+    setDragOffset(0);
+    triggered.current = false;
+  };
+
+  const handleDoubleClick = () => {
+    if (isReadOnly || sessionCompleted) return;
+    onReply(msg);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div
+      className="relative w-full overflow-hidden select-none mb-3"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onDoubleClick={handleDoubleClick}
+    >
+      {/* Swipe background indicator - revealed on drag */}
+      <div 
+        className="absolute inset-y-0 left-0 flex items-center justify-start pl-4 pointer-events-none transition-all duration-150"
+        style={{
+          opacity: Math.min(dragOffset / 50, 1),
+          transform: `scale(${Math.min(dragOffset / 50, 1.15)})`,
+        }}
+      >
+        <div className={`p-1.5 rounded-full ${dragOffset >= 50 ? 'bg-indigo-600 text-slate-50 border-indigo-500' : 'bg-slate-900 text-slate-400 border-slate-800'} border flex items-center justify-center transition-all duration-200 shadow-md`}>
+          <CornerUpLeft className="w-3.5 h-3.5" />
+        </div>
+      </div>
+
+      {/* Message item wrapper */}
+      <div
+        className={`flex w-full group ${isMe ? 'justify-end' : 'justify-start'} transition-transform duration-200 ease-out`}
+        style={{
+          transform: `translateX(${dragOffset}px)`
+        }}
+      >
+        <div className={`max-w-[85%] sm:max-w-[75%] flex items-center space-x-1.5 sm:space-x-2 ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row'}`}>
+          {/* Bubble Container */}
+          <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+            <div
+              className={`relative rounded-2xl px-4 py-2.5 text-xs shadow-sm min-w-[100px] w-fit cursor-pointer transition-all duration-150 hover:brightness-110 active:scale-[0.99] select-text ${
+                isMe
+                  ? 'bg-indigo-600/20 text-slate-100 border border-indigo-500/25 rounded-tr-none'
+                  : 'bg-slate-900 text-slate-100 border border-slate-800 rounded-tl-none'
+              }`}
+              title="Double click to reply / Swipe to reply"
+            >
+              {/* Replied-To message quote box */}
+              {msg.reply_to_text && (
+                <div className="mb-2 bg-slate-950/75 border-l-2 border-indigo-500 rounded-lg p-2 text-[11px] text-slate-300 font-sans tracking-wide leading-normal text-left max-w-full select-none">
+                  <div className="font-semibold text-indigo-400 truncate text-[10px]">
+                    {msg.reply_to_sender === userName ? 'You' : msg.reply_to_sender}
+                  </div>
+                  <div className="truncate text-slate-300 mt-0.5">
+                    {msg.reply_to_text}
+                  </div>
+                </div>
+              )}
+
+              {msg.text.startsWith('[VOICE_NOTE]:') ? (
+                <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
+                  <div className="flex items-center space-x-1.5 text-[10px] font-mono text-indigo-300 uppercase tracking-wider">
+                    <span>🎙️ Voice Note</span>
+                  </div>
+                  <audio
+                    controls
+                    controlsList="nodownload"
+                    onContextMenu={(e) => e.preventDefault()}
+                    src={msg.text.substring('[VOICE_NOTE]:'.length)}
+                    className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
+                  />
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap leading-relaxed text-[13px] font-sans break-words">{msg.text}</p>
+              )}
+
+              {/* Time and status indicator below the content */}
+              <div className={`mt-1.5 flex items-center space-x-1.5 text-[9px] text-slate-400 font-mono select-none ${isMe ? 'justify-end' : 'justify-start'}`}>
+                <span>{safeFormatTime(msg.created_at)}</span>
+                {isMe && (
+                  <span>
+                    {msg.is_offline ? (
+                      <span className="text-amber-500/85 animate-pulse flex items-center">
+                        <Clock className="w-2 h-2 animate-spin" />
+                      </span>
+                    ) : msg.is_read === 1 ? (
+                      <CheckCheck className="w-3 h-3 text-cyan-400" />
+                    ) : (
+                      <Check className="w-3 h-3" />
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Reply Button on Hover for Desktop */}
+          {!isReadOnly && !sessionCompleted && (
+            <button
+              type="button"
+              onClick={() => {
+                onReply(msg);
+                inputRef.current?.focus();
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-all duration-150 p-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-indigo-400 border border-slate-800 flex-shrink-0"
+              title="Reply to message"
+            >
+              <CornerUpLeft className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ChatRoomProps {
   sessionId: string;
@@ -170,6 +359,7 @@ export function ChatRoom({
   }, [messages, sessionId]);
 
   const [textInput, setTextInput] = useState('');
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   
   // Custom confirmation dialog state
   const [confirmState, setConfirmState] = useState<{
@@ -761,8 +951,10 @@ export function ChatRoom({
     const isInactive = sessionCompleted || sessionInfo?.status === 'rejected' || sessionInfo?.status === 'missed' || sessionInfo?.status === 'cancelled';
     if (!textToSend || isInactive) return;
 
-    // Clear input immediately to make UI responsive
+    const currentReply = replyToMessage;
+    // Clear input and reply state immediately to make UI responsive
     setTextInput('');
+    setReplyToMessage(null);
     
     // Explicitly restore focus to prevent keyboard from closing on mobile devices
     inputRef.current?.focus();
@@ -781,6 +973,9 @@ export function ChatRoom({
       created_at: new Date().toISOString(),
       is_read: 0,
       is_offline: true, // Custom flag for UI indicators
+      reply_to_id: currentReply ? currentReply.id : null,
+      reply_to_text: currentReply ? (currentReply.text.startsWith('[VOICE_NOTE]:') ? '🎙️ Voice Note' : currentReply.text) : null,
+      reply_to_sender: currentReply ? currentReply.sender_name : null,
     };
 
     // If offline or low internet, queue immediately and display locally
@@ -809,6 +1004,9 @@ export function ChatRoom({
           sender_type: role,
           sender_name: userName,
           text: textToSend,
+          reply_to_id: currentReply ? currentReply.id : null,
+          reply_to_text: currentReply ? (currentReply.text.startsWith('[VOICE_NOTE]:') ? '🎙️ Voice Note' : currentReply.text) : null,
+          reply_to_sender: currentReply ? currentReply.sender_name : null,
         }),
       });
 
@@ -947,6 +1145,8 @@ export function ChatRoom({
     if (isInactive) return;
 
     const payloadText = `[VOICE_NOTE]:${base64Audio}`;
+    const currentReply = replyToMessage;
+    setReplyToMessage(null);
 
     try {
       // Send via HTTP REST API
@@ -959,6 +1159,9 @@ export function ChatRoom({
           sender_type: role,
           sender_name: userName,
           text: payloadText,
+          reply_to_id: currentReply ? currentReply.id : null,
+          reply_to_text: currentReply ? (currentReply.text.startsWith('[VOICE_NOTE]:') ? '🎙️ Voice Note' : currentReply.text) : null,
+          reply_to_sender: currentReply ? currentReply.sender_name : null,
         }),
       });
 
@@ -977,6 +1180,9 @@ export function ChatRoom({
             sender_type: role,
             sender_name: userName,
             text: payloadText,
+            reply_to_id: currentReply ? currentReply.id : null,
+            reply_to_text: currentReply ? (currentReply.text.startsWith('[VOICE_NOTE]:') ? '🎙️ Voice Note' : currentReply.text) : null,
+            reply_to_sender: currentReply ? currentReply.sender_name : null,
           });
         }
       }
@@ -988,6 +1194,9 @@ export function ChatRoom({
           sender_type: role,
           sender_name: userName,
           text: payloadText,
+          reply_to_id: currentReply ? currentReply.id : null,
+          reply_to_text: currentReply ? (currentReply.text.startsWith('[VOICE_NOTE]:') ? '🎙️ Voice Note' : currentReply.text) : null,
+          reply_to_sender: currentReply ? currentReply.sender_name : null,
         });
       }
     }
@@ -1626,55 +1835,18 @@ export function ChatRoom({
           const isMe = msg.sender_type === role;
 
           return (
-            <div
+            <SwipeableMessage
               key={msg.id}
-              className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}
-            >
-              <div className={`max-w-[80%] sm:max-w-[70%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                <div
-                  className={`relative rounded-2xl px-4 py-2.5 text-xs shadow-sm min-w-[100px] w-fit ${
-                    isMe
-                      ? 'bg-indigo-600/20 text-slate-100 border border-indigo-500/25 rounded-tr-none'
-                      : 'bg-slate-900 text-slate-100 border border-slate-800 rounded-tl-none'
-                  }`}
-                >
-                  {msg.text.startsWith('[VOICE_NOTE]:') ? (
-                    <div className="flex flex-col space-y-1.5 py-1 min-w-[200px] sm:min-w-[240px]">
-                      <div className="flex items-center space-x-1.5 text-[10px] font-mono text-indigo-300 uppercase tracking-wider">
-                        <span>🎙️ Voice Note</span>
-                      </div>
-                      <audio
-                        controls
-                        controlsList="nodownload"
-                        onContextMenu={(e) => e.preventDefault()}
-                        src={msg.text.substring('[VOICE_NOTE]:'.length)}
-                        className="w-full h-8 outline-none filter invert brightness-100 contrast-125"
-                      />
-                    </div>
-                  ) : (
-                    <p className="whitespace-pre-wrap leading-relaxed text-[13px] font-sans break-words">{msg.text}</p>
-                  )}
-
-                  {/* Time and status indicator below the content */}
-                  <div className={`mt-1.5 flex items-center space-x-1.5 text-[9px] text-slate-400 font-mono select-none ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <span>{safeFormatTime(msg.created_at)}</span>
-                    {isMe && (
-                      <span>
-                        {msg.is_offline ? (
-                          <span className="text-amber-500/85 animate-pulse flex items-center">
-                            <Clock className="w-2 h-2 animate-spin" />
-                          </span>
-                        ) : msg.is_read === 1 ? (
-                          <CheckCheck className="w-3 h-3 text-cyan-400" />
-                        ) : (
-                          <Check className="w-3 h-3" />
-                        )}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+              msg={msg}
+              isMe={isMe}
+              role={role}
+              userName={userName}
+              isReadOnly={isReadOnly}
+              sessionCompleted={sessionCompleted}
+              safeFormatTime={safeFormatTime}
+              onReply={(m) => setReplyToMessage(m)}
+              inputRef={inputRef}
+            />
           );
         })}
 
@@ -1799,6 +1971,28 @@ export function ChatRoom({
       {/* Input panel */}
       {isReadOnly ? null : (
         <div className="bg-slate-900 md:border-x md:border-b border-t border-slate-800 p-2 sm:p-2.5 md:rounded-b-2xl rounded-none shrink-0">
+          {/* Active Reply Banner */}
+          {replyToMessage && (
+            <div className="flex items-center justify-between bg-slate-950 border-l-4 border-indigo-500 rounded-lg p-2.5 mb-2 relative shadow-sm">
+              <div className="flex flex-col min-w-0 pr-2">
+                <span className="text-[11px] font-bold text-indigo-400 font-sans tracking-wide">
+                  {replyToMessage.sender_type === role ? 'Replying to yourself' : `Replying to ${replyToMessage.sender_name}`}
+                </span>
+                <span className="text-xs text-slate-300 truncate max-w-full font-sans mt-0.5">
+                  {replyToMessage.text.startsWith('[VOICE_NOTE]:') ? '🎙️ Voice Note' : replyToMessage.text}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyToMessage(null)}
+                className="text-slate-400 hover:text-rose-400 p-1 flex-shrink-0 transition-colors"
+                title="Cancel Reply"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {sessionInfo?.status === 'queued' || sessionInfo?.status === 'pending' ? (
             <div className="bg-slate-950/60 border border-slate-850 border-dashed rounded-xl p-3 text-center text-xs font-mono text-slate-400">
               ⏳ Waiting in queue... You can start messaging as soon as the consultant accepts your chat.

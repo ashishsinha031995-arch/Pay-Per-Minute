@@ -8,6 +8,9 @@ export interface MemoryMessage {
   text: string;
   created_at: string;
   is_read: number;
+  reply_to_id?: number | null;
+  reply_to_text?: string | null;
+  reply_to_sender?: string | null;
 }
 
 // In-memory store for active session messages
@@ -15,7 +18,15 @@ const activeSessionMessages = new Map<string, MemoryMessage[]>();
 let messageIdCounter = 1000000;
 
 export const ChatMemoryService = {
-  addMessage(sessionId: string, senderType: 'user' | 'consultant', senderName: string, text: string): MemoryMessage {
+  addMessage(
+    sessionId: string,
+    senderType: 'user' | 'consultant',
+    senderName: string,
+    text: string,
+    replyToId?: number | null,
+    replyToText?: string | null,
+    replyToSender?: string | null
+  ): MemoryMessage {
     if (!activeSessionMessages.has(sessionId)) {
       activeSessionMessages.set(sessionId, []);
     }
@@ -27,16 +38,19 @@ export const ChatMemoryService = {
       sender_name: senderName,
       text,
       created_at: new Date().toISOString(),
-      is_read: 0
+      is_read: 0,
+      reply_to_id: replyToId || null,
+      reply_to_text: replyToText || null,
+      reply_to_sender: replyToSender || null
     };
     messages.push(msg);
 
     // Save directly to the database immediately to prevent loss on server restart!
     try {
       const result = db.prepare(`
-        INSERT INTO messages (session_id, sender_type, sender_name, text, created_at, is_read)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(sessionId, senderType, senderName, text, msg.created_at, msg.is_read);
+        INSERT INTO messages (session_id, sender_type, sender_name, text, created_at, is_read, reply_to_id, reply_to_text, reply_to_sender)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(sessionId, senderType, senderName, text, msg.created_at, msg.is_read, msg.reply_to_id, msg.reply_to_text, msg.reply_to_sender);
       
       if (result && result.lastInsertRowid) {
         msg.id = Number(result.lastInsertRowid);
@@ -61,7 +75,10 @@ export const ChatMemoryService = {
           sender_name: m.sender_name,
           text: m.text,
           created_at: m.created_at,
-          is_read: m.is_read
+          is_read: m.is_read,
+          reply_to_id: m.reply_to_id,
+          reply_to_text: m.reply_to_text,
+          reply_to_sender: m.reply_to_sender
         }));
         // Cache back to active memory if there is an active session
         const sess = db.prepare("SELECT status FROM sessions WHERE id = ?").get(sessionId) as { status: string } | undefined;
@@ -113,7 +130,10 @@ export const ChatMemoryService = {
           sender_name: m.sender_name,
           text: m.text,
           created_at: m.created_at,
-          is_read: m.is_read
+          is_read: m.is_read,
+          reply_to_id: m.reply_to_id,
+          reply_to_text: m.reply_to_text,
+          reply_to_sender: m.reply_to_sender
         }));
       } catch (err) {
         console.error('[ChatMemoryService] Error loading messages from DB during consolidation:', err);
@@ -131,8 +151,9 @@ export const ChatMemoryService = {
           }
         }
       } catch (e) {}
+      const replyPrefix = m.reply_to_sender ? `[In reply to ${m.reply_to_sender}: "${m.reply_to_text}"] ` : '';
       const textVal = (m.text && typeof m.text === 'string' && m.text.startsWith('[VOICE_NOTE]:')) ? '[Voice Note 🎙️]' : (m.text || '');
-      return `[${timeStr}] ${m.sender_name || 'User'}: ${textVal}`;
+      return `[${timeStr}] ${m.sender_name || 'User'}: ${replyPrefix}${textVal}`;
     }).join('\n');
 
     const consultantMsgs = messages.filter(m => m.sender_type === 'consultant');

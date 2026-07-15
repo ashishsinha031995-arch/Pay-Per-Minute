@@ -95,6 +95,9 @@ export interface Message {
   created_at: string;
   is_read: number; // 0 or 1
   is_offline?: boolean;
+  reply_to_id?: number | string | null;
+  reply_to_text?: string | null;
+  reply_to_sender?: string | null;
 }
 
 export interface Review {

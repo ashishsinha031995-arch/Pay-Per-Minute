@@ -42,7 +42,7 @@ export function handleChatSocket(io: Server, socket: Socket) {
   });
 
   // 2. Real-time Messages exchange
-  socket.on('send:message', ({ session_id, sender_type, sender_name, text }) => {
+  socket.on('send:message', ({ session_id, sender_type, sender_name, text, reply_to_id, reply_to_text, reply_to_sender }) => {
     console.log(`[Socket Server] Received send:message from ${sender_name} (${sender_type}) in session ${session_id}: "${text}"`);
     try {
       // Ensure session is active or pending before allowing messages
@@ -60,7 +60,15 @@ export function handleChatSocket(io: Server, socket: Socket) {
       }
 
       // Store message in-memory during active session
-      const savedMessage = ChatMemoryService.addMessage(session_id, sender_type, sender_name, text);
+      const savedMessage = ChatMemoryService.addMessage(
+        session_id,
+        sender_type,
+        sender_name,
+        text,
+        reply_to_id,
+        reply_to_text,
+        reply_to_sender
+      );
       console.log(`[Socket Server] Message added in-memory:`, savedMessage.id);
 
       console.log(`[Socket Server] Broadcasting message to session room ${session_id}:`, savedMessage);

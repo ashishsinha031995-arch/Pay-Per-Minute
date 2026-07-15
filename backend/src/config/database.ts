@@ -560,6 +560,9 @@ export function initDb() {
       text TEXT NOT NULL,
       created_at TEXT NOT NULL,
       is_read INTEGER DEFAULT 0,
+      reply_to_id INTEGER DEFAULT NULL,
+      reply_to_text TEXT DEFAULT NULL,
+      reply_to_sender TEXT DEFAULT NULL,
       FOREIGN KEY (session_id) REFERENCES sessions (id)
     );
 
@@ -820,6 +823,10 @@ export function initDb() {
   try { db.exec("ALTER TABLE support_tickets ADD COLUMN closed_at TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE support_tickets ADD COLUMN resolved_at TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE consultants ADD COLUMN manual_busy INTEGER DEFAULT 0;"); } catch(_) {}
+
+  try { db.exec("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER DEFAULT NULL;"); } catch(_) {}
+  try { db.exec("ALTER TABLE messages ADD COLUMN reply_to_text TEXT DEFAULT NULL;"); } catch(_) {}
+  try { db.exec("ALTER TABLE messages ADD COLUMN reply_to_sender TEXT DEFAULT NULL;"); } catch(_) {}
 
   try {
     db.exec(`
