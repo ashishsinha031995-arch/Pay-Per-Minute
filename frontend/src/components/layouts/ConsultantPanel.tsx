@@ -5,7 +5,7 @@ import { Consultant, Plan, Session } from '../../types';
 import { IncomingRequestNotification } from '../IncomingRequestNotification';
 import { io } from 'socket.io-client';
 import { ImageEditorModal } from '../modals/ImageEditorModal';
-import { Crop } from 'lucide-react';
+import { Crop, Filter, Search } from 'lucide-react';
 import { ProfileChangesSuccessModal, ProfileChangeItem } from '../modals/ProfileChangesSuccessModal';
 import { compressImageBase64 } from '../../utils/helpers';
 
@@ -172,6 +172,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Stats & Sessions list
   const [wallet, setWallet] = useState<any>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsFilterName, setSessionsFilterName] = useState('');
+  const [sessionsFilterStatus, setSessionsFilterStatus] = useState<'all' | 'completed' | 'rejected' | 'cancelled' | 'missed' | 'pending' | 'active'>('all');
+  const [isSearchingSessions, setIsSearchingSessions] = useState(false);
   const [salaryInfo, setSalaryInfo] = useState<any>(null);
   const [manualAdjustments, setManualAdjustments] = useState<any[]>([]);
   const [loginHours, setLoginHours] = useState<{ daily: number, weekly: number, monthly: number } | null>(null);
@@ -6290,12 +6293,106 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       </button>
                     </div>
 
+                    {/* Search and Filter query block */}
+                    <div className={`p-4 border-b flex flex-col sm:flex-row sm:items-end gap-3 text-left ${
+                      theme === 'light' ? 'border-slate-100 bg-slate-50/50' : 'border-slate-800 bg-slate-950/20'
+                    }`}>
+                      <div className="space-y-1.5 flex-1">
+                        <label className={`block text-[10px] font-mono uppercase tracking-wider ${
+                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                        }`}>
+                          Search By Client Name
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+                              <Search className="w-3.5 h-3.5" />
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="Enter client name..."
+                              value={sessionsFilterName}
+                              onChange={(e) => setSessionsFilterName(e.target.value)}
+                              className={`rounded-xl pl-9 pr-4 py-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full transition-all ${
+                                theme === 'light'
+                                  ? 'bg-white border border-slate-200 text-slate-800 placeholder-slate-400'
+                                  : 'bg-slate-950 border border-slate-850 text-slate-100 placeholder-slate-600'
+                              }`}
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              setIsSearchingSessions(true);
+                              setTimeout(() => {
+                                setIsSearchingSessions(false);
+                              }, 200);
+                            }}
+                            disabled={isSearchingSessions}
+                            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-4 rounded-xl transition-all flex items-center justify-center min-w-[80px]"
+                          >
+                            {isSearchingSessions ? 'Searching...' : 'Search'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 min-w-[150px]">
+                        <label className={`block text-[10px] font-mono uppercase tracking-wider flex items-center gap-1.5 ${
+                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                        }`}>
+                          <Filter className="w-3 h-3" />
+                          <span>Status Filter</span>
+                        </label>
+                        <div className="relative flex items-center">
+                          <select
+                            value={sessionsFilterStatus}
+                            onChange={(e) => setSessionsFilterStatus(e.target.value as any)}
+                            className={`w-full rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 appearance-none cursor-pointer pr-8 font-medium ${
+                              theme === 'light'
+                                ? 'bg-white border border-slate-200 text-slate-800'
+                                : 'bg-slate-950 border border-slate-850 text-slate-100'
+                            }`}
+                          >
+                            <option value="all">All Sessions</option>
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="missed">Missed</option>
+                            <option value="pending">Pending</option>
+                          </select>
+                          <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none text-slate-500">
+                            <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                              <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Scrollable list container */}
                     <div className="flex-1 flex flex-col max-h-none sm:max-h-[550px] overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-0 sm:py-0 pr-4 sm:pr-1 sessions-scrollbar min-h-0">
-                      {sessions.length === 0 ? (
-                        <div className="text-center py-12 text-slate-500 text-xs font-sans">No sessions recorded yet for your account.</div>
-                      ) : (
-                        sessions.map((sess, index) => {
+                      {(() => {
+                        const filteredSessions = sessions.filter(sess => {
+                          const matchesName = !sessionsFilterName.trim() ||
+                            sess.user_name.toLowerCase().includes(sessionsFilterName.trim().toLowerCase());
+                          
+                          const matchesStatus = sessionsFilterStatus === 'all' ||
+                            String(sess.status).toLowerCase() === sessionsFilterStatus;
+
+                          return matchesName && matchesStatus;
+                        });
+
+                        if (filteredSessions.length === 0) {
+                          return (
+                            <div className="text-center py-16 text-slate-500 text-xs font-sans leading-relaxed">
+                              {sessionsFilterName.trim() || sessionsFilterStatus !== 'all' 
+                                ? "No sessions found matching current search or status filter." 
+                                : "No sessions recorded yet for your account."}
+                            </div>
+                          );
+                        }
+
+                        return filteredSessions.map((sess, index) => {
                           const isUserBlocked = blockedUsers.some(b => b.user_name.toLowerCase() === sess.user_name.toLowerCase());
                           return (
                             <React.Fragment key={sess.id}>
@@ -6473,13 +6570,13 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                   </div>
                                 ) : null}
                               </div>
-                              {index < sessions.length - 1 && (
+                              {index < filteredSessions.length - 1 && (
                                 <div className={`border-b ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`} />
                               )}
                             </React.Fragment>
                           );
-                        })
-                      )}
+                        });
+                      })()}
                     </div>
                   </div>
                 </motion.div>

@@ -1926,13 +1926,12 @@ export function ChatRoom({
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold">Your Written Review</label>
+                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold">Your Written Review (Optional)</label>
                       <textarea
                         value={reviewText}
                         onChange={(e) => setReviewText(e.target.value.replace(/[0-9]/g, ''))}
                         placeholder="Apna anubhav share karein... (e.g. Bohat accha guidance mila, highly recommended)"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[65px] font-sans"
-                        required
                       />
                       <div className="flex justify-between items-center mt-1">
                         <span className={`text-[10px] font-mono ${reviewText.trim() === '' ? 'text-slate-500' : reviewText.trim().split(/\s+/).length > 30 ? 'text-rose-400 font-bold' : 'text-slate-500'}`}>
@@ -2208,13 +2207,12 @@ export function ChatRoom({
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold">Your Written Review</label>
+                      <label className="block text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider font-bold">Your Written Review (Optional)</label>
                       <textarea
                         value={reviewText}
                         onChange={(e) => setReviewText(e.target.value.replace(/[0-9]/g, ''))}
                         placeholder="Apna anubhav share karein... (e.g. Bohat accha guidance mila, highly recommended)"
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[65px] font-sans"
-                        required
                       />
                       <div className="flex justify-between items-center mt-1">
                         <span className={`text-[10px] font-mono ${reviewText.trim() === '' ? 'text-slate-500' : reviewText.trim().split(/\s+/).length > 30 ? 'text-rose-400 font-bold' : 'text-slate-500'}`}>
