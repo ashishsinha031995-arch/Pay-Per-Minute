@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db, logWalletTransaction, calculateConsultantLoginHours } from '../config/database.js';
+import { db, logWalletTransaction, calculateConsultantLoginHours, syncIdsToMongo } from '../config/database.js';
 import { getSalaryCycleInfo } from '../utils/salary.js';
 
 export const getAdminDashboardStats = (req: Request, res: Response) => {
@@ -117,7 +117,7 @@ export const toggleConsultantActiveStatus = (req: Request, res: Response) => {
   }
 };
 
-export const updateConsultantBySuperAdmin = (req: Request, res: Response) => {
+export const updateConsultantBySuperAdmin = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const {
@@ -238,6 +238,10 @@ export const updateConsultantBySuperAdmin = (req: Request, res: Response) => {
     }
 
     const updated = db.prepare('SELECT * FROM consultants WHERE id = ?').get(id);
+    
+    // Sync to MongoDB immediately to prevent reversion during background database polls
+    await syncIdsToMongo('consultants', [Number(id)], 'id');
+
     res.json({ success: true, consultant: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

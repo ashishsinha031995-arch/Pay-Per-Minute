@@ -6,6 +6,24 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Consultant } from '../../types';
 
+const normalizeCategory = (cat: string) => {
+  if (!cat) return 'Consultants';
+  const c = cat.trim();
+  const mapping: Record<string, string> = {
+    'Astrologer': 'Astrologers', 'Astrologers': 'Astrologers',
+    'Influencer': 'Influencers', 'Influencers': 'Influencers',
+    'Mentor': 'Mentors', 'Mentors': 'Mentors',
+    'Doctor': 'Doctors', 'Doctors': 'Doctors',
+    'Lawyer': 'Lawyers', 'Lawyers': 'Lawyers',
+    'Singer': 'Singers', 'Singers': 'Singers',
+    'Advisor': 'Advisors', 'Advisors': 'Advisors',
+    'Friend': 'Friends', 'Friends': 'Friends',
+    'Coach': 'Coaches', 'Coaches': 'Coaches',
+    'Consultant': 'Consultants', 'Consultants': 'Consultants'
+  };
+  return mapping[c] || c;
+};
+
 interface CallMintLandingPageProps {
   consultants: Consultant[];
   onOpenAuth: () => void;
@@ -575,7 +593,7 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
                     <span className="text-xs">✅</span>
                   </h4>
                   <span className="inline-block text-[10px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/15 font-bold">
-                    {(cons as any).category || 'Consultant'}
+                    {normalizeCategory((cons as any).category || 'Consultants')}
                   </span>
                 </div>
 

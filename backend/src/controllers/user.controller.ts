@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db, logWalletTransaction, calculateConsultantLoginHours } from '../config/database.js';
+import { db, logWalletTransaction, calculateConsultantLoginHours, syncIdsToMongo } from '../config/database.js';
 import { getSalaryCycleInfo, checkAndResetMonthlyWallets, recalculateConsultantWallet } from '../utils/salary.js';
 import { processNextInQueue } from './payment.controller.js';
 import { getRazorpayClient, getRazorpayErrorMessage, getCleanRazorpayKeyId, getResponseRazorpayKeyId, getCleanRazorpayKeySecret } from '../services/payment.service.js';
@@ -152,7 +152,7 @@ export const getConsultantProfileById = (req: Request, res: Response) => {
 };
 
 // Update Consultant Profile Settings
-export const updateConsultantProfile = (req: Request, res: Response) => {
+export const updateConsultantProfile = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { photo_url, bio, price_per_minute, display_name, email, password, phone, category, experience, languages, specializations } = req.body;
@@ -300,6 +300,10 @@ export const updateConsultantProfile = (req: Request, res: Response) => {
     }
 
     const updated = db.prepare('SELECT * FROM consultants WHERE id = ?').get(id);
+    
+    // Sync to MongoDB immediately to prevent reversion during background database polls
+    await syncIdsToMongo('consultants', [Number(id)], 'id');
+
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

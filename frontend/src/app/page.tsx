@@ -135,8 +135,10 @@ export default function AppPage() {
           localStorage.setItem('clicked_consultant_username', username);
           return username;
         }
+      } else {
+        localStorage.removeItem('clicked_consultant_username');
+        return undefined;
       }
-      return localStorage.getItem('clicked_consultant_username') || undefined;
     }
     return undefined;
   });

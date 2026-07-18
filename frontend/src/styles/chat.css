@@ -80,3 +80,23 @@
   scrollbar-color: #cbd5e1 transparent;
 }
 
+@keyframes flash-highlight {
+  0% {
+    background-color: rgba(99, 102, 241, 0.55) !important;
+    transform: scale(1.02);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    background-color: rgba(99, 102, 241, 0.35) !important;
+    transform: scale(1.01);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.highlight-message {
+  animation: flash-highlight 1.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+

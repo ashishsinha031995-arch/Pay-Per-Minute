@@ -14,6 +14,7 @@ interface SwipeableMessageProps {
   safeFormatTime: (timeStr?: string) => string;
   onReply: (msg: Message) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  onScrollToMessage: (id: string | number) => void;
 }
 
 export const SwipeableMessage: React.FC<SwipeableMessageProps> = ({
@@ -25,7 +26,8 @@ export const SwipeableMessage: React.FC<SwipeableMessageProps> = ({
   sessionCompleted,
   safeFormatTime,
   onReply,
-  inputRef
+  inputRef,
+  onScrollToMessage
 }) => {
   const [dragOffset, setDragOffset] = useState(0);
   const touchStartX = useRef(0);
@@ -117,6 +119,7 @@ export const SwipeableMessage: React.FC<SwipeableMessageProps> = ({
           {/* Bubble Container */}
           <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
             <div
+              id={`msg-bubble-${msg.id}`}
               className={`relative rounded-2xl px-4 py-2.5 text-xs shadow-sm min-w-[100px] w-fit cursor-pointer transition-all duration-150 hover:brightness-110 active:scale-[0.99] select-text ${
                 isMe
                   ? 'bg-indigo-600/20 text-slate-100 border border-indigo-500/25 rounded-tr-none'
@@ -126,7 +129,16 @@ export const SwipeableMessage: React.FC<SwipeableMessageProps> = ({
             >
               {/* Replied-To message quote box */}
               {msg.reply_to_text && (
-                <div className="mb-2 bg-slate-950/75 border-l-2 border-indigo-500 rounded-lg p-2 text-[11px] text-slate-300 font-sans tracking-wide leading-normal text-left max-w-full select-none">
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (msg.reply_to_id) {
+                      onScrollToMessage(msg.reply_to_id);
+                    }
+                  }}
+                  title="Click to scroll to original message (Original message par scroll karne ke liye click karein)"
+                  className="mb-2 bg-slate-950/75 border-l-2 border-indigo-500 rounded-lg p-2 text-[11px] text-slate-300 font-sans tracking-wide leading-normal text-left max-w-full select-none cursor-pointer hover:bg-indigo-950/80 active:scale-[0.98] transition-all"
+                >
                   <div className="font-semibold text-indigo-400 truncate text-[10px]">
                     {msg.reply_to_sender === userName ? 'You' : msg.reply_to_sender}
                   </div>
@@ -360,6 +372,18 @@ export function ChatRoom({
 
   const [textInput, setTextInput] = useState('');
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+
+  const handleScrollToMessage = (msgId: string | number | null | undefined) => {
+    if (!msgId) return;
+    const bubbleElement = document.getElementById(`msg-bubble-${msgId}`);
+    if (bubbleElement) {
+      bubbleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      bubbleElement.classList.add('highlight-message');
+      setTimeout(() => {
+        bubbleElement.classList.remove('highlight-message');
+      }, 1500);
+    }
+  };
   
   // Custom confirmation dialog state
   const [confirmState, setConfirmState] = useState<{
@@ -1219,6 +1243,8 @@ export function ChatRoom({
     );
   }
 
+  const isLastMinute = remainingSeconds !== null && remainingSeconds > 0 && remainingSeconds <= 60 && !sessionCompleted && sessionInfo?.status !== 'queued' && sessionInfo?.status !== 'pending';
+
   return (
     <div 
       className="fixed inset-0 z-[150] md:relative md:inset-auto md:z-0 bg-slate-950 md:bg-transparent w-full max-w-4xl mx-auto px-0 md:px-4 sm:px-6 lg:px-8 py-0 md:py-4 h-[100dvh] md:h-[calc(100vh-100px)] flex flex-col justify-between overflow-hidden"
@@ -1435,8 +1461,12 @@ export function ChatRoom({
               </div>
             </div>
           ) : (
-            <div className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-950 border border-slate-850 px-2.5 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-9 rounded-full text-rose-400 flex-shrink-0">
-              <Clock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
+            <div className={`flex items-center space-x-1 sm:space-x-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-9 rounded-full flex-shrink-0 transition-all duration-300 ${
+              isLastMinute 
+                ? 'bg-red-950/50 border border-red-500 text-red-500 animate-pulse font-extrabold shadow-[0_0_12px_rgba(239,68,68,0.4)]'
+                : 'bg-slate-950 border border-slate-850 text-rose-400'
+            }`}>
+              <Clock className={`w-3.5 h-3.5 ${isLastMinute ? 'text-red-500 animate-[bounce_1s_infinite]' : 'text-rose-500 animate-pulse'}`} />
               <div className="text-[10px] sm:text-xs font-black font-mono tracking-wider">
                 {sessionInfo?.status === 'queued' ? (
                   <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wide">In Queue</span>
@@ -1846,6 +1876,7 @@ export function ChatRoom({
               safeFormatTime={safeFormatTime}
               onReply={(m) => setReplyToMessage(m)}
               inputRef={inputRef}
+              onScrollToMessage={handleScrollToMessage}
             />
           );
         })}

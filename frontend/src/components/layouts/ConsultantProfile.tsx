@@ -3988,7 +3988,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                     {/* Subtitle with proper gap from name row */}
                     <div className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1 leading-relaxed">
-                      {selectedConsultant.category || 'Mentors'}
+                      {normalizeCategory(selectedConsultant.category || 'Consultants')}
                     </div>
 
                     {/* Online status and Following button next to it on the bottom line */}
@@ -4036,6 +4036,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   onClick={() => {
                     setSelectedConsultant(null);
                     setReviews([]);
+                    if (onClearTargetUsername) {
+                      onClearTargetUsername();
+                    }
                   }}
                   className="p-1.5 ml-2 mr-0 text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-xl transition-all cursor-pointer shrink-0 active:scale-95 flex items-center justify-center self-center"
                   title="Go Back"
