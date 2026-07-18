@@ -739,7 +739,7 @@ export const getUserPastSessions = (req: Request, res: Response) => {
     const { user_name, ids } = req.query;
     let sessionsList: any[] = [];
 
-    if (user_name) {
+    if (user_name && !ids) {
       sessionsList = db.prepare(`
         SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
         FROM sessions s
@@ -752,14 +752,32 @@ export const getUserPastSessions = (req: Request, res: Response) => {
       const idArr = String(ids).split(',').map(x => x.trim()).filter(Boolean);
       if (idArr.length > 0) {
         const placeholders = idArr.map(() => '?').join(',');
-        sessionsList = db.prepare(`
-          SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
-          FROM sessions s
-          LEFT JOIN consultants c ON s.consultant_id = c.id
-          LEFT JOIN reviews r ON s.id = r.session_id
-          WHERE s.id IN (${placeholders})
-          ORDER BY s.id DESC
-        `).all(...idArr);
+        
+        if (user_name) {
+          // If a username is passed, only return matching sessions that are either guest sessions (user_id IS NULL) or belong to this user
+          sessionsList = db.prepare(`
+            SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
+            FROM sessions s
+            LEFT JOIN consultants c ON s.consultant_id = c.id
+            LEFT JOIN reviews r ON s.id = r.session_id
+            WHERE s.id IN (${placeholders}) AND (
+              s.user_id IS NULL OR 
+              LOWER(s.user_name) = LOWER(?) OR 
+              s.user_id = (SELECT id FROM users WHERE LOWER(username) = LOWER(?))
+            )
+            ORDER BY s.id DESC
+          `).all(...idArr, String(user_name).trim(), String(user_name).trim());
+        } else {
+          // If no username is passed, ONLY allow sessions that are guest sessions (user_id IS NULL) to prevent cross-account leak
+          sessionsList = db.prepare(`
+            SELECT s.*, c.display_name as consultant_name, r.rating, r.text as review_text, r.is_hidden as review_is_hidden
+            FROM sessions s
+            LEFT JOIN consultants c ON s.consultant_id = c.id
+            LEFT JOIN reviews r ON s.id = r.session_id
+            WHERE s.id IN (${placeholders}) AND s.user_id IS NULL
+            ORDER BY s.id DESC
+          `).all(...idArr);
+        }
       }
     } else {
       return res.json([]);

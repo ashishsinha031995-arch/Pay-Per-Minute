@@ -1652,6 +1652,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       const res = await fetch(`/api/consultants/${id}/stats`);
       if (res.ok) {
         try {
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error(`Expected JSON response but received content-type: ${contentType || 'none'}`);
+          }
           const data = await res.json();
           setWallet(data.wallet);
           setSessions(data.sessions);
@@ -1662,7 +1666,9 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           }
         } catch (e: any) {
           const errMsg = e && e.message ? String(e.message) : '';
-          if (errMsg.includes('Failed to fetch') || errMsg.includes('abort') || errMsg.includes('stream') || errMsg.includes('network')) {
+          if (errMsg.includes('Expected JSON response') || errMsg.includes('content-type')) {
+            console.warn('[Validation] Stats endpoint returned HTML or non-JSON content. Skipping parse.');
+          } else if (errMsg.includes('Failed to fetch') || errMsg.includes('abort') || errMsg.includes('stream') || errMsg.includes('network')) {
             console.warn('Network connection or stream interrupted while parsing stats JSON.');
           } else {
             console.error('Error parsing stats JSON:', e);
@@ -1678,12 +1684,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       const blockedRes = await fetch(`/api/consultants/${id}/blocked`);
       if (blockedRes.ok) {
         try {
+          const contentType = blockedRes.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error(`Expected JSON response but received content-type: ${contentType || 'none'}`);
+          }
           const blockedData = await blockedRes.json();
           setBlockedUsers(blockedData);
           localStorage.setItem(`blocked_users_${id}`, JSON.stringify(blockedData));
         } catch (e: any) {
           const errMsg = e && e.message ? String(e.message) : '';
-          if (errMsg.includes('Failed to fetch') || errMsg.includes('abort') || errMsg.includes('stream') || errMsg.includes('network')) {
+          if (errMsg.includes('Expected JSON response') || errMsg.includes('content-type')) {
+            console.warn('[Validation] Blocked users endpoint returned HTML or non-JSON content. Skipping parse.');
+          } else if (errMsg.includes('Failed to fetch') || errMsg.includes('abort') || errMsg.includes('stream') || errMsg.includes('network')) {
             console.warn('Network connection or stream interrupted while parsing blocked list JSON.');
           } else {
             console.error('Error parsing blocked list JSON:', e);

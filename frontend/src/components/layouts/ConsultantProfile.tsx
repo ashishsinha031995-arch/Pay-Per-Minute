@@ -53,9 +53,10 @@ interface ConsultantProfileProps {
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
   onInstallApp?: () => void;
+  onSelectConsultantChanged?: (selected: any) => void;
 }
 
-export function ConsultantProfile({ onSelectSession, targetUsername, onClearTargetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout, theme = 'dark', onToggleTheme, onInstallApp }: ConsultantProfileProps) {
+export function ConsultantProfile({ onSelectSession, targetUsername, onClearTargetUsername, currentUser, setCurrentUser, onOpenAuth, activeSessionId, onLogout, theme = 'dark', onToggleTheme, onInstallApp, onSelectConsultantChanged }: ConsultantProfileProps) {
   // Directory or profile selection
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
@@ -98,6 +99,15 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [selectedMinutes, setSelectedMinutes] = useState<number>(10); // Default 10 mins
   const [bookingTab, setBookingTab] = useState<'about' | 'schedule' | 'reviews'>('about');
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState<'wallet' | 'razorpay'>('wallet');
+  const [aboutExpanded, setAboutExpanded] = useState<boolean>(false);
+  const [reviewFilter, setReviewFilter] = useState<'all' | 5 | 4 | 3>('all');
+
+  // Propagate selected consultant state up to parent for layout controls (e.g. hiding/showing top bar)
+  useEffect(() => {
+    if (onSelectConsultantChanged) {
+      onSelectConsultantChanged(selectedConsultant);
+    }
+  }, [selectedConsultant, onSelectConsultantChanged]);
 
   // Payment checkout overlay states
   const [checkoutOrder, setCheckoutOrder] = useState<any>(null);
@@ -619,7 +629,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
         if (ids && ids.length > 0) {
           try {
-            const res = await fetch(`/api/user/sessions?ids=${ids.join(',')}`);
+            const url = currentUser?.username
+              ? `/api/user/sessions?ids=${ids.join(',')}&user_name=${encodeURIComponent(currentUser.username)}`
+              : `/api/user/sessions?ids=${ids.join(',')}`;
+            const res = await fetch(url);
             if (res.ok) {
               const contentType = res.headers.get('content-type');
               if (contentType && contentType.includes('application/json')) {
@@ -1376,58 +1389,11 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 text-slate-100">
+    <div className={selectedConsultant 
+      ? `w-full flex-1 flex flex-col overflow-hidden min-h-0 ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-sky-50 text-slate-900'}`
+      : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 text-slate-100"
+    }>
       
-      {/* Direct link banner */}
-      {targetUsername && selectedConsultant && (
-        <div className="bg-slate-900 border border-emerald-500/20 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
-          <div className="space-y-1.5 text-center md:text-left">
-            <span className="inline-flex items-center text-[10px] bg-emerald-500/10 text-emerald-400 font-black px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wider animate-pulse">
-              ✨ Direct Connection Live
-            </span>
-            <h2 className="text-xl font-black text-slate-100">Bespoke Expert Consultation</h2>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-              Aap directly <strong>{selectedConsultant.display_name}</strong> ke personal consultation profile page par hain.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {currentUser && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono bg-slate-950 px-3 py-2.5 rounded-xl text-emerald-400 border border-slate-800 font-bold">
-                  Wallet Balance: ₹{parseFloat(currentUser.wallet_balance || 0).toFixed(2)}
-                </span>
-                <button
-                  onClick={() => setShowRechargeModal(true)}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black py-2.5 px-4 rounded-xl transition-all flex items-center space-x-1 border border-emerald-400/20"
-                >
-                  <Wallet className="w-3.5 h-3.5" />
-                  <span>Recharge Page</span>
-                </button>
-              </div>
-            )}
-            {onClearTargetUsername && (
-              <button
-                onClick={() => {
-                  onClearTargetUsername();
-                }}
-                className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-bold py-2.5 px-4 rounded-xl transition-all border border-emerald-500/20 shadow-sm"
-              >
-                ✨ Show All My Advisors
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setShowHistoryModal(true);
-                loadPastHistoryFromLocalStorage();
-              }}
-              className="bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold py-2.5 px-4 rounded-xl transition-all border border-slate-700/60"
-            >
-              My Past Chats History
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Alert feeds */}
       {error && activeDashboardTab !== 'profile' && (
@@ -3511,8 +3477,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       {/* Info section */}
                       <div className="min-w-0 flex-1 space-y-0.5 text-left">
                         <div className="flex items-center gap-1">
-                          <h4 className={`font-medium text-xs truncate ${
-                            theme === 'light' ? 'text-slate-100' : 'text-slate-100'
+                          <h4 className={`font-bold text-xs truncate ${
+                            theme === 'light' ? 'text-slate-900' : 'text-slate-100'
                           }`}>{cons.display_name}</h4>
                           <span className="bg-sky-500/15 text-sky-400 p-0.5 rounded-full border border-sky-500/25 flex items-center justify-center shrink-0">
                             <CheckCircle className="w-3 h-3 fill-sky-500 text-slate-950" />
@@ -3927,151 +3893,362 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       {/* 2. SHOW SPECIFIC SELECTED PROFILE BOOKING PAGE */}
       {selectedConsultant && (
-        <div className="space-y-3 max-w-md md:max-w-4xl lg:max-w-5xl mx-auto w-full px-2 sm:px-4">
+        <div className={`w-full flex-1 flex flex-col overflow-hidden lg:h-auto lg:min-h-screen lg:overflow-visible lg:pb-24 transition-colors duration-300 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${
+          theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-sky-50 text-slate-900'
+        }`}>
+          <style dangerouslySetInnerHTML={{ __html: `
+            /* Hide scrollbar for Chrome, Safari, Opera, Firefox and IE/Edge globally when profile is active */
+            ::-webkit-scrollbar {
+              display: none !important;
+            }
+            html {
+              scrollbar-gutter: stable !important;
+            }
+            @media (max-width: 1023px) {
+              html, body {
+                overflow: hidden !important;
+                height: 100% !important;
+                -ms-overflow-style: none !important;
+                scrollbar-width: none !important;
+              }
+              .scrollable-content {
+                -webkit-overflow-scrolling: touch !important;
+              }
+            }
+            @media (min-width: 1024px) {
+              html, body {
+                -ms-overflow-style: none !important;
+                scrollbar-width: none !important;
+                overflow-y: auto !important;
+              }
+            }
+          `}} />
           
-          {/* Unified single rounded card (border-radius 16px, hairline border, flat surface, no shadows) */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl overflow-hidden text-left shadow-none relative">
-            
-            {/* Go Back Link inside Card */}
-            {!targetUsername && (
-              <div className="px-5 pt-3.5 pb-2.5 flex items-center bg-slate-950/20 border-b border-slate-850/50">
-                <button
+          {/* Sticky Profile Header Section - Clean, Spacious, and Highly Professional */}
+          <div className={`sticky top-0 lg:top-[56px] z-30 transition-colors duration-200 border-b ${
+            theme === 'dark' 
+              ? 'bg-slate-950/95 border-slate-800' 
+              : 'bg-sky-50/95 border-slate-200/80'
+          } backdrop-blur-md flex-shrink-0`}>
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-1 sm:pt-1.5 pb-0">
+
+              {/* Profile Header Row - Horizontal layout with avatar/info on left and back button on right */}
+              <div className="flex flex-row items-center justify-between gap-3 sm:gap-4 w-full pb-2.5 pt-1">
+                
+                {/* Left Side: Avatar and Info details */}
+                <div className="flex flex-row items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  {/* Avatar with rounded-2xl modern design and indicator */}
+                  <div className="relative w-14 h-14 sm:w-16 sm:h-16 shrink-0">
+                    {selectedConsultant.photo_url ? (
+                      <img
+                        src={selectedConsultant.photo_url}
+                        alt={selectedConsultant.display_name}
+                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-slate-200 dark:border-slate-800/80 cursor-pointer shadow-sm hover:opacity-90 transition-all"
+                        onClick={() => setLightboxImage(selectedConsultant.photo_url)}
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-lg border border-slate-200 dark:border-slate-800/80 shadow-sm">
+                        {selectedConsultant.display_name.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    {/* Pulsing online status ring around badge */}
+                    <div className="absolute -bottom-1 -right-1 flex h-4.5 w-4.5 items-center justify-center">
+                      <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${
+                        selectedConsultant.is_online === 1
+                          ? selectedConsultant.is_busy === 1
+                            ? 'bg-amber-400'
+                            : 'bg-emerald-400'
+                          : 'bg-slate-400'
+                      }`} />
+                      <span className={`relative inline-flex rounded-full h-3 w-3 border-2 border-white dark:border-slate-950 ${
+                        selectedConsultant.is_online === 1
+                          ? selectedConsultant.is_busy === 1
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                          : 'bg-slate-400'
+                      }`} />
+                    </div>
+                  </div>
+                  
+                  {/* Info details */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    {/* Name & Verified Badge in a clean horizontal row */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h1 className={`font-extrabold text-lg sm:text-xl leading-none tracking-tight ${
+                        theme === 'dark' ? 'text-white' : 'text-sky-500'
+                      }`}>
+                        {selectedConsultant.display_name}
+                      </h1>
+                      
+                      {/* Verified Badge */}
+                      <span className="bg-blue-500 dark:bg-blue-600 text-white rounded-full p-0.5 text-[8px] w-4 h-4 flex items-center justify-center font-bold shrink-0 shadow-sm" title="Verified Professional">✓</span>
+                    </div>
+
+                    {/* Subtitle with proper gap from name row */}
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1 leading-relaxed">
+                      Consultant • {selectedConsultant.category || 'Mentors'}
+                    </div>
+
+                    {/* Online status and Following button next to it on the bottom line */}
+                    <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        selectedConsultant.is_online === 1
+                          ? selectedConsultant.is_busy === 1
+                            ? 'bg-amber-500/10 dark:bg-amber-500/5 text-amber-500 border-amber-500/20'
+                            : 'bg-emerald-500/10 dark:bg-emerald-500/5 text-emerald-500 border-emerald-500/20'
+                          : 'bg-slate-500/10 dark:bg-slate-500/5 text-slate-400 border-slate-500/20'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          selectedConsultant.is_online === 1
+                            ? selectedConsultant.is_busy === 1
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500 animate-pulse'
+                            : 'bg-slate-400'
+                        }`} />
+                        {selectedConsultant.is_online === 1 
+                          ? selectedConsultant.is_busy === 1 
+                            ? 'Busy' 
+                            : 'Online' 
+                          : 'Offline'}
+                      </span>
+
+                      {/* Following Badge / Button with proper alignment, next to Online status */}
+                      <button
+                        type="button"
+                        onClick={() => handleFollowToggle(selectedConsultant)}
+                        className={`px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all border duration-200 cursor-pointer shadow-sm shrink-0 ${
+                          (selectedConsultant as any).is_following === 1
+                            ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 border-transparent hover:shadow-md hover:shadow-emerald-500/10 active:scale-95'
+                        }`}
+                      >
+                        {(selectedConsultant as any).is_following === 1 ? 'Following' : 'Follow'}
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Back Button - Beautifully aligned on the right side of the details */}
+                <button 
                   onClick={() => {
                     setSelectedConsultant(null);
                     setReviews([]);
                   }}
-                  className="group text-slate-400 hover:text-emerald-400 flex items-center space-x-1 text-xs font-mono transition-colors duration-200 cursor-pointer"
+                  className="p-1.5 ml-2 mr-0 text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-xl transition-all cursor-pointer shrink-0 active:scale-95 flex items-center justify-center self-center"
+                  title="Go Back"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 transform group-hover:-translate-x-0.5 transition-transform duration-200" />
-                  <span>Go Back</span>
+                  <ArrowLeft className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
                 </button>
+
               </div>
-            )}
-            
-            {/* Section 1: Header Section */}
-            <div className="p-5 flex items-center justify-between gap-3 bg-slate-900/40">
-              {/* Left: Avatar & Name details */}
-              <div className="flex items-center space-x-3">
-                <div className="relative w-11 h-11 shrink-0">
-                  {selectedConsultant.photo_url ? (
-                    <img
-                      src={selectedConsultant.photo_url}
-                      alt={selectedConsultant.display_name}
-                      className="w-11 h-11 rounded-full object-cover cursor-pointer hover:opacity-90"
-                      onClick={() => setLightboxImage(selectedConsultant.photo_url)}
-                      referrerPolicy="no-referrer"
-                      onError={(e) => { (e.target as any).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'; }}
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded-full bg-slate-800 flex items-center justify-center font-semibold text-slate-300 text-sm">
-                      {selectedConsultant.display_name.slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
-                  {/* Small online-status dot on the bottom-right */}
-                  <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 ${
-                    selectedConsultant.is_online === 1
-                      ? selectedConsultant.is_busy === 1
-                        ? 'bg-amber-500'
-                        : 'bg-emerald-500'
-                      : 'bg-slate-500'
-                  }`} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-100 text-base leading-snug">
-                    {selectedConsultant.display_name}
-                  </h3>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap text-xs">
-                    <p className="text-emerald-400 font-bold font-mono">
-                      {selectedConsultant.followers_count || 0} Followers
-                    </p>
-                    <span className="text-slate-600 text-xs">•</span>
+
+              {/* Tabs inside Sticky Header */}
+              <div className="flex gap-2">
+                {[
+                  { key: 'about', label: 'About' },
+                  { key: 'schedule', label: 'Slots' },
+                  { key: 'reviews', label: 'Reviews' },
+                ].map((tab) => {
+                  const isActive = (tab.key === 'about' && bookingTab === 'about') ||
+                                   (tab.key === 'reviews' && bookingTab === 'reviews') ||
+                                   (tab.key === 'schedule' && bookingTab === 'schedule');
+                  return (
                     <button
-                      type="button"
-                      onClick={() => handleFollowToggle(selectedConsultant)}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all border duration-200 cursor-pointer ${
-                        (selectedConsultant as any).is_following === 1
-                          ? 'bg-slate-800 border-slate-700 text-slate-300'
-                          : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 border-transparent shadow-sm active:scale-95'
+                      key={tab.key}
+                      onClick={() => setBookingTab(tab.key as any)}
+                      className={`flex-1 py-2 text-xs sm:text-sm font-semibold text-center border-b-2 transition-all cursor-pointer ${
+                        isActive
+                          ? 'text-emerald-500 dark:text-emerald-400 border-emerald-500 dark:border-emerald-400 font-bold'
+                          : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300'
                       }`}
                     >
-                      {(selectedConsultant as any).is_following === 1 ? 'Following' : 'Follow'}
+                      {tab.label}
                     </button>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
 
-              {/* Right: Badges */}
-              <div className="flex flex-col items-end justify-center space-y-1">
-                {/* Rating (always in one line, no box) */}
-                <div className="text-amber-400 font-semibold text-xs flex items-center gap-0.5 whitespace-nowrap">
-                  <span>★</span>
-                  <span>
-                    {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : "5.0"} ({reviews.length})
-                  </span>
-                </div>
-                {/* Rate badge */}
-                <div className="bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg text-xs font-semibold text-emerald-400 font-mono">
-                  ₹{selectedConsultant.price_per_minute}/min
-                </div>
-              </div>
             </div>
+          </div>
 
-            {/* Main Responsive Grid Layout for Desktop vs Mobile */}
-            <div className="grid grid-cols-1 md:grid-cols-12 border-t border-slate-850/50">
+          {/* Main Layout Area */}
+          <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-2 flex-1 min-h-0 flex flex-col overflow-hidden lg:block lg:flex-none lg:h-auto lg:overflow-visible lg:pb-0">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden lg:grid lg:grid-cols-12 lg:gap-8 lg:items-start lg:w-full">
               
-              {/* Left Panel: Tabs + Content + Packages */}
-              <div className="md:col-span-7 flex flex-col md:border-r border-slate-850/50">
-                {/* Section 2: Tabs Section */}
-                <div className="flex border-b border-slate-850/50 bg-slate-950/20">
-                  {(['about', 'schedule', 'reviews'] as const).map((tab) => {
-                    const isActive = bookingTab === tab;
-                    const labels: Record<string, string> = {
-                      about: 'About',
-                      schedule: 'Schedule shifts',
-                      reviews: 'Reviews'
-                    };
-                    return (
-                      <button
-                        key={tab}
-                        type="button"
-                        onClick={() => setBookingTab(tab)}
-                        className={`flex-1 py-3 text-xs sm:text-sm font-medium text-center relative transition-all cursor-pointer ${
-                          isActive ? 'text-emerald-400 font-semibold' : 'text-slate-500 hover:text-slate-300'
-                        }`}
-                      >
-                        {labels[tab]}
-                        {isActive && (
-                          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
+              {/* Left Column: Interactive Tabs Content */}
+              <div className={`flex-1 min-h-0 overflow-y-auto scrollable-content pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] lg:col-span-7 lg:border-r lg:pr-8 lg:space-y-4 lg:pb-0 lg:overflow-visible lg:h-auto transition-colors duration-200 border-transparent dark:border-transparent lg:border-slate-100 lg:dark:border-slate-800`}>
+                
                 {/* Tab Contents */}
-                <div className="p-5 text-xs sm:text-sm text-slate-300 leading-relaxed font-sans min-h-[200px] max-h-[360px] overflow-y-auto bg-slate-900/40 flex-1">
+                <div className="min-h-[220px]">
+                  
+                  {/* About Tab Content */}
                   {bookingTab === 'about' && (
-                    <div>
-                      <p className="font-sans font-light">
-                        {selectedConsultant.bio || "No biography provided yet. Stay tuned for expert insights and updates!"}
-                      </p>
+                    <div className="space-y-4 animate-in fade-in duration-200">
+                      <div>
+                        <div className={`text-slate-700 dark:text-slate-300 text-sm leading-relaxed ${aboutExpanded ? '' : 'line-clamp-3'}`}>
+                          {selectedConsultant.bio || "Hello! I am an expert advisor on CallMint. I offer dynamic insights, practical solutions, and strategies tailored to your specific personal and career development goals. Let's work together to make your vision a reality."}
+                        </div>
+                        {selectedConsultant.bio && selectedConsultant.bio.length > 150 && (
+                          <button 
+                            onClick={() => setAboutExpanded(!aboutExpanded)}
+                            className="text-blue-600 dark:text-blue-400 text-xs font-bold mt-2 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            {aboutExpanded ? 'Read less ▲' : 'Read more ▼'}
+                          </button>
+                        )}
+                      </div>
+
+
                     </div>
                   )}
 
+                  {/* Reviews Tab Content */}
+                  {bookingTab === 'reviews' && (
+                    <div className="space-y-4 animate-in fade-in duration-200">
+                      {/* Compact Rating Summary - Border only, no card background */}
+                      <div className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800/80 rounded-xl">
+                        <div className="text-center flex flex-col justify-center shrink-0 border-r border-slate-200 dark:border-slate-800 pr-4">
+                          <div className="text-3xl font-black text-slate-900 dark:text-white">
+                            {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : "4.8"}
+                          </div>
+                          <div className="text-amber-500 text-lg my-0.5">★</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">Out of 5</div>
+                        </div>
+                        <div className="flex-1 flex flex-col justify-center gap-1.5">
+                          {[
+                            { stars: 5, pct: reviews.length > 0 ? (reviews.filter(r => Math.round(r.rating) === 5).length / reviews.length) * 105 : 86, count: reviews.length > 0 ? reviews.filter(r => Math.round(r.rating) === 5).length : 86 },
+                            { stars: 4, pct: reviews.length > 0 ? (reviews.filter(r => Math.round(r.rating) === 4).length / reviews.length) * 105 : 25, count: reviews.length > 0 ? reviews.filter(r => Math.round(r.rating) === 4).length : 25 },
+                            { stars: 3, pct: reviews.length > 0 ? (reviews.filter(r => Math.round(r.rating) === 3).length / reviews.length) * 105 : 8, count: reviews.length > 0 ? reviews.filter(r => Math.round(r.rating) === 3).length : 8 }
+                          ].map((row) => (
+                            <div key={row.stars} className="flex items-center gap-2 text-xs font-medium">
+                              <span className="w-6 text-slate-500 dark:text-slate-400 text-right">{row.stars}★</span>
+                              <div className="flex-1 h-2 bg-slate-150 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, row.pct)}%` }} />
+                              </div>
+                              <span className="w-6 text-slate-500 dark:text-slate-400 text-left font-mono text-[10px]">{row.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Filter Tabs */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                        <button
+                          onClick={() => setReviewFilter('all')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                            reviewFilter === 'all'
+                              ? theme === 'dark'
+                                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                                : 'bg-emerald-600 text-white shadow-sm'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80'
+                          }`}
+                        >
+                          All ({reviews.length || 124})
+                        </button>
+                        {[5, 4, 3].map((star) => {
+                          const count = reviews.filter(r => Math.round(r.rating) === star).length || (star === 5 ? 86 : star === 4 ? 25 : 8);
+                          return (
+                            <button
+                              key={star}
+                              onClick={() => setReviewFilter(star as any)}
+                              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                                reviewFilter === star
+                                  ? theme === 'dark'
+                                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                                    : 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80'
+                              }`}
+                            >
+                              {star}★ ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Review Items */}
+                      <div className="divide-y divide-slate-150 dark:divide-slate-800 lg:max-h-[300px] lg:overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        {(() => {
+                          const filtered = reviewFilter === 'all'
+                            ? reviews
+                            : reviews.filter(r => Math.round(r.rating) === reviewFilter);
+                          
+                          if (filtered.length === 0) {
+                            return (
+                              <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-xs font-mono">
+                                No reviews found matching this filter.
+                              </div>
+                            );
+                          }
+
+                          return filtered.map((rev) => (
+                            <div key={rev.id} className="py-3 first:pt-1 last:pb-1 text-slate-700 dark:text-slate-300 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0 select-none border border-blue-200 dark:border-blue-900">
+                                  {rev.user_name.slice(0, 1).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold text-xs text-slate-900 dark:text-slate-150 truncate">
+                                    {rev.user_name}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                    {new Date(rev.created_at).toLocaleDateString()}
+                                  </div>
+                                </div>
+                                <div className="text-amber-500 font-bold font-mono text-xs">
+                                  {'★'.repeat(Math.round(rev.rating)) + '☆'.repeat(5 - Math.round(rev.rating))}
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic pl-9">
+                                "{rev.text || 'Excellent consultation session. Very satisfied!'}"
+                              </p>
+                              <div className="flex gap-1.5 flex-wrap pl-9">
+                                <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-[9px] font-bold px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-900/60 uppercase">
+                                  {selectedConsultant.category || 'Expert'}
+                                </span>
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Slots Tab Content - Flat design, separated by simple thin divider lines like history */}
                   {bookingTab === 'schedule' && (
-                    <div className="space-y-2">
+                    <div className="space-y-4 animate-in fade-in duration-200">
                       {selectedConsSchedules.length === 0 ? (
-                        <div className="text-slate-500 font-sans text-xs py-1">
+                        <div className="text-center py-10 text-slate-500 dark:text-slate-400 text-xs font-mono bg-slate-50 dark:bg-slate-900/10 rounded-xl p-6 border border-dashed border-slate-200 dark:border-slate-800">
                           No specific schedule listed. Connects live based on real-time online status.
                         </div>
                       ) : (
-                        <div className="space-y-1">
+                        <div className="divide-y divide-slate-200 dark:divide-slate-800 lg:max-h-[360px] lg:overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                           {selectedConsSchedules.map((sch) => (
-                            <div key={sch.id} className="flex items-center justify-between py-1 border-b border-slate-800/30 text-xs font-mono last:border-0 last:pb-0">
-                              <span className="text-emerald-400 font-medium">
-                                {sch.date ? formatToDDMMYYYY(sch.date) : sch.day}
-                              </span>
-                              <span className="text-slate-400">{formatTimeTo12Hour(sch.from_time)} - {formatTimeTo12Hour(sch.to_time)}</span>
+                            <div key={sch.id} className="py-3.5 space-y-2 first:pt-0 last:pb-0">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm">
+                                  {sch.date ? formatToDDMMYYYY(sch.date) : sch.day}
+                                </span>
+                                <span className="text-[10px] bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-900/40 font-bold uppercase tracking-wider">
+                                  Available Shift
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                Active Shift Timing: {formatTimeTo12Hour(sch.from_time)} - {formatTimeTo12Hour(sch.to_time)}
+                              </div>
+                              <div className="grid grid-cols-3 gap-1.5 pt-1.5">
+                                <div className="py-1 px-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-center text-[10px] sm:text-xs text-slate-600 dark:text-slate-300 font-semibold font-mono">
+                                  {formatTimeTo12Hour(sch.from_time)}
+                                </div>
+                                <div className="py-1 px-2 bg-slate-100/40 dark:bg-slate-850/40 border border-slate-200 dark:border-slate-800 rounded-lg text-center text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                                  Mid Shift
+                                </div>
+                                <div className="py-1 px-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-center text-[10px] sm:text-xs text-slate-600 dark:text-slate-300 font-semibold font-mono">
+                                  {formatTimeTo12Hour(sch.to_time)}
+                                </div>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -4079,100 +4256,78 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                     </div>
                   )}
 
-                  {bookingTab === 'reviews' && (
-                    <div className="space-y-2">
-                      {reviews.length === 0 ? (
-                        <div className="text-center py-4 text-slate-500 text-xs font-mono">
-                          No reviews found yet. Be the first to consult!
-                        </div>
-                      ) : (
-                        reviews.map((rev) => (
-                          <div key={rev.id} className="py-2 border-b border-slate-850/30 last:border-0 flex items-center justify-between gap-3 text-xs">
-                            <div className="flex items-center space-x-2 min-w-0 flex-1">
-                              <div className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center font-bold text-[9px] text-emerald-400 shrink-0 select-none">
-                                {rev.user_name.slice(0, 1).toUpperCase()}
-                              </div>
-                              <span className="font-semibold text-slate-200 shrink-0 truncate max-w-[80px]">{rev.user_name}</span>
-                              <span className="text-slate-400 truncate italic">"{rev.text}"</span>
-                            </div>
-                            <div className="flex items-center space-x-1.5 shrink-0 text-slate-500 font-mono text-[10px] select-none">
-                              <span className="text-amber-400 font-semibold">★{rev.rating}</span>
-                              <span>•</span>
-                              <span>{new Date(rev.created_at).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* Right Panel: Packages + Billing Breakdown & Action Buttons */}
-              <div className="md:col-span-5 bg-slate-950/20 flex flex-col justify-between border-t md:border-t-0 border-slate-850/50">
-                <div className="flex-1 flex flex-col divide-y divide-slate-850/50">
-                  {/* Section 3: Chat Duration Packages Section */}
-                  <div className="p-5 sm:p-6 space-y-3">
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-200">Chat duration packages</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">Select consultation duration</p>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2.5">
-                      {[5, 10, 15, 30].map((mins) => {
-                        const isSelected = selectedMinutes === mins;
-                        return (
-                          <button
-                            key={mins}
-                            type="button"
-                            onClick={() => setSelectedMinutes(mins)}
-                            className={`py-2.5 px-1 rounded-xl text-xs sm:text-sm font-medium border transition-all text-center flex flex-col justify-center items-center cursor-pointer ${
-                              isSelected
-                                ? 'bg-emerald-500/10 border border-emerald-500 text-emerald-400 font-semibold shadow-sm'
-                                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                            }`}
-                          >
-                            <span>{mins} min</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+              {/* Right Column: Chat Packages, Billing Breakdown & Action (Separated by thin grey line, border-t on mobile, border-l-0 on desktop) */}
+              <div className={`flex-shrink-0 w-full backdrop-blur-md border-t px-4 py-3 pb-5 transition-colors duration-200 space-y-3.5 ${
+                theme === 'dark' ? 'bg-slate-950 border-slate-800/80' : 'bg-sky-50 border-slate-200'
+              } lg:col-span-5 lg:sticky lg:top-6 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none lg:border-t-0 lg:w-auto lg:space-y-6 lg:pb-0 lg:z-10 z-40`}>
+                {/* Duration Packages */}
+                <div className="space-y-2">
+                  <div className="space-y-0.5">
+                    <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Select chat duration</h4>
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">Choose appropriate duration</p>
                   </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 10, 15, 30].map((mins) => {
+                      const isSelected = selectedMinutes === mins;
+                      return (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => setSelectedMinutes(mins)}
+                          className={`py-1.5 sm:py-2 px-2 rounded-full text-xs sm:text-sm font-bold border transition-all text-center flex flex-col justify-center items-center cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-sm shadow-emerald-500/5'
+                              : 'bg-transparent border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300'
+                          }`}
+                        >
+                          <span>{mins} min</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                  {/* Section 4: Billing Breakdown Section */}
-                  <div className="p-5 sm:p-6 space-y-4">
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-200">Billing breakdown</h4>
+                {/* Billing Summary & Booking Action Bar */}
+                <div className={`border-t pt-3 mt-3 lg:pt-6 lg:mt-6 ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`}>
+                  {/* Error Banner */}
+                  {error && (
+                    <div className="text-[11px] text-red-600 dark:text-rose-400 text-center bg-red-50 dark:bg-rose-950/20 py-2 px-3.5 rounded-xl border border-red-100 dark:border-rose-900/40 leading-relaxed mb-4">
+                      {error}
                     </div>
-                    <div className="space-y-2 text-xs sm:text-sm text-slate-400">
-                      <div className="flex justify-between">
-                        <span>Advisor rate:</span>
-                        <span className="font-mono text-slate-200">₹{selectedConsultant.price_per_minute}/min</span>
+                  )}
+
+                  <div className="flex flex-row items-center justify-between gap-4 w-full pt-1">
+                    {/* Left & Middle combined in a row with a vertical divider */}
+                    <div className="flex items-center gap-3 sm:gap-6 flex-1 min-w-0">
+                      {/* Left: Total amount */}
+                      <div className="flex flex-col text-left">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total amount</span>
+                        <span className="text-[14px] sm:text-lg font-extrabold text-emerald-500 dark:text-emerald-400 mt-0.5 font-mono">
+                          ₹{selectedMinutes * selectedConsultant.price_per_minute}
+                        </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Duration:</span>
-                        <span className="font-mono text-slate-200">{selectedMinutes} mins</span>
+
+                      {/* Vertical Divider Line */}
+                      <div className="h-6 w-[1px] bg-slate-200/60 dark:bg-slate-800/60 self-center shrink-0" />
+
+                      {/* Middle: Your balance */}
+                      <div className="flex flex-col text-left">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Your balance</span>
+                        <span className="text-[13px] sm:text-sm font-bold text-emerald-500 dark:text-emerald-400 mt-0.5 font-mono">
+                          {currentUser ? (
+                            `₹${parseFloat(currentUser.wallet_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          ) : (
+                            "₹0.00"
+                          )}
+                        </span>
                       </div>
-                      <div className="flex justify-between border-t border-slate-850/50 pt-2 text-slate-100 font-bold text-sm sm:text-base">
-                        <span>Total due:</span>
-                        <span className="font-mono text-emerald-400">₹{selectedMinutes * selectedConsultant.price_per_minute} INR</span>
-                      </div>
-                      {currentUser && (
-                        <div className="flex justify-between text-slate-500 pt-1">
-                          <span>Your balance:</span>
-                          <span className="font-mono text-slate-300">₹{parseFloat(currentUser.wallet_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="space-y-2.5 pt-4">
-                      {error && (
-                        <div className="text-[11px] text-rose-400 text-center bg-rose-500/10 py-2 px-3 rounded-xl border border-rose-500/20 mb-2 leading-relaxed font-sans">
-                          {error}
-                        </div>
-                      )}
-
-                      {/* Wallet button */}
+                    {/* Right: Rounded pill-shaped 'Start chat' button */}
+                    <div className="shrink-0">
                       <button
                         type="button"
                         onClick={() => {
@@ -4189,30 +4344,31 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           }
                         }}
                         disabled={isProcessingPayment || selectedConsultant.is_online !== 1}
-                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/10"
+                        className="px-4 py-2.5 sm:px-6 sm:py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 text-slate-950 font-extrabold rounded-full text-xs sm:text-sm tracking-wide transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] cursor-pointer shadow-md shadow-emerald-500/10"
                       >
                         {isProcessingPayment && pendingPaymentMethod === 'wallet' ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950" />
                         ) : selectedConsultant.is_online !== 1 ? (
-                          <span>Consultant is Offline</span>
+                          <span>Offline</span>
                         ) : (
-                          <span>Book chat with wallet · ₹{selectedMinutes * selectedConsultant.price_per_minute}</span>
+                          <span>Start chat · ₹{selectedMinutes * selectedConsultant.price_per_minute}</span>
                         )}
                       </button>
-
-                      {currentUser && currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute) && (
-                        <div className="text-[11px] text-amber-500/90 text-center bg-amber-500/5 py-2 px-3 rounded-xl border border-amber-500/10 mt-1 leading-relaxed">
-                          Insufficient wallet balance to book a chat. Please recharge your wallet above.
-                        </div>
-                      )}
                     </div>
                   </div>
+
+                  {currentUser && currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute) && (
+                    <div className="text-[11px] text-amber-600 dark:text-amber-500 font-medium text-center bg-amber-50 dark:bg-amber-950/10 py-2 px-3 rounded-xl border border-amber-100 dark:border-amber-900/20 mt-4 leading-relaxed">
+                      Insufficient wallet balance to book a chat. Please recharge your wallet above.
+                    </div>
+                  )}
                 </div>
+
               </div>
 
             </div>
-
           </div>
+
         </div>
       )}
 

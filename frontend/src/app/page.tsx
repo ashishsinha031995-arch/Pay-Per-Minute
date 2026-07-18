@@ -74,6 +74,18 @@ export default function AppPage() {
     return 'dark';
   });
 
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.style.colorScheme = 'dark';
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.style.colorScheme = 'light';
+      }
+    }
+  }, [theme]);
+
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
 
@@ -128,6 +140,8 @@ export default function AppPage() {
     }
     return undefined;
   });
+
+  const [selectedConsultantActive, setSelectedConsultantActive] = useState(false);
 
   // Active Chat Session state
   const [activeSession, setActiveSession] = useState<{
@@ -588,6 +602,7 @@ export default function AppPage() {
         localStorage.setItem('logged_user_id', data.user.id.toString());
         localStorage.setItem('current_role', 'user');
         sessionStorage.setItem('current_role', 'user');
+        localStorage.removeItem('my_consultation_sessions');
         if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/u/')) {
           window.history.pushState({}, '', '/');
         }
@@ -716,6 +731,7 @@ export default function AppPage() {
     localStorage.removeItem('advisor_active_session');
     localStorage.removeItem('clicked_consultant_username');
     localStorage.removeItem('current_role');
+    localStorage.removeItem('my_consultation_sessions');
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('current_role');
       window.history.pushState({}, '', '/');
@@ -764,7 +780,7 @@ export default function AppPage() {
   };
 
   return (
-    <div className={`min-h-screen ${theme === 'light' ? 'theme-light bg-sky-50 text-slate-900' : 'bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-sky-500 selection:text-white`}>
+    <div className={`min-h-screen ${selectedConsultantActive ? 'h-screen overflow-hidden' : ''} ${theme === 'light' ? 'theme-light bg-sky-50 text-slate-900' : 'bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-sky-500 selection:text-white`}>
       
       {/* 1. Header (Shared) */}
       <Header
@@ -808,7 +824,7 @@ export default function AppPage() {
       />
 
       {/* 2. Main Content Routing Area */}
-      <main className="flex-1 pb-12">
+      <main className={`flex-1 ${selectedConsultantActive ? 'min-h-0 overflow-hidden flex flex-col' : 'pb-12'}`}>
         {activeSession && (
           // Active Socket Chat Room overlay
           <ChatRoom
@@ -826,7 +842,7 @@ export default function AppPage() {
           />
         )}
 
-        <div className={activeSession ? 'hidden' : ''}>
+        <div className={`${activeSession ? 'hidden' : ''} ${selectedConsultantActive ? 'flex-1 flex flex-col overflow-hidden' : ''}`}>
           {currentRole === 'user' && (
             // User View / Consultants page
             <ConsultantProfile
@@ -854,6 +870,7 @@ export default function AppPage() {
               theme={theme}
               onToggleTheme={toggleTheme}
               onInstallApp={handleInstallApp}
+              onSelectConsultantChanged={(selected) => setSelectedConsultantActive(!!selected)}
             />
           )}
 

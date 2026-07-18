@@ -52,17 +52,24 @@
 .theme-light .bg-red-500 .text-white,
 .theme-light .bg-teal-500 .text-white,
 .theme-light .bg-teal-600 .text-white,
+.theme-light .bg-blue-500 .text-white,
+.theme-light .bg-blue-600 .text-white,
+.theme-light .bg-blue-700 .text-white,
 .theme-light button.bg-emerald-500,
 .theme-light button.bg-emerald-600,
 .theme-light button.bg-sky-500,
 .theme-light button.bg-sky-600,
 .theme-light button.bg-rose-500,
 .theme-light button.bg-red-500,
+.theme-light button.bg-blue-500,
+.theme-light button.bg-blue-600,
+.theme-light button.bg-blue-700,
 .theme-light a.bg-emerald-500,
 .theme-light [class*="bg-emerald-"] .text-white,
 .theme-light [class*="bg-rose-"] .text-white,
 .theme-light [class*="bg-teal-"] .text-white,
-.theme-light [class*="bg-sky-"] .text-white {
+.theme-light [class*="bg-sky-"] .text-white,
+.theme-light [class*="bg-blue-"] .text-white {
   color: #ffffff !important;
 }
 
