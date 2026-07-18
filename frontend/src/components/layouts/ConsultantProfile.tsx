@@ -3988,7 +3988,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
                     {/* Subtitle with proper gap from name row */}
                     <div className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1 leading-relaxed">
-                      Consultant • {selectedConsultant.category || 'Mentors'}
+                      {selectedConsultant.category || 'Mentors'}
                     </div>
 
                     {/* Online status and Following button next to it on the bottom line */}
@@ -4257,9 +4257,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               } lg:col-span-5 lg:sticky lg:top-6 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none lg:border-t-0 lg:w-auto lg:space-y-6 lg:pb-0 lg:z-10 z-40`}>
                 {/* Duration Packages */}
                 <div className="space-y-2">
-                  <div className="space-y-0.5">
-                    <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Select chat duration</h4>
-                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">Choose appropriate duration</p>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-black'}`}>Select chat duration</h4>
+                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">Choose appropriate duration</p>
+                    </div>
+                    <div className={`text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 ${theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                      Rate = ₹{selectedConsultant.price_per_minute}/min
+                    </div>
                   </div>
                   <div className="grid grid-cols-4 gap-2">
                     {[5, 10, 15, 30].map((mins) => {

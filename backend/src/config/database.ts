@@ -220,12 +220,58 @@ async function syncFromMongoToSQLite() {
 
     // 1. Fetch current SQLite rows and identify any rows missing from the MongoDB sync batch BEFORE wiping the table
     let missingInMongo: any[] = [];
+    const sqliteRowMap = new Map<string, any>();
     try {
       const sqliteRowsBefore = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+      for (const r of sqliteRowsBefore) {
+        sqliteRowMap.set(String(r[primaryKey]), r);
+      }
       const mongoIds = new Set(docs.map(doc => String(doc._id || doc[primaryKey])));
       missingInMongo = sqliteRowsBefore.filter(row => !mongoIds.has(String(row[primaryKey])));
     } catch (e) {
       console.error(`[MongoDB Sync] Error identifying missing rows for table '${table}' before sync:`, e);
+    }
+
+    // Merge existing SQLite data to prevent losing updates (e.g., bio, bank, KYC details)
+    const docsToSaveToMongo: any[] = [];
+    for (const doc of docs) {
+      const pkVal = String(doc._id || doc[primaryKey]);
+      const localRow = sqliteRowMap.get(pkVal);
+      if (localRow) {
+        let docIsMerged = false;
+        for (const k of allKeys) {
+          const mongoVal = doc[k];
+          const localVal = localRow[k];
+          
+          const isMongoEmpty = mongoVal === undefined || mongoVal === null || mongoVal === '';
+          const isLocalFilled = localVal !== undefined && localVal !== null && localVal !== '';
+          
+          if (isMongoEmpty && isLocalFilled) {
+            doc[k] = localVal;
+            docIsMerged = true;
+          }
+        }
+        if (docIsMerged) {
+          docsToSaveToMongo.push(doc);
+        }
+      }
+    }
+
+    if (docsToSaveToMongo.length > 0) {
+      console.log(`[MongoDB Sync] Merged local SQLite updates for ${docsToSaveToMongo.length} rows in table '${table}'. Syncing merged state back to MongoDB...`);
+      try {
+        await Model.bulkWrite(
+          docsToSaveToMongo.map(doc => ({
+            updateOne: {
+              filter: { _id: doc._id || doc[primaryKey] },
+              update: { $set: doc },
+              upsert: true
+            }
+          }))
+        );
+      } catch (mongoErr) {
+        console.error(`[MongoDB Sync] Failed to write merged docs back to MongoDB for table '${table}':`, mongoErr);
+      }
     }
 
     // 2. Safely wipe and load the MongoDB records into SQLite
