@@ -1,6 +1,17 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 
+// Register global uncaught exception and unhandled rejection handlers
+// to prevent unexpected background errors (e.g., from network operations,
+// third-party APIs, or asynchronous intervals) from crashing the server process.
+process.on('uncaughtException', (err) => {
+  console.error('[Global Uncaught Exception]:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Global Unhandled Rejection] Reason:', reason);
+});
+
 import express from 'express';
 import path from 'path';
 import { createServer } from 'http';

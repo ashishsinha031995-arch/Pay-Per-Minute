@@ -1721,6 +1721,24 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
               </div>
 
               <div>
+                <label className="block text-[10px] font-mono text-slate-400 mb-1">Username</label>
+                <div className="relative flex rounded-xl border border-slate-800 bg-slate-950/60 items-center overflow-hidden opacity-70">
+                  <div className="flex items-center pl-3 pr-2.5 py-2.5 bg-slate-900 border-r border-slate-800 shrink-0 font-mono text-xs font-bold text-slate-500">
+                    <span>@</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={currentUser?.username || ''}
+                    disabled={true}
+                    className="w-full bg-transparent border-0 pl-3 pr-4 py-2.5 text-xs text-slate-400 cursor-not-allowed focus:outline-none font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-amber-500/80 mt-1 font-mono">
+                  🔒 Username cannot be changed.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-mono text-slate-400 mb-1">Date of Birth</label>
                 <input
                   type="date"

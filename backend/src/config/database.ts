@@ -242,16 +242,6 @@ async function syncFromMongoToSQLite() {
               doc[k] = localVal;
               docIsMerged = true;
             }
-            // If the SQLite database is NOT newly seeded, and the SQLite value is different from the MongoDB value,
-            // prioritize the SQLite value (which contains the live runtime updates from the previous active session)
-            else if (!isNewlySeeded && isLocalFilled) {
-              const localStr = typeof localVal === 'object' && localVal !== null ? JSON.stringify(localVal) : String(localVal);
-              const mongoStr = typeof mongoVal === 'object' && mongoVal !== null ? JSON.stringify(mongoVal) : String(mongoVal ?? '');
-              if (localStr !== mongoStr) {
-                doc[k] = localVal;
-                docIsMerged = true;
-              }
-            }
           }
           if (docIsMerged) {
             docsToSaveToMongo.push(doc);
@@ -1325,6 +1315,21 @@ export function initDb() {
     console.warn('[MongoDB] MONGODB_URI not set. Running with local SQLite fallback mode. Please configure MONGODB_URI to enable full MongoDB persistence.');
   } else {
     console.log('[MongoDB] MONGODB_URI is configured. Connecting...');
+
+    // Register connection listeners to catch disconnections and network errors,
+    // preventing uncaught exceptions from crashing the entire server process.
+    mongoose.connection.on('error', (err) => {
+      console.error('[MongoDB Connection Error] Gracefully caught network or runtime error:', err);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.warn('[MongoDB Disconnected] Lost connection to MongoDB Atlas. Mongoose will automatically attempt to reconnect.');
+    });
+
+    mongoose.connection.on('reconnected', () => {
+      console.log('[MongoDB Reconnected] Successfully re-established connection to MongoDB Atlas.');
+    });
+
     mongoose.connect(mongoUri, { dbName: 'callmint' })
       .then(async () => {
         console.log('[MongoDB] Connected successfully to database: callmint.');
