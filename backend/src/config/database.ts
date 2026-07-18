@@ -1112,6 +1112,7 @@ export function initDb() {
     const astro = db.prepare('SELECT id FROM consultants WHERE username = ?').get('astro_pandit') as { id: number } | undefined;
     const karan = db.prepare('SELECT id FROM consultants WHERE username = ?').get('influencer_karan') as { id: number } | undefined;
     const rahul = db.prepare('SELECT id FROM consultants WHERE username = ?').get('coach_rahul') as { id: number } | undefined;
+    const ayush = db.prepare('SELECT id FROM consultants WHERE username = ?').get('mentor_ayush') as { id: number } | undefined;
 
     const insertReview = db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -1125,6 +1126,14 @@ export function initDb() {
     }
     if (rahul) {
       insertReview.run(rahul.id, 'Sanya', 5, 'Loved the tarot reading, so on point!', now);
+    }
+    if (ayush) {
+      insertReview.run(ayush.id, 'Aarav', 5, 'Excellent guidance on system design. The architecture details were explained so clearly.', now);
+      insertReview.run(ayush.id, 'Kavya', 5, 'Highly professional mentor. Helped me prepare a roadmap for senior engineering roles.', now);
+      insertReview.run(ayush.id, 'Ishaan', 5, 'Great tips on LeetCode strategy and dynamic programming patterns. Very helpful!', now);
+      insertReview.run(ayush.id, 'Meera', 5, 'Very knowledgeable about engineering management best practices. Good communication.', now);
+      insertReview.run(ayush.id, 'Diya', 5, 'Ayush is incredibly patient. He broke down complex microservice concepts effortlessly.', now);
+      insertReview.run(ayush.id, 'Siddharth', 4, 'The advice on resume review was good. Very structured and actionable feedback.', now);
     }
   }
 

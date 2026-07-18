@@ -4088,13 +4088,13 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   {bookingTab === 'about' && (
                     <div className="space-y-4 animate-in fade-in duration-200">
                       <div>
-                        <div className={`text-slate-700 dark:text-slate-300 text-sm leading-relaxed ${aboutExpanded ? '' : 'line-clamp-3'}`}>
+                        <div className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-white' : 'text-black'} ${aboutExpanded ? '' : 'line-clamp-[11] lg:line-clamp-none'}`}>
                           {selectedConsultant.bio || "Hello! I am an expert advisor on CallMint. I offer dynamic insights, practical solutions, and strategies tailored to your specific personal and career development goals. Let's work together to make your vision a reality."}
                         </div>
                         {selectedConsultant.bio && selectedConsultant.bio.length > 150 && (
                           <button 
                             onClick={() => setAboutExpanded(!aboutExpanded)}
-                            className="text-blue-600 dark:text-blue-400 text-xs font-bold mt-2 hover:underline cursor-pointer flex items-center gap-1"
+                            className="text-emerald-500 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300 text-xs font-bold mt-2 hover:underline cursor-pointer flex items-center gap-1"
                           >
                             {aboutExpanded ? 'Read less ▲' : 'Read more ▼'}
                           </button>
@@ -4111,18 +4111,18 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       {/* Compact Rating Summary - Border only, no card background */}
                       <div className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800/80 rounded-xl">
                         <div className="text-center flex flex-col justify-center shrink-0 border-r border-slate-200 dark:border-slate-800 pr-4">
-                          <div className="text-3xl font-black text-slate-900 dark:text-white">
-                            {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : "4.8"}
+                          <div className="text-3xl font-black text-sky-500 dark:text-white">
+                            {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : (selectedConsultant?.average_rating || "4.8")}
                           </div>
-                          <div className="text-amber-500 text-lg my-0.5">★</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">Out of 5</div>
+                          <div className="text-sky-500 dark:text-white text-lg my-0.5">★</div>
+                          <div className="text-[10px] text-sky-500 dark:text-white font-semibold uppercase tracking-wider">Out of 5</div>
                         </div>
                         <div className="flex-1 flex flex-col justify-center gap-1.5">
-                          {[
-                            { stars: 5, pct: reviews.length > 0 ? (reviews.filter(r => Math.round(r.rating) === 5).length / reviews.length) * 105 : 86, count: reviews.length > 0 ? reviews.filter(r => Math.round(r.rating) === 5).length : 86 },
-                            { stars: 4, pct: reviews.length > 0 ? (reviews.filter(r => Math.round(r.rating) === 4).length / reviews.length) * 105 : 25, count: reviews.length > 0 ? reviews.filter(r => Math.round(r.rating) === 4).length : 25 },
-                            { stars: 3, pct: reviews.length > 0 ? (reviews.filter(r => Math.round(r.rating) === 3).length / reviews.length) * 105 : 8, count: reviews.length > 0 ? reviews.filter(r => Math.round(r.rating) === 3).length : 8 }
-                          ].map((row) => (
+                          {[5, 4, 3, 2, 1].map((star) => {
+                            const count = reviews.filter(r => Math.round(r.rating) === star).length;
+                            const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+                            return { stars: star, pct, count };
+                          }).map((row) => (
                             <div key={row.stars} className="flex items-center gap-2 text-xs font-medium">
                               <span className="w-6 text-slate-500 dark:text-slate-400 text-right">{row.stars}★</span>
                               <div className="flex-1 h-2 bg-slate-150 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -4146,10 +4146,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80'
                           }`}
                         >
-                          All ({reviews.length || 124})
+                          All ({reviews.length})
                         </button>
-                        {[5, 4, 3].map((star) => {
-                          const count = reviews.filter(r => Math.round(r.rating) === star).length || (star === 5 ? 86 : star === 4 ? 25 : 8);
+                        {[5, 4, 3, 2, 1].map((star) => {
+                          const count = reviews.filter(r => Math.round(r.rating) === star).length;
                           return (
                             <button
                               key={star}
@@ -4190,10 +4190,10 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                   {rev.user_name.slice(0, 1).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <div className="font-bold text-xs text-slate-900 dark:text-slate-150 truncate">
+                                  <div className={`font-bold text-xs ${theme === 'dark' ? 'text-white' : 'text-sky-500'} truncate`}>
                                     {rev.user_name}
                                   </div>
-                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                  <div className={`text-[10px] ${theme === 'dark' ? 'text-white' : 'text-sky-500'} font-mono`}>
                                     {new Date(rev.created_at).toLocaleDateString()}
                                   </div>
                                 </div>
@@ -4201,14 +4201,9 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                   {'★'.repeat(Math.round(rev.rating)) + '☆'.repeat(5 - Math.round(rev.rating))}
                                 </div>
                               </div>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic pl-9">
-                                "{rev.text || 'Excellent consultation session. Very satisfied!'}"
+                              <p className={`text-xs ${theme === 'dark' ? 'text-white' : 'text-sky-500'} leading-relaxed italic pl-9`}>
+                                {rev.text || 'Excellent consultation session. Very satisfied!'}
                               </p>
-                              <div className="flex gap-1.5 flex-wrap pl-9">
-                                <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-[9px] font-bold px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-900/60 uppercase">
-                                  {selectedConsultant.category || 'Expert'}
-                                </span>
-                              </div>
                             </div>
                           ));
                         })()}
