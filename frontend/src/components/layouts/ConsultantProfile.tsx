@@ -4223,24 +4223,21 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           {selectedConsSchedules.map((sch) => (
                             <div key={sch.id} className="py-3.5 space-y-2 first:pt-0 last:pb-0">
                               <div className="flex items-center justify-between">
-                                <span className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm">
+                                <div className={`text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
+                                  Active Shift Timing: {formatTimeTo12Hour(sch.from_time)} - {formatTimeTo12Hour(sch.to_time)}
+                                </div>
+                                <span className={`font-bold text-xs sm:text-sm ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
                                   {sch.date ? formatToDDMMYYYY(sch.date) : sch.day}
                                 </span>
-                                <span className="text-[10px] bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-900/40 font-bold uppercase tracking-wider">
-                                  Available Shift
-                                </span>
-                              </div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                Active Shift Timing: {formatTimeTo12Hour(sch.from_time)} - {formatTimeTo12Hour(sch.to_time)}
                               </div>
                               <div className="grid grid-cols-3 gap-1.5 pt-1.5">
-                                <div className="py-1 px-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-center text-[10px] sm:text-xs text-slate-600 dark:text-slate-300 font-semibold font-mono">
+                                <div className={`py-1.5 px-2 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500 rounded-lg text-center text-[10px] sm:text-xs font-semibold font-mono ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
                                   {formatTimeTo12Hour(sch.from_time)}
                                 </div>
-                                <div className="py-1 px-2 bg-slate-100/40 dark:bg-slate-850/40 border border-slate-200 dark:border-slate-800 rounded-lg text-center text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                                <div className={`py-1.5 px-2 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500 rounded-lg text-center text-[10px] sm:text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
                                   Mid Shift
                                 </div>
-                                <div className="py-1 px-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-lg text-center text-[10px] sm:text-xs text-slate-600 dark:text-slate-300 font-semibold font-mono">
+                                <div className={`py-1.5 px-2 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500 rounded-lg text-center text-[10px] sm:text-xs font-semibold font-mono ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
                                   {formatTimeTo12Hour(sch.to_time)}
                                 </div>
                               </div>
