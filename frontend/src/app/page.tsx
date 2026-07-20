@@ -863,11 +863,13 @@ export default function AppPage() {
             userName={activeSession.userName}
             role={activeSession.role}
             isReadOnly={activeSession.isReadOnly}
-            currentUser={currentUser}
+            currentUser={activeSession.role === 'consultant' ? currentConsultant : currentUser}
             refreshUserProfile={refreshUserProfile}
             onClose={() => {
               setActiveSession(null);
-              if (currentUser?.id) refreshUserProfile(currentUser.id);
+              if (activeSession.role === 'user' && currentUser?.id) {
+                refreshUserProfile(currentUser.id);
+              }
               window.dispatchEvent(new CustomEvent('refresh-consultant-stats'));
             }}
           />

@@ -225,7 +225,27 @@ export function ChatRoom({
   isReadOnly = false
 }: ChatRoomProps) {
   const authContext = useAuthContext();
-  const currentUser = currentUserProp || authContext?.currentUser;
+  
+  // Create a highly robust currentUser resolution that falls back to localStorage immediately for both user and consultant
+  let resolvedCurrentUser = currentUserProp || authContext?.currentUser;
+  if (!resolvedCurrentUser || !resolvedCurrentUser.id) {
+    if (typeof window !== 'undefined') {
+      if (role === 'consultant') {
+        const saved = localStorage.getItem('consultant_session');
+        if (saved) {
+          try {
+            resolvedCurrentUser = JSON.parse(saved);
+          } catch (e) {}
+        }
+      } else {
+        const savedId = localStorage.getItem('logged_user_id');
+        if (savedId) {
+          resolvedCurrentUser = { id: parseInt(savedId, 10) };
+        }
+      }
+    }
+  }
+  const currentUser = resolvedCurrentUser;
   const refreshUserProfile = refreshUserProfileProp || authContext?.refreshUserProfile;
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -862,7 +882,7 @@ export function ChatRoom({
       setSessionTranscript(transcript);
       setRemainingSeconds(0);
       setSessionInfo(prev => prev ? { ...prev, status: 'completed', transcript } : null);
-      if (currentUser?.id && refreshUserProfile) {
+      if (role === 'user' && currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
       }
     });
@@ -872,7 +892,7 @@ export function ChatRoom({
       setSessionCompleted(true);
       localStorage.removeItem('advisor_active_session');
       setSessionInfo(prev => prev ? { ...prev, status: 'rejected' } : null);
-      if (currentUser?.id && refreshUserProfile) {
+      if (role === 'user' && currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
       }
     });
@@ -882,7 +902,7 @@ export function ChatRoom({
       setSessionCompleted(true);
       localStorage.removeItem('advisor_active_session');
       setSessionInfo(prev => prev ? { ...prev, status: 'cancelled' } : null);
-      if (currentUser?.id && refreshUserProfile) {
+      if (role === 'user' && currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
       }
     });
@@ -892,7 +912,7 @@ export function ChatRoom({
       setSessionCompleted(true);
       localStorage.removeItem('advisor_active_session');
       setSessionInfo(prev => prev ? { ...prev, status: 'missed' } : null);
-      if (currentUser?.id && refreshUserProfile) {
+      if (role === 'user' && currentUser?.id && refreshUserProfile) {
         refreshUserProfile(currentUser.id);
       }
     });
@@ -1369,7 +1389,7 @@ export function ChatRoom({
                             setSessionTranscript(data.transcript || '');
                             setRemainingSeconds(0);
                             setSessionInfo(prev => prev ? { ...prev, status: data.status || 'completed', transcript: data.transcript } : null);
-                            if (currentUser?.id && refreshUserProfile) {
+                            if (role === 'user' && currentUser?.id && refreshUserProfile) {
                               refreshUserProfile(currentUser.id);
                             }
                           } else {
