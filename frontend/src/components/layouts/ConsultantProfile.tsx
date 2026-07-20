@@ -1011,13 +1011,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     setError(null);
     setSuccess(null);
     try {
-      // 1. Load Razorpay script
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
-      }
-
-      // 2. Create the order on backend (real or mock depending on env keys)
+      // 1. Create the order on backend (real or mock depending on env keys)
       const res = await fetch('/api/user/recharge/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1028,6 +1022,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       });
       const orderData = await res.json();
       if (!res.ok) throw new Error(orderData.error || 'Failed to create recharge order');
+
+      // 2. Load Razorpay script ONLY if it is not a mock order
+      if (!orderData.is_mock) {
+        const scriptLoaded = await loadRazorpayScript();
+        if (!scriptLoaded) {
+          throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+        }
+      }
 
       setShowRechargeModal(false);
 
@@ -1084,14 +1086,21 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       // Only pass order_id if it's NOT a mock order to avoid Razorpay validation error
       if (!orderData.is_mock) {
         options.order_id = orderData.order_id;
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (resp: any) {
+          setError(`Payment failed: ${resp.error.description || 'Unknown error'}`);
+          setRechargeLoading(false);
+        });
+        rzp.open();
+      } else {
+        // Automatically simulate successful test payment after 1 second
+        setTimeout(() => {
+          options.handler({
+            razorpay_payment_id: `pay_mock_${Math.random().toString(36).slice(2, 11)}`,
+            razorpay_signature: 'sig_mock',
+          });
+        }, 1000);
       }
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', function (resp: any) {
-        setError(`Payment failed: ${resp.error.description || 'Unknown error'}`);
-        setRechargeLoading(false);
-      });
-      rzp.open();
     } catch (err: any) {
       setError(err.message);
       setRechargeLoading(false);
@@ -1286,13 +1295,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
     }
 
     try {
-      // 1. Load Razorpay script
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
-      }
-
-      // 2. Create the order on backend
+      // 1. Create the order on backend
       const orderRes = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1328,6 +1331,14 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           }
         }
         throw new Error(orderData.error || 'Failed to initialize session order');
+      }
+
+      // 2. Load Razorpay script ONLY if it is not a mock order
+      if (!orderData.is_mock) {
+        const scriptLoaded = await loadRazorpayScript();
+        if (!scriptLoaded) {
+          throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+        }
       }
 
       // 3. Initialize Razorpay Checkout
@@ -1427,14 +1438,21 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
       // Only pass order_id if it's NOT a mock order to avoid Razorpay validation error
       if (!orderData.is_mock) {
         options.order_id = orderData.order_id;
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (resp: any) {
+          setError(`Payment failed: ${resp.error.description || 'Unknown error'}`);
+          setIsProcessingPayment(false);
+        });
+        rzp.open();
+      } else {
+        // Automatically simulate successful test payment after 1 second
+        setTimeout(() => {
+          options.handler({
+            razorpay_payment_id: `pay_mock_${Math.random().toString(36).slice(2, 11)}`,
+            razorpay_signature: 'sig_mock',
+          });
+        }, 1000);
       }
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', function (resp: any) {
-        setError(`Payment failed: ${resp.error.description || 'Unknown error'}`);
-        setIsProcessingPayment(false);
-      });
-      rzp.open();
 
     } catch (err: any) {
       setError(err.message);
@@ -2063,6 +2081,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   <span>Back to Advisors</span>
                 </button>
               </div>
+
+              {/* Wallet Error/Success Alerts */}
+              {error && (
+                <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl text-rose-200 text-xs flex items-start space-x-2 text-left">
+                  <ShieldAlert className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <span className="flex-1 whitespace-pre-line">{error}</span>
+                </div>
+              )}
+              {success && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl text-emerald-200 text-xs flex items-start space-x-2 text-left">
+                  <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span className="flex-1 whitespace-pre-line">{success}</span>
+                </div>
+              )}
 
               {/* Recharge Amount Section Header */}
               <div className="space-y-1.5 text-left border-t border-slate-800/60 pt-4">
@@ -3379,6 +3411,20 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                 Recharge wallet money safely. Deduct strictly on exact speaking minutes when talking to consultants.
               </p>
 
+              {/* Wallet Error/Success Alerts */}
+              {error && (
+                <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl text-rose-200 text-xs flex items-start space-x-2 text-left">
+                  <ShieldAlert className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <span className="flex-1 whitespace-pre-line">{error}</span>
+                </div>
+              )}
+              {success && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl text-emerald-200 text-xs flex items-start space-x-2 text-left">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span className="flex-1 whitespace-pre-line">{success}</span>
+                </div>
+              )}
+
               {currentUser ? (
                 <div className="space-y-4">
                   {/* Current Balance Display */}
@@ -4439,6 +4485,8 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                           if (!currentUser) {
                             onOpenAuth();
                           } else if (currentUser.wallet_balance < (selectedMinutes * selectedConsultant.price_per_minute)) {
+                            setError(null);
+                            setSuccess(null);
                             setShowRechargeModal(true);
                           } else {
                             handleInitiateWalletPayment();

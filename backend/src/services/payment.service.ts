@@ -17,28 +17,31 @@ export function isPlaceholder(val: string | undefined): boolean {
 }
 
 export function getCleanRazorpayKeyId(): string | undefined {
+  const envKey = process.env.RAZORPAY_KEY_ID;
+  if (envKey && !isPlaceholder(envKey)) {
+    return envKey.trim();
+  }
   return 'rzp_test_T8D90KI42881P9';
 }
 
 export function getCleanRazorpayKeySecret(): string | undefined {
+  const envSecret = process.env.RAZORPAY_KEY_SECRET;
+  if (envSecret && !isPlaceholder(envSecret)) {
+    return envSecret.trim();
+  }
   return '4avGKvRQwpLUMO1jmlBL0242';
 }
 
 export function getRazorpayClient() {
-  if (razorpayClient !== null) {
-    return razorpayClient;
-  }
-
   const keyId = getCleanRazorpayKeyId();
   const keySecret = getCleanRazorpayKeySecret();
 
   if (keyId && keySecret) {
     try {
-      razorpayClient = new Razorpay({
+      return new Razorpay({
         key_id: keyId,
         key_secret: keySecret,
       });
-      console.log('Razorpay initialized successfully with key:', keyId);
     } catch (error) {
       console.error('Failed to initialize Razorpay client:', error);
     }
@@ -46,7 +49,7 @@ export function getRazorpayClient() {
     console.log('Razorpay credentials missing. Running in Razorpay Mock Sandbox Mode.');
   }
 
-  return razorpayClient;
+  return null;
 }
 
 export function getRazorpayErrorMessage(err: any): string {

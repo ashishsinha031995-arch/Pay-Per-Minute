@@ -1947,9 +1947,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       }
 
       // Paid plan: Razorpay checkout
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+      if (!orderData.is_mock) {
+        const scriptLoaded = await loadRazorpayScript();
+        if (!scriptLoaded) {
+          throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+        }
       }
 
       // Initialize Razorpay Options
@@ -2018,24 +2020,21 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
       if (!orderData.is_mock) {
         options.order_id = orderData.order_id;
-      }
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', function (resp: any) {
-        setError(`Plan Payment failed: ${resp.error.description || 'Unknown error'}`);
-        setBuyingPlanId(null);
-      });
-      rzp.open();
-
-      // If it is mock, immediately auto-trigger success helper to simulate seamless flow
-      if (orderData.is_mock) {
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (resp: any) {
+          setError(`Plan Payment failed: ${resp.error.description || 'Unknown error'}`);
+          setBuyingPlanId(null);
+        });
+        rzp.open();
+      } else {
+        // Automatically simulate successful test payment after 1 second
         setTimeout(() => {
           options.handler({
             razorpay_order_id: orderData.order_id,
             razorpay_payment_id: 'pay_mock_' + Math.random().toString(36).slice(2, 11),
             razorpay_signature: 'sig_mock',
           });
-        }, 1500);
+        }, 1000);
       }
     } catch (err: any) {
       setError(err.message);
@@ -2138,9 +2137,11 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setIsPrefilled(false);
       } else {
         // Paid plan: Razorpay flow (Mock or Real)
-        const scriptLoaded = await loadRazorpayScript();
-        if (!scriptLoaded) {
-          throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+        if (!orderData.is_mock) {
+          const scriptLoaded = await loadRazorpayScript();
+          if (!scriptLoaded) {
+            throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+          }
         }
 
         // Initialize REAL Razorpay Checkout Modal
@@ -2206,13 +2207,20 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         // Only pass order_id if it's NOT a mock order to avoid Razorpay validation error
         if (!orderData.is_mock) {
           options.order_id = orderData.order_id;
+          const rzp = new (window as any).Razorpay(options);
+          rzp.on('payment.failed', function (resp: any) {
+            setError(`Registration Payment failed: ${resp.error.description || 'Unknown error'}`);
+          });
+          rzp.open();
+        } else {
+          // Automatically simulate successful test payment after 1 second
+          setTimeout(() => {
+            options.handler({
+              razorpay_payment_id: 'pay_mock_' + Math.random().toString(36).slice(2, 11),
+              razorpay_signature: 'sig_mock',
+            });
+          }, 1000);
         }
-
-        const rzp = new (window as any).Razorpay(options);
-        rzp.on('payment.failed', function (resp: any) {
-          setError(`Registration Payment failed: ${resp.error.description || 'Unknown error'}`);
-        });
-        rzp.open();
       }
     } catch (err: any) {
       const errMsg = err.message || '';
