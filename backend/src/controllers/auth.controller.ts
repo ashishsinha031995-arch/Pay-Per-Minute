@@ -41,10 +41,10 @@ export const userSignUp = (req: Request, res: Response) => {
     const defaultPhotoUrl = finalGender.toLowerCase() === 'female' ? defaultGirlAvatar : defaultBoyAvatar;
 
     const stmt = db.prepare(`
-      INSERT INTO users (username, email, password, display_name, wallet_balance, lifetime_recharge, is_blocked, gender, photo_url, phone)
-      VALUES (?, ?, ?, ?, 0.0, 0.0, 0, ?, ?, ?)
+      INSERT INTO users (username, email, password, display_name, wallet_balance, lifetime_recharge, is_blocked, gender, photo_url, phone, created_at)
+      VALUES (?, ?, ?, ?, 0.0, 0.0, 0, ?, ?, ?, ?)
     `);
-    const result = stmt.run(cleanUsername, cleanEmail, password, display_name.trim(), finalGender, defaultPhotoUrl, cleanPhone);
+    const result = stmt.run(cleanUsername, cleanEmail, password, display_name.trim(), finalGender, defaultPhotoUrl, cleanPhone, new Date().toISOString());
     
     const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     res.json({ success: true, user: newUser });
@@ -69,8 +69,30 @@ export const userLogin = (req: Request, res: Response) => {
     if (user.password !== cleanPassword) {
       return res.status(400).json({ error: 'Incorrect password.' });
     }
+    if (user.suspended_until) {
+      if (user.suspended_until === 'permanent') {
+        return res.status(403).json({ error: 'Your account has been permanently suspended by the admin due to Privacy Breach.' });
+      } else {
+        const expiry = new Date(user.suspended_until).getTime();
+        if (!isNaN(expiry)) {
+          if (expiry > Date.now()) {
+            const diffMs = expiry - Date.now();
+            const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+            const unlockDateStr = new Date(user.suspended_until).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+            return res.status(403).json({ 
+              error: `Your account has been suspended due to Privacy Breach. Remaining suspension: ${daysRemaining} days. You will be able to log in again on ${unlockDateStr}.` 
+            });
+          } else {
+            // Expired, clear it!
+            db.prepare('UPDATE users SET is_blocked = 0, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(user.id);
+            user.is_blocked = 0;
+            user.suspended_until = null;
+          }
+        }
+      }
+    }
     if (user.is_blocked === 1) {
-      return res.status(403).json({ error: 'Aapka account block kar diya gaya hai admin dwara. (Your account has been blocked by the admin.)' });
+      return res.status(403).json({ error: 'Your account has been blocked by the admin due to Privacy Breach.' });
     }
 
     let updatedUser = user;
@@ -344,8 +366,30 @@ export const consultantLogin = (req: Request, res: Response) => {
     if (!consultant) {
       return res.status(401).json({ error: 'Invalid username/email or password' });
     }
+    if (consultant.suspended_until) {
+      if (consultant.suspended_until === 'permanent') {
+        return res.status(403).json({ error: 'Your account has been permanently suspended by Super Admin due to Privacy Breach.' });
+      } else {
+        const expiry = new Date(consultant.suspended_until).getTime();
+        if (!isNaN(expiry)) {
+          if (expiry > Date.now()) {
+            const diffMs = expiry - Date.now();
+            const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+            const unlockDateStr = new Date(consultant.suspended_until).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+            return res.status(403).json({ 
+              error: `Your account has been suspended due to Privacy Breach. Remaining suspension: ${daysRemaining} days. You will be able to log in again on ${unlockDateStr}.` 
+            });
+          } else {
+            // Expired, clear it!
+            db.prepare('UPDATE consultants SET is_active = 1, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(consultant.id);
+            consultant.is_active = 1;
+            consultant.suspended_until = null;
+          }
+        }
+      }
+    }
     if (consultant.is_active === 0) {
-      return res.status(403).json({ error: 'Your account has been deactivated by Super Admin.' });
+      return res.status(403).json({ error: 'Your account has been deactivated by Super Admin due to Privacy Breach.' });
     }
     res.json({ success: true, consultant });
   } catch (err: any) {
@@ -460,8 +504,8 @@ export const consultantRegister = (req: Request, res: Response) => {
     const result = db.prepare(`
       INSERT INTO consultants (
         username, email, phone, password, display_name, photo_url, bio, price_per_minute, 
-        is_online, is_busy, is_active, plan_expiry, category, plan_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_online, is_busy, is_active, plan_expiry, category, plan_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       finalUsername,
       cleanEmail,
@@ -476,7 +520,8 @@ export const consultantRegister = (req: Request, res: Response) => {
       1, // active
       expiryDate ? expiryDate.toISOString() : null,
       catValue,
-      plan ? plan.id : null
+      plan ? plan.id : null,
+      new Date().toISOString()
     );
 
     // Dispatch credentials email asynchronously using the professional Gmail dispatch system

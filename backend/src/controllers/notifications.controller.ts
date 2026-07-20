@@ -91,7 +91,20 @@ export const getClientNotifications = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'user_type must be "user" or "consultant"' });
     }
 
-    // Fetch active notifications targeted at either this user_type or 'both'
+    let userCreatedAt = new Date().toISOString();
+    if (user_type === 'user') {
+      const user = db.prepare('SELECT created_at FROM users WHERE id = ?').get(Number(user_id)) as any;
+      if (user && user.created_at) {
+        userCreatedAt = user.created_at;
+      }
+    } else if (user_type === 'consultant') {
+      const consultant = db.prepare('SELECT created_at FROM consultants WHERE id = ?').get(Number(user_id)) as any;
+      if (consultant && consultant.created_at) {
+        userCreatedAt = consultant.created_at;
+      }
+    }
+
+    // Fetch active notifications targeted at either this user_type or 'both' and created on or after the registration date
     const notifications = db.prepare(`
       SELECT n.*, 
              CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END as is_read
@@ -100,9 +113,11 @@ export const getClientNotifications = (req: Request, res: Response) => {
         ON n.id = r.notification_id 
         AND r.user_id = ? 
         AND r.user_type = ?
-      WHERE n.status = 'active' AND (n.target_type = ? OR n.target_type = 'both')
+      WHERE n.status = 'active' 
+        AND (n.target_type = ? OR n.target_type = 'both')
+        AND n.created_at >= ?
       ORDER BY n.created_at DESC
-    `).all(Number(user_id), user_type, user_type) as any[];
+    `).all(Number(user_id), user_type, user_type, userCreatedAt) as any[];
 
     // Parse is_read as boolean
     const processed = notifications.map(n => ({
@@ -155,7 +170,20 @@ export const markAllNotificationsAsRead = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'user_type and user_id are required in request body' });
     }
 
-    // Find all active notifications for this client type that aren't read yet
+    let userCreatedAt = new Date().toISOString();
+    if (user_type === 'user') {
+      const user = db.prepare('SELECT created_at FROM users WHERE id = ?').get(Number(user_id)) as any;
+      if (user && user.created_at) {
+        userCreatedAt = user.created_at;
+      }
+    } else if (user_type === 'consultant') {
+      const consultant = db.prepare('SELECT created_at FROM consultants WHERE id = ?').get(Number(user_id)) as any;
+      if (consultant && consultant.created_at) {
+        userCreatedAt = consultant.created_at;
+      }
+    }
+
+    // Find all active notifications for this client type that aren't read yet and were created on or after registration
     const unreadNotifications = db.prepare(`
       SELECT n.id 
       FROM admin_notifications n
@@ -165,8 +193,9 @@ export const markAllNotificationsAsRead = (req: Request, res: Response) => {
         AND r.user_type = ?
       WHERE n.status = 'active' 
         AND (n.target_type = ? OR n.target_type = 'both')
+        AND n.created_at >= ?
         AND r.id IS NULL
-    `).all(Number(user_id), user_type, user_type) as any[];
+    `).all(Number(user_id), user_type, user_type, userCreatedAt) as any[];
 
     const read_at = new Date().toISOString();
     const insertStmt = db.prepare(`

@@ -563,7 +563,8 @@ export function initDb() {
       bank_name TEXT,
       bank_status TEXT DEFAULT 'unsubmitted',
       bank_reject_reason TEXT,
-      manual_followers_count INTEGER DEFAULT 0
+      manual_followers_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -579,7 +580,8 @@ export function initDb() {
       wallet_balance REAL DEFAULT 0.0,
       lifetime_recharge REAL DEFAULT 0.0,
       is_active INTEGER DEFAULT 1,
-      is_blocked INTEGER DEFAULT 0
+      is_blocked INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS sessions (
@@ -808,8 +810,17 @@ export function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN wallet_balance REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN lifetime_recharge REAL DEFAULT 0.0;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;"); } catch(_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN suspended_until TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN suspension_reason TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN suspended_until TEXT;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN suspension_reason TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN location TEXT;"); } catch(_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN languages TEXT DEFAULT 'Hindi';"); } catch(_) {}
+
+  try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT;"); } catch(_) {}
+  try { db.exec("UPDATE users SET created_at = '2026-07-01T00:00:00.000Z' WHERE created_at IS NULL;"); } catch(_) {}
+  try { db.exec("ALTER TABLE consultants ADD COLUMN created_at TEXT;"); } catch(_) {}
+  try { db.exec("UPDATE consultants SET created_at = '2026-07-01T00:00:00.000Z' WHERE created_at IS NULL;"); } catch(_) {}
 
   try { db.exec("ALTER TABLE reviews ADD COLUMN is_hidden INTEGER DEFAULT 0;"); } catch(_) {}
   try { db.exec("ALTER TABLE reviews ADD COLUMN session_id TEXT;"); } catch(_) {}
@@ -1188,37 +1199,36 @@ export function initDb() {
       insertReview.run(ayush.id, 'Diya', 5, 'Ayush is incredibly patient. He broke down complex microservice concepts effortlessly.', now);
       insertReview.run(ayush.id, 'Siddharth', 4, 'The advice on resume review was good. Very structured and actionable feedback.', now);
     }
-  }
-
-  // Auto-assign plans to any consultants who have no active plan assigned
-  try {
-    const unassignedConsultants = db.prepare('SELECT id, price_per_minute FROM consultants WHERE plan_id IS NULL').all() as any[];
-    if (unassignedConsultants.length > 0) {
-      console.log(`[Database] Auto-assigning subscription plans to ${unassignedConsultants.length} consultants with no active plan...`);
-      const plans = db.prepare('SELECT id, max_consultant_rate FROM plans ORDER BY max_consultant_rate ASC').all() as any[];
-      if (plans.length > 0) {
-        const updatePlanStmt = db.prepare('UPDATE consultants SET plan_id = ?, plan_expiry = ? WHERE id = ?');
-        const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        for (const cons of unassignedConsultants) {
-          // Find the lowest plan that allows their price_per_minute
-          let assignedPlanId = plans[0].id;
-          for (const plan of plans) {
-            if (cons.price_per_minute <= plan.max_consultant_rate) {
-              assignedPlanId = plan.id;
-              break;
+    // Auto-assign plans to seeded consultants who have no active plan assigned
+    try {
+      const unassignedConsultants = db.prepare('SELECT id, price_per_minute FROM consultants WHERE plan_id IS NULL').all() as any[];
+      if (unassignedConsultants.length > 0) {
+        console.log(`[Database] Auto-assigning subscription plans to ${unassignedConsultants.length} consultants with no active plan...`);
+        const plans = db.prepare('SELECT id, max_consultant_rate FROM plans ORDER BY max_consultant_rate ASC').all() as any[];
+        if (plans.length > 0) {
+          const updatePlanStmt = db.prepare('UPDATE consultants SET plan_id = ?, plan_expiry = ? WHERE id = ?');
+          const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          for (const cons of unassignedConsultants) {
+            // Find the lowest plan that allows their price_per_minute
+            let assignedPlanId = plans[0].id;
+            for (const plan of plans) {
+              if (cons.price_per_minute <= plan.max_consultant_rate) {
+                assignedPlanId = plan.id;
+                break;
+              }
             }
+            // If rate exceeds all plans, give them the highest plan
+            if (cons.price_per_minute > plans[plans.length - 1].max_consultant_rate) {
+              assignedPlanId = plans[plans.length - 1].id;
+            }
+            updatePlanStmt.run(assignedPlanId, futureDate, cons.id);
           }
-          // If rate exceeds all plans, give them the highest plan
-          if (cons.price_per_minute > plans[plans.length - 1].max_consultant_rate) {
-            assignedPlanId = plans[plans.length - 1].id;
-          }
-          updatePlanStmt.run(assignedPlanId, futureDate, cons.id);
+          console.log(`[Database] Auto-assigned plans successfully.`);
         }
-        console.log(`[Database] Auto-assigned plans successfully.`);
       }
+    } catch (err) {
+      console.error('Error auto-assigning plans:', err);
     }
-  } catch (err) {
-    console.error('Error auto-assigning plans:', err);
   }
 
   // Extract the ID migration and Giphy photo cleanup to be run safely after MongoDB sync
@@ -1330,7 +1340,7 @@ export function initDb() {
       console.log('[MongoDB Reconnected] Successfully re-established connection to MongoDB Atlas.');
     });
 
-    mongoose.connect(mongoUri, { dbName: 'callmint' })
+    mongoose.connect(mongoUri, { dbName: 'callmint', serverSelectionTimeoutMS: 5000 })
       .then(async () => {
         console.log('[MongoDB] Connected successfully to database: callmint.');
         let hasMongoData = false;

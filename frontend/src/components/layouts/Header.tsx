@@ -8,7 +8,7 @@ interface HeaderProps {
   currentUser: any;
   currentConsultant?: any;
   onLogout: () => void;
-  onOpenAuth: () => void;
+  onOpenAuth: (options?: { tab?: 'login' | 'signup' | 'forgot', signUpType?: 'choose' | 'user' | 'consultant' }) => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onNavigateToUserView?: (username: string) => void;

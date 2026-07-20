@@ -47,7 +47,7 @@ interface ConsultantProfileProps {
   onClearTargetUsername?: () => void;
   currentUser: any;
   setCurrentUser: (user: any) => void;
-  onOpenAuth: () => void;
+  onOpenAuth: (options?: { tab?: 'login' | 'signup' | 'forgot', signUpType?: 'choose' | 'user' | 'consultant' }) => void;
   activeSessionId?: string;
   onLogout?: () => void;
   theme?: 'dark' | 'light';
@@ -1076,6 +1076,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           consultant_id: selectedConsultant.id,
           duration_minutes: selectedMinutes,
           user_name: currentUser.display_name,
+          user_id: currentUser.id,
         }),
       });
       
@@ -1095,8 +1096,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       if (!orderRes.ok) {
         if (orderRes.status === 403 || (orderData.error && (orderData.error.toLowerCase().includes('blocked') || orderData.error.toLowerCase().includes('block')))) {
-          setBlockedConsultantName(selectedConsultant.display_name);
-          setShowBlockedModal(true);
+          if (orderData.error && (orderData.error.toLowerCase().includes('suspended') || orderData.error.includes('Privacy Breach'))) {
+            alert(orderData.error);
+          } else {
+            setBlockedConsultantName(selectedConsultant.display_name);
+            setShowBlockedModal(true);
+          }
         }
         throw new Error(orderData.error || 'Failed to initialize session order');
       }
@@ -1222,6 +1227,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
           consultant_id: selectedConsultant.id,
           duration_minutes: selectedMinutes,
           user_name: currentUser.display_name,
+          user_id: currentUser.id,
         }),
       });
 
@@ -1241,8 +1247,12 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
 
       if (!orderRes.ok) {
         if (orderRes.status === 403 || (orderData.error && (orderData.error.toLowerCase().includes('blocked') || orderData.error.toLowerCase().includes('block')))) {
-          setBlockedConsultantName(selectedConsultant.display_name);
-          setShowBlockedModal(true);
+          if (orderData.error && (orderData.error.toLowerCase().includes('suspended') || orderData.error.includes('Privacy Breach'))) {
+            alert(orderData.error);
+          } else {
+            setBlockedConsultantName(selectedConsultant.display_name);
+            setShowBlockedModal(true);
+          }
         }
         throw new Error(orderData.error || 'Failed to initialize session order');
       }
@@ -3750,17 +3760,17 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                   {/* Centered live chat portal badge */}
                   <div className="inline-flex items-center gap-1.5 bg-teal-500/10 text-teal-300 border border-teal-500/20 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider mx-auto">
                     <Zap className="w-3.5 h-3.5 text-teal-400 fill-teal-400/25" />
-                    <span>Live chat consultation portal</span>
+                    <span>Your Expert. Your Choice. Your Conversation.</span>
                   </div>
 
                   {/* Bold headline (24px, medium weight) */}
                   <h2 className="text-2xl font-medium text-slate-100 tracking-tight leading-snug">
-                    Consult with India's elite specialists and advisors
+                    India’s Top Experts, Just One Conversation Away.
                   </h2>
 
                   {/* Short muted 2-3 line description */}
                   <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                    Real-time live chat with professional consultants, astrologers, coaches, and legal mentors. Start secure, private sessions instantly.
+                    Whether it's your career, relationships, finances, or legal concerns, connect instantly with trusted professionals in a secure private chat.
                   </p>
                 </motion.div>
               </>

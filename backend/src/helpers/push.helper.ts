@@ -85,9 +85,9 @@ export async function sendWebPushNotification(consultantId: number, payload: any
       } catch (err: any) {
         console.error(`[Push Helper] Failed to send push to subscription ID ${subRow.id}:`, err);
         
-        // If the subscription is expired or no longer valid (status 410 or 404), delete it from database
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          console.log(`[Push Helper] Subscription ${subRow.id} has expired or is unsubscribed. Deleting from database.`);
+        // If the subscription is expired or no longer valid (status 4xx), delete it from database
+        if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+          console.log(`[Push Helper] Subscription ${subRow.id} is invalid or expired (status ${err.statusCode}). Deleting from database.`);
           db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(subRow.id);
         }
       }

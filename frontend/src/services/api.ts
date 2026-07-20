@@ -13,9 +13,21 @@ export async function request<T = any>(
     },
   });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Something went wrong");
+  const contentType = response.headers.get("content-type");
+  let data: any = null;
+
+  if (contentType && contentType.includes("application/json")) {
+    try {
+      data = await response.json();
+    } catch (err) {
+      console.error("Failed to parse JSON response:", err);
+    }
   }
-  return data;
+
+  if (!response.ok) {
+    const errorMsg = (data && data.error) || `Server returned status ${response.status}`;
+    throw new Error(errorMsg);
+  }
+
+  return data as T;
 }

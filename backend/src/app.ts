@@ -45,4 +45,9 @@ app.use('/api', supportRoutes);
 app.use('/api', pushRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Catch-all route handler for unmatched API requests to return proper JSON error
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
+});
+
 export default app;

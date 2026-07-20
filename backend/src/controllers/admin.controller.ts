@@ -105,12 +105,25 @@ export const getAdminConsultantsList = (req: Request, res: Response) => {
 export const toggleConsultantActiveStatus = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const { duration } = req.body;
     const consultant = db.prepare('SELECT is_active FROM consultants WHERE id = ?').get(id) as { is_active: number } | undefined;
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found' });
     }
     const newActive = consultant.is_active === 1 ? 0 : 1;
-    db.prepare('UPDATE consultants SET is_active = ? WHERE id = ?').run(newActive, id);
+    let suspendedUntil: string | null = null;
+    let reason: string | null = null;
+    if (newActive === 0) {
+      reason = 'Due to Privacy Breach';
+      if (duration === '7') {
+        suspendedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (duration === '14') {
+        suspendedUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      } else {
+        suspendedUntil = 'permanent';
+      }
+    }
+    db.prepare('UPDATE consultants SET is_active = ?, suspended_until = ?, suspension_reason = ?, is_online = 0, is_busy = 0 WHERE id = ?').run(newActive, suspendedUntil, reason, id);
     res.json({ success: true, is_active: newActive });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -343,8 +356,17 @@ export const getSuperAdminUsersList = (req: Request, res: Response) => {
 
 export const blockUserBySuperAdmin = (req: Request, res: Response) => {
   try {
-    const { user_id } = req.body;
-    db.prepare('UPDATE users SET is_blocked = 1 WHERE id = ?').run(user_id);
+    const { user_id, duration } = req.body;
+    let suspendedUntil: string | null = null;
+    const reason = 'Due to Privacy Breach';
+    if (duration === '7') {
+      suspendedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    } else if (duration === '14') {
+      suspendedUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    } else {
+      suspendedUntil = 'permanent';
+    }
+    db.prepare('UPDATE users SET is_blocked = 1, suspended_until = ?, suspension_reason = ? WHERE id = ?').run(suspendedUntil, reason, user_id);
     res.json({ success: true, message: 'User blocked successfully.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -354,7 +376,7 @@ export const blockUserBySuperAdmin = (req: Request, res: Response) => {
 export const unblockUserBySuperAdmin = (req: Request, res: Response) => {
   try {
     const { user_id } = req.body;
-    db.prepare('UPDATE users SET is_blocked = 0 WHERE id = ?').run(user_id);
+    db.prepare('UPDATE users SET is_blocked = 0, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(user_id);
     res.json({ success: true, message: 'User unblocked successfully.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

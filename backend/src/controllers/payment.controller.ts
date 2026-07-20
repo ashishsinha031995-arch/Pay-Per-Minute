@@ -26,6 +26,40 @@ export const createRazorpayOrMockOrder = async (req: Request, res: Response) => 
       return res.status(403).json({ error: 'Aap is consultant ke sath chat nahi kar sakte kyunki aap blocked hain. (You have been blocked by this consultant.)' });
     }
 
+    // Check if the user trying to start a session is suspended
+    let checkingUser: any = null;
+    if (req.body.user_id) {
+      checkingUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.body.user_id);
+    } else if (user_name) {
+      checkingUser = db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(display_name) = LOWER(?)').get(user_name.trim(), user_name.trim());
+    }
+
+    if (checkingUser) {
+      if (checkingUser.suspended_until) {
+        if (checkingUser.suspended_until === 'permanent') {
+          return res.status(403).json({ error: 'Your account has been permanently suspended due to Privacy Breach. You cannot initiate a chat.' });
+        } else {
+          const expiry = new Date(checkingUser.suspended_until).getTime();
+          if (!isNaN(expiry)) {
+            if (expiry > Date.now()) {
+              const diffMs = expiry - Date.now();
+              const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+              const unlockDateStr = new Date(checkingUser.suspended_until).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+              return res.status(403).json({ 
+                error: `Your account has been suspended due to Privacy Breach. Remaining suspension: ${daysRemaining} days. You will be able to chat again on ${unlockDateStr}.` 
+              });
+            } else {
+              // Expired, clear it!
+              db.prepare('UPDATE users SET is_blocked = 0, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(checkingUser.id);
+            }
+          }
+        }
+      }
+      if (checkingUser.is_blocked === 1) {
+        return res.status(403).json({ error: 'Your account has been blocked due to Privacy Breach. You cannot initiate a chat.' });
+      }
+    }
+
     const consultant = db.prepare('SELECT price_per_minute, is_online, is_busy FROM consultants WHERE id = ? AND is_active = 1').get(consultant_id) as any;
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found or deactivated' });
@@ -95,6 +129,40 @@ export const verifyPaymentAndInitSession = (req: Request, res: Response) => {
     const isBlocked = db.prepare('SELECT id FROM blocked_users WHERE consultant_id = ? AND LOWER(user_name) = LOWER(?)').get(consultant_id, user_name.trim());
     if (isBlocked) {
       return res.status(403).json({ error: 'Aap is consultant ke sath chat nahi kar sakte kyunki aap blocked hain. (You have been blocked by this consultant.)' });
+    }
+
+    // Check if the user trying to start a session is suspended
+    let checkingUser: any = null;
+    if (user_id) {
+      checkingUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user_id);
+    } else if (user_name) {
+      checkingUser = db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(display_name) = LOWER(?)').get(user_name.trim(), user_name.trim());
+    }
+
+    if (checkingUser) {
+      if (checkingUser.suspended_until) {
+        if (checkingUser.suspended_until === 'permanent') {
+          return res.status(403).json({ error: 'Your account has been permanently suspended due to Privacy Breach. You cannot initiate a chat.' });
+        } else {
+          const expiry = new Date(checkingUser.suspended_until).getTime();
+          if (!isNaN(expiry)) {
+            if (expiry > Date.now()) {
+              const diffMs = expiry - Date.now();
+              const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+              const unlockDateStr = new Date(checkingUser.suspended_until).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+              return res.status(403).json({ 
+                error: `Your account has been suspended due to Privacy Breach. Remaining suspension: ${daysRemaining} days. You will be able to chat again on ${unlockDateStr}.` 
+              });
+            } else {
+              // Expired, clear it!
+              db.prepare('UPDATE users SET is_blocked = 0, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(checkingUser.id);
+            }
+          }
+        }
+      }
+      if (checkingUser.is_blocked === 1) {
+        return res.status(403).json({ error: 'Your account has been blocked due to Privacy Breach. You cannot initiate a chat.' });
+      }
     }
 
     const consultant = db.prepare('SELECT price_per_minute, display_name, is_online FROM consultants WHERE id = ?').get(consultant_id) as any;

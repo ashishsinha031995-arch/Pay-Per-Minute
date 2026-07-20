@@ -365,6 +365,13 @@ export function AdminPanel() {
   // User Editing Form States
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
+  
+  // Suspension modal states
+  const [showSuspensionModal, setShowSuspensionModal] = useState(false);
+  const [suspensionTargetType, setSuspensionTargetType] = useState<'user' | 'consultant'>('user');
+  const [suspensionTargetId, setSuspensionTargetId] = useState<number | null>(null);
+  const [suspensionTargetName, setSuspensionTargetName] = useState('');
+  const [suspensionDuration, setSuspensionDuration] = useState<'7' | '14' | 'permanent'>('7');
   const [usrDisplayName, setUsrDisplayName] = useState('');
   const [usrEmail, setUsrEmail] = useState('');
   const [usrPhone, setUsrPhone] = useState('');
@@ -1107,11 +1114,53 @@ export function AdminPanel() {
   };
 
   // Toggle Consultant active/suspended
-  const handleToggleConsultant = async (id: number) => {
+  const handleToggleConsultant = async (id: number, currentActive: boolean) => {
+    if (!currentActive) {
+      try {
+        const res = await fetch(`/api/admin/consultants/${id}/toggle-active`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ duration: 'permanent' })
+        });
+        if (!res.ok) throw new Error('Failed to activate advisor.');
+        setSuccessMsg('Advisor activated successfully.');
+        loadAdminData();
+        setTimeout(() => setSuccessMsg(null), 3000);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    } else {
+      const cons = consultants.find((c: any) => c.id === id);
+      setSuspensionTargetType('consultant');
+      setSuspensionTargetId(id);
+      setSuspensionTargetName(cons ? cons.display_name : `Advisor #${id}`);
+      setSuspensionDuration('7');
+      setShowSuspensionModal(true);
+    }
+  };
+
+  // Submit suspension handler
+  const handleSubmitSuspension = async () => {
+    if (!suspensionTargetId) return;
     try {
-      const res = await fetch(`/api/admin/consultants/${id}/toggle-active`, { method: 'PUT' });
-      if (!res.ok) throw new Error('Failed to toggle active status of advisor.');
-      setSuccessMsg('Advisor listing status altered.');
+      if (suspensionTargetType === 'user') {
+        const res = await fetch('/api/admin/users/block', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: suspensionTargetId, duration: suspensionDuration }),
+        });
+        if (!res.ok) throw new Error('Failed to suspend user');
+        setSuccessMsg(`Client suspended for ${suspensionDuration === 'permanent' ? 'Permanent' : suspensionDuration + ' Days'}.`);
+      } else {
+        const res = await fetch(`/api/admin/consultants/${suspensionTargetId}/toggle-active`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ duration: suspensionDuration }),
+        });
+        if (!res.ok) throw new Error('Failed to suspend advisor');
+        setSuccessMsg(`Advisor suspended for ${suspensionDuration === 'permanent' ? 'Permanent' : suspensionDuration + ' Days'}.`);
+      }
+      setShowSuspensionModal(false);
       loadAdminData();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -1140,19 +1189,27 @@ export function AdminPanel() {
 
   // Toggle client user block status
   const handleToggleBlockUser = async (userId: number, currentBlocked: boolean) => {
-    try {
-      const endpoint = currentBlocked ? '/api/admin/users/unblock' : '/api/admin/users/block';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
-      });
-      if (!res.ok) throw new Error('Failed to update client user status');
-      setSuccessMsg(currentBlocked ? 'Client unblocked successfully.' : 'Client administratively blocked from portal.');
-      loadAdminData();
-      setTimeout(() => setSuccessMsg(null), 3000);
-    } catch (err: any) {
-      setError(err.message);
+    if (currentBlocked) {
+      try {
+        const res = await fetch('/api/admin/users/unblock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId }),
+        });
+        if (!res.ok) throw new Error('Failed to unblock client user');
+        setSuccessMsg('Client unblocked successfully.');
+        loadAdminData();
+        setTimeout(() => setSuccessMsg(null), 3000);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    } else {
+      const user = adminUsers.find((u: any) => u.id === userId);
+      setSuspensionTargetType('user');
+      setSuspensionTargetId(userId);
+      setSuspensionTargetName(user ? user.display_name : `User #${userId}`);
+      setSuspensionDuration('7');
+      setShowSuspensionModal(true);
     }
   };
 
@@ -2371,7 +2428,7 @@ export function AdminPanel() {
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => handleToggleConsultant(cons.id)}
+                                  onClick={() => handleToggleConsultant(cons.id, cons.is_active === 1)}
                                   className={`p-1.5 rounded-lg border transition-all ${
                                     cons.is_active === 1 
                                       ? 'bg-rose-500/15 text-rose-400 border-rose-500/10 hover:bg-rose-500/25' 
@@ -7149,6 +7206,88 @@ export function AdminPanel() {
                 <span>Save Client Changes</span>
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Account Suspension Modal */}
+      {showSuspensionModal && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-4 my-8 shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-500" />
+                <span>Buy Plan To Start Your Journey / Suspend Account</span>
+              </h3>
+              <button 
+                onClick={() => { setShowSuspensionModal(false); setSuspensionTargetId(null); }}
+                className="text-slate-400 hover:text-white bg-slate-950/50 p-1.5 rounded-lg border border-slate-850 hover:border-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-xs text-slate-300">
+                You are about to suspend <strong>{suspensionTargetName}</strong> ({suspensionTargetType === 'user' ? 'Client' : 'Advisor'}). Suspended accounts are immediately logged out and cannot use the platform features.
+              </p>
+
+              <div>
+                <label className="block text-[11px] text-slate-400 font-mono mb-2">Select Suspension Plan / Duration</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSuspensionDuration('7')}
+                    className={`px-3 py-2.5 rounded-xl border font-bold text-xs transition-all text-center ${
+                      suspensionDuration === '7'
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    7 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSuspensionDuration('14')}
+                    className={`px-3 py-2.5 rounded-xl border font-bold text-xs transition-all text-center ${
+                      suspensionDuration === '14'
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    14 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSuspensionDuration('permanent')}
+                    className={`px-3 py-2.5 rounded-xl border font-bold text-xs transition-all text-center ${
+                      suspensionDuration === 'permanent'
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    Permanent
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowSuspensionModal(false); setSuspensionTargetId(null); }}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 w-1/2 font-bold py-2 rounded-xl text-xs transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitSuspension}
+                  className="bg-rose-500 hover:bg-rose-600 text-slate-950 w-1/2 font-bold py-2 rounded-xl text-xs transition-all flex items-center justify-center space-x-1 shadow-lg shadow-rose-500/10"
+                >
+                  Confirm Suspension
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

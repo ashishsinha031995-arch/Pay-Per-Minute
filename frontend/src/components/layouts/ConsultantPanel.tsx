@@ -572,6 +572,8 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Status Toggles
   const [isOnline, setIsOnline] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [isSuspended, setIsSuspended] = useState(false);
+  const [suspensionDetails, setSuspensionDetails] = useState<string | null>(null);
   const [buyingPlanId, setBuyingPlanId] = useState<number | null>(null);
   const [showLogoutWarningModal, setShowLogoutWarningModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -1712,10 +1714,35 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
       const profileRes = await fetch(`/api/consultants/${id}/profile`);
       const profileContentType = profileRes.headers.get('content-type');
       if (profileRes.ok && profileContentType && profileContentType.includes('application/json')) {
-        const matching = await profileRes.json() as Consultant;
+        const matching = await profileRes.json() as any;
         if (matching) {
-          setIsOnline(matching.is_online === 1);
-          setIsBusy(matching.is_busy === 1);
+          if (matching.is_active === 0) {
+            setIsSuspended(true);
+            setIsOnline(false);
+            setIsBusy(false);
+            if (matching.suspended_until) {
+              if (matching.suspended_until === 'permanent') {
+                setSuspensionDetails('Your account has been permanently suspended due to Privacy Breach.');
+              } else {
+                const expiry = new Date(matching.suspended_until).getTime();
+                if (!isNaN(expiry)) {
+                  const diffMs = expiry - Date.now();
+                  const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                  const unlockDateStr = new Date(matching.suspended_until).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+                  setSuspensionDetails(`Your account has been suspended due to Privacy Breach. Remaining suspension: ${daysRemaining} days. You will be able to go online again on ${unlockDateStr}.`);
+                } else {
+                  setSuspensionDetails('Your account has been suspended due to Privacy Breach.');
+                }
+              }
+            } else {
+              setSuspensionDetails('Your account has been suspended or deactivated due to Privacy Breach.');
+            }
+          } else {
+            setIsSuspended(false);
+            setSuspensionDetails(null);
+            setIsOnline(matching.is_online === 1);
+            setIsBusy(matching.is_busy === 1);
+          }
           
           // Always sync verification statuses
           setKycStatus(matching.kyc_status || 'unsubmitted');
@@ -2504,6 +2531,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Toggle Online/Offline State
   const handleToggleOnline = async () => {
     if (!currentConsultant) return;
+    if (isSuspended) {
+      setError(suspensionDetails || "Your account has been suspended due to Privacy Breach.");
+      return;
+    }
     if (isSubscriptionExpired) {
       setError("Your subscription has expired. Please renew your plan to toggle presence.");
       handleScrollToPlans();
@@ -2520,11 +2551,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setIsOnline(nextOnline);
       } else {
         const errData = await res.json().catch(() => ({}));
+        setIsOnline(false);
+        setIsBusy(false);
         setError(errData.error || "Failed to update presence status.");
-        handleScrollToPlans();
       }
     } catch (err: any) {
       console.error(err);
+      setIsOnline(false);
+      setIsBusy(false);
       setError(err?.message || "Failed to update presence status.");
     }
   };
@@ -2532,6 +2566,10 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   // Toggle Busy State
   const handleToggleBusy = async () => {
     if (!currentConsultant) return;
+    if (isSuspended) {
+      setError(suspensionDetails || "Your account has been suspended due to Privacy Breach.");
+      return;
+    }
     if (isSubscriptionExpired) {
       setError("Your subscription has expired. Please renew your plan to toggle presence.");
       handleScrollToPlans();
@@ -2548,11 +2586,14 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         setIsBusy(nextBusy);
       } else {
         const errData = await res.json().catch(() => ({}));
+        setIsOnline(false);
+        setIsBusy(false);
         setError(errData.error || "Failed to update presence status.");
-        handleScrollToPlans();
       }
     } catch (err: any) {
       console.error(err);
+      setIsOnline(false);
+      setIsBusy(false);
       setError(err?.message || "Failed to update presence status.");
     }
   };
@@ -2799,7 +2840,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
             <div className="space-y-2 relative z-10">
               <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">💡 Profit Simulator</span>
               <h3 className="text-xl sm:text-2xl font-black text-slate-100">Calculate Your Potential Monthly Earnings</h3>
-              <p className="text-xs text-slate-400">Set your customized per-minute call fee and average chat duration per day to estimate profits.</p>
+              <p className="text-xs text-slate-400">Set your chat per minute fee and average chat duration to estimate your earnings.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pt-4 items-center relative z-10">
@@ -2939,7 +2980,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
           {/* Subscription pricing packages with elaborate pointers */}
           <div id="pricing-section" className="space-y-8 text-center pt-4">
             <div className="space-y-2">
-              <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">📊 STEP 1: CHOOSE A PARTNER PLAN</span>
+              <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">📊 STEP 1: CHOOSE A PLAN</span>
               <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Simple, Predictable Subscription Packages</h3>
               <p className="text-xs text-slate-400 max-w-xl mx-auto">Select a subscription duration below to instantly generate your portal credentials and activate your direct chat booking link.</p>
             </div>
@@ -4363,7 +4404,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           <div className="inline-flex items-center space-x-2 bg-amber-500/10 border border-amber-500/35 px-3.5 py-1.5 rounded-full">
                             <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
                             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
-                              ⚠️ Partnership Plan Required
+                              ⚠️ Buy Plan To Start Your Journey.
                             </span>
                           </div>
 
@@ -4373,29 +4414,39 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                           </h2>
 
                           {/* Highly Animated Current Price Indicator */}
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.3, duration: 0.5 }}
-                            className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500/10 to-sky-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-2xl shadow-lg shadow-emerald-500/5 mt-1"
-                          >
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          <div className="flex flex-col items-start space-y-1.5 mt-1">
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: 0.3, duration: 0.5 }}
+                              className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500/10 to-sky-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-2xl shadow-lg shadow-emerald-500/5"
+                            >
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                              </span>
+                              <span className="text-xs font-sans font-bold text-slate-200">
+                                Configured Rate: <motion.span
+                                  animate={{ color: ["#34d399", "#38bdf8", "#34d399"] }}
+                                  transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                                  className="font-black text-emerald-400 font-mono"
+                                >₹{currentConsultant.price_per_minute || 0}/minute</motion.span>
+                              </span>
+                            </motion.div>
+                            <span className="text-[11px] font-sans text-slate-400 font-medium pl-1">
+                              Buy Plan to change your Rate
                             </span>
-                            <span className="text-xs font-sans font-bold text-slate-200">
-                              Configured Rate: <motion.span
-                                animate={{ color: ["#34d399", "#38bdf8", "#34d399"] }}
-                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                                className="font-black text-emerald-400 font-mono"
-                              >₹{currentConsultant.price_per_minute || 0}/minute</motion.span>
-                            </span>
-                          </motion.div>
+                          </div>
 
-                          <div className="space-y-3">
+                          <div className="space-y-4">
                             <p className="text-sm text-slate-200 leading-relaxed font-sans">
-                              Your partner account has been successfully created! 🎉 Currently, your direct profile and custom chat booking link are locked. 
-                              To unlock your personal high-earning profile, start receiving direct calls & chats from clients, and begin generating real-time revenue, please select and subscribe to a suitable partner plan below.
+                              Your partner account has been successfully created! 🎉. You can securely chat and connect with your users without sharing your personal phone number, ensuring complete privacy and professional communication.
+                            </p>
+                            <p className="text-sm text-slate-200 leading-relaxed font-sans">
+                              To unlock your public profile, personal booking link, simply choose a subscription plan below.
+                            </p>
+                            <p className="text-sm text-slate-200 leading-relaxed font-sans">
+                              Subscribe now and start building your audience. Receive direct chats, and earning from every conversation.
                             </p>
                           </div>
 
@@ -4427,7 +4478,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       {/* 3 PLANS DISPLAY */}
                       <div id="pricing-section-active" className="space-y-8 text-center pt-4">
                         <div className="space-y-2">
-                          <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">🔥 STEP 1: CHOOSE A PARTNER PLAN</span>
+                          <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">🔥 STEP 1: CHOOSE A PLAN</span>
                           <h3 className="text-2xl sm:text-3xl font-black text-slate-100">Simple, Predictable Subscription Packages</h3>
                           <p className="text-xs text-slate-400 max-w-xl mx-auto">Select a subscription duration below to instantly activate your direct chat booking link and start earning.</p>
                         </div>
@@ -4554,7 +4605,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                         <div className="space-y-2 relative z-10">
                           <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-emerald-400">💡 Profit Simulator</span>
                           <h3 className="text-xl sm:text-2xl font-black text-slate-100">Calculate Your Potential Monthly Earnings</h3>
-                          <p className="text-xs text-slate-400">Set your customized per-minute call fee and average chat duration per day to estimate profits.</p>
+                          <p className="text-xs text-slate-400">Set your chat per minute fee and average chat duration to estimate your earnings.</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pt-4 items-center relative z-10">
@@ -4930,18 +4981,18 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                              {/* Part 3: Online/Offline Button */}
                              <div 
                                onClick={handleToggleOnline}
-                               className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'} ${isSubscriptionExpired ? 'opacity-50 !cursor-not-allowed' : ''}`}
+                               className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'} ${(isSubscriptionExpired || isSuspended) ? 'opacity-50 !cursor-not-allowed' : ''}`}
                                style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: theme === 'light' ? '1px solid #f1f5f9' : '0.5px solid #1e2a3a' }}
                              >
                                <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                  Online/Offline Button
-                                 {isSubscriptionExpired && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-bold font-mono">🔒</span>}
+                                 {(isSubscriptionExpired || isSuspended) && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-bold font-mono">🔒</span>}
                                </span>
                                <div style={{ 
                                  width: '36px', 
                                  height: '21px', 
                                  borderRadius: '11px', 
-                                 backgroundColor: isOnline && !isSubscriptionExpired ? (theme === 'light' ? '#10b981' : '#1d9e75') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
+                                 backgroundColor: isOnline && !isSubscriptionExpired && !isSuspended ? (theme === 'light' ? '#10b981' : '#1d9e75') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
                                  position: 'relative',
                                  transition: 'all 0.2s ease'
                                }}>
@@ -4952,47 +5003,45 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                                    backgroundColor: '#fff', 
                                    position: 'absolute', 
                                    top: '3px', 
-                                   left: isOnline && !isSubscriptionExpired ? 'auto' : '3px',
-                                   right: isOnline && !isSubscriptionExpired ? '3px' : 'auto',
+                                   left: isOnline && !isSubscriptionExpired && !isSuspended ? 'auto' : '3px',
+                                   right: isOnline && !isSubscriptionExpired && !isSuspended ? '3px' : 'auto',
                                    transition: 'all 0.2s ease'
                                  }}></div>
                                </div>
                              </div>
- 
                              {/* Part 4: Busy Button */}
-                             <div 
-                               onClick={handleToggleBusy}
-                               className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'} ${isSubscriptionExpired ? 'opacity-50 !cursor-not-allowed' : ''}`}
-                               style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                             >
-                               <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                 Busy Button
-                                 {isSubscriptionExpired && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-bold font-mono">🔒</span>}
-                               </span>
-                               <div style={{ 
-                                 width: '36px', 
-                                 height: '21px', 
-                                 borderRadius: '11px', 
-                                 backgroundColor: isBusy && !isSubscriptionExpired ? (theme === 'light' ? '#f59e0b' : '#d97706') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
-                                 position: 'relative',
-                                 transition: 'all 0.2s ease'
-                               }}>
-                                 <div style={{ 
-                                   width: '15px', 
-                                   height: '15px', 
-                                   borderRadius: '50%', 
-                                   backgroundColor: '#fff', 
-                                   position: 'absolute', 
-                                   top: '3px', 
-                                   left: isBusy && !isSubscriptionExpired ? 'auto' : '3px',
-                                   right: isBusy && !isSubscriptionExpired ? '3px' : 'auto',
-                                   transition: 'all 0.2s ease'
-                                 }}></div>
-                               </div>
-                             </div>
-                          </div>
-
-                          {/* Your Wallet & Rolling Monthly Earnings Card */}
+                              <div 
+                                onClick={handleToggleBusy}
+                                className={`cursor-pointer transition-all duration-200 ${theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-900/30'} ${(isSubscriptionExpired || isSuspended) ? 'opacity-50 !cursor-not-allowed' : ''}`}
+                                style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                              >
+                                <span style={{ fontSize: '12px', color: theme === 'light' ? '#64748b' : '#7a8699', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  Busy Button
+                                  {(isSubscriptionExpired || isSuspended) && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-bold font-mono">🔒</span>}
+                                </span>
+                                <div style={{ 
+                                  width: '36px', 
+                                  height: '21px', 
+                                  borderRadius: '11px', 
+                                  backgroundColor: isBusy && !isSubscriptionExpired && !isSuspended ? (theme === 'light' ? '#f59e0b' : '#d97706') : (theme === 'light' ? '#cbd5e1' : '#1e2a3a'), 
+                                  position: 'relative',
+                                  transition: 'all 0.2s ease'
+                                }}>
+                                  <div style={{ 
+                                    width: '15px', 
+                                    height: '15px', 
+                                    borderRadius: '50%', 
+                                    backgroundColor: '#fff', 
+                                    position: 'absolute', 
+                                    top: '3px', 
+                                    left: isBusy && !isSubscriptionExpired && !isSuspended ? 'auto' : '3px',
+                                    right: isBusy && !isSubscriptionExpired && !isSuspended ? '3px' : 'auto',
+                                    transition: 'all 0.2s ease'
+                                  }}></div>
+                                </div>
+                              </div>
+                           </div>
+                           {/* Your Wallet & Rolling Monthly Earnings Card */}
                           <div id="dashboard-wallet-card" style={{ 
                             background: theme === 'light' ? '#ffffff' : '#111a29', 
                             border: theme === 'light' ? '1px solid #e2e8f0' : '0.5px solid #1e2a3a', 

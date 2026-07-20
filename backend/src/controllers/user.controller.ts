@@ -94,9 +94,35 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
     const { id } = req.params;
     const { is_online, is_busy } = req.body;
 
-    // Check if consultant's plan has expired
-    const consultant = db.prepare('SELECT plan_expiry, plan_id FROM consultants WHERE id = ?').get(id) as any;
+    // Check if consultant's plan has expired or if they are suspended
+    const consultant = db.prepare('SELECT plan_expiry, plan_id, is_active, suspended_until FROM consultants WHERE id = ?').get(id) as any;
     if (consultant) {
+      if (consultant.suspended_until) {
+        if (consultant.suspended_until === 'permanent') {
+          return res.status(403).json({ error: 'Your account has been permanently suspended due to Privacy Breach. You cannot toggle your presence status.' });
+        } else {
+          const expiry = new Date(consultant.suspended_until).getTime();
+          if (!isNaN(expiry)) {
+            if (expiry > Date.now()) {
+              const diffMs = expiry - Date.now();
+              const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+              const unlockDateStr = new Date(consultant.suspended_until).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+              return res.status(403).json({ 
+                error: `Your account has been suspended due to Privacy Breach. Remaining suspension: ${daysRemaining} days. You will be able to go online again on ${unlockDateStr}.` 
+              });
+            } else {
+              // Expired, clear it!
+              db.prepare('UPDATE consultants SET is_active = 1, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(id);
+              consultant.is_active = 1;
+              consultant.suspended_until = null;
+            }
+          }
+        }
+      }
+      if (consultant.is_active === 0) {
+        return res.status(403).json({ error: 'Your account has been deactivated due to Privacy Breach.' });
+      }
+
       const isExpired = consultant.plan_expiry ? new Date(consultant.plan_expiry) < new Date() : false;
       if (!consultant.plan_id || isExpired) {
         return res.status(403).json({ error: 'Your subscription has expired. Please buy or renew your subscription to toggle presence states.' });
@@ -136,15 +162,38 @@ export const updateConsultantStatus = (req: Request, res: Response) => {
 export const getConsultantProfileById = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const consultant = db.prepare(`
+    let consultant = db.prepare(`
       SELECT *,
              ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + COALESCE(manual_followers_count, 0)) AS followers_count
       FROM consultants 
       WHERE id = ?
-    `).get(id);
+    `).get(id) as any;
     if (!consultant) {
       return res.status(404).json({ error: 'Consultant not found' });
     }
+
+    if (consultant.suspended_until) {
+      if (consultant.suspended_until === 'permanent') {
+        consultant.is_active = 0;
+      } else {
+        const expiry = new Date(consultant.suspended_until).getTime();
+        if (!isNaN(expiry)) {
+          if (expiry > Date.now()) {
+            consultant.is_active = 0;
+          } else {
+            // Suspension expired! Let's update DB dynamically
+            db.prepare('UPDATE consultants SET is_active = 1, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(consultant.id);
+            consultant = db.prepare(`
+              SELECT *,
+                     ((SELECT COUNT(*) FROM consultant_followers f WHERE f.consultant_id = consultants.id) + COALESCE(manual_followers_count, 0)) AS followers_count
+              FROM consultants 
+              WHERE id = ?
+            `).get(consultant.id) as any;
+          }
+        }
+      }
+    }
+
     res.json(consultant);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -472,9 +521,26 @@ export const getBlockedUsersByConsultant = (req: Request, res: Response) => {
 export const getUserProfileInfo = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    let user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.suspended_until) {
+      if (user.suspended_until === 'permanent') {
+        user.is_blocked = 1;
+      } else {
+        const expiry = new Date(user.suspended_until).getTime();
+        if (!isNaN(expiry)) {
+          if (expiry > Date.now()) {
+            user.is_blocked = 1;
+          } else {
+            // Suspension expired! Let's update DB dynamically
+            db.prepare('UPDATE users SET is_blocked = 0, suspended_until = NULL, suspension_reason = NULL WHERE id = ?').run(user.id);
+            user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as any;
+          }
+        }
+      }
     }
     
     let finalUser = user;
@@ -1027,7 +1093,24 @@ export const getActiveQueuedSessionForUser = (req: Request, res: Response) => {
 export const getConsultantSchedules = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const schedules = db.prepare('SELECT * FROM consultant_schedules WHERE consultant_id = ? ORDER BY date ASC, from_time ASC').all(id);
+
+    // Get current date in Indian Standard Time (IST) YYYY-MM-DD
+    const d = new Date();
+    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+    const istDate = new Date(utc + (3600000 * 5.5));
+    const year = istDate.getFullYear();
+    const month = String(istDate.getMonth() + 1).padStart(2, '0');
+    const day = String(istDate.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    // Filter schedules to only include recurring slots (date is NULL) or current/future slots (date >= todayStr)
+    const schedules = db.prepare(`
+      SELECT * FROM consultant_schedules 
+      WHERE consultant_id = ? 
+        AND (date IS NULL OR date >= ?)
+      ORDER BY date ASC, from_time ASC
+    `).all(id, todayStr);
+
     res.json(schedules);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

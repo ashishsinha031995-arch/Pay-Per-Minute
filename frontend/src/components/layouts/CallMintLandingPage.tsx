@@ -26,7 +26,7 @@ const normalizeCategory = (cat: string) => {
 
 interface CallMintLandingPageProps {
   consultants: Consultant[];
-  onOpenAuth: () => void;
+  onOpenAuth: (options?: { tab?: 'login' | 'signup' | 'forgot', signUpType?: 'choose' | 'user' | 'consultant' }) => void;
   onSelectConsultant: (consultant: Consultant) => void;
 }
 
@@ -169,14 +169,13 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
           </h1>
 
           <p className="text-sm md:text-base text-slate-400 max-w-xl mx-auto lg:mx-0 leading-relaxed font-medium">
-            Instantly connect through Chat, Voice Call or Video Call with trusted professionals and creators anytime, anywhere. 
-            Enjoy seamless pay-per-minute billing and absolute call confidentiality.
+            Connect instantly with your favorite astrologers, influencers, mentors, lawyers, singers, and more through secure one-on-one chat—anytime, anywhere.
           </p>
 
           {/* Call to Actions */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-2">
             <button
-              onClick={onOpenAuth}
+              onClick={() => onOpenAuth()}
               className="px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-sm tracking-wide shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)] transition-all cursor-pointer flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0 group"
             >
               <span>Start Talking Now</span>
@@ -184,7 +183,7 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
             </button>
             <button
               onClick={() => {
-                window.dispatchEvent(new CustomEvent('switch-to-consultant-tab'));
+                onOpenAuth({ tab: 'signup', signUpType: 'consultant' });
               }}
               className="px-8 py-4 rounded-2xl bg-slate-900 hover:bg-slate-850 text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/30 transition-all font-extrabold text-sm tracking-wide cursor-pointer flex items-center justify-center gap-2"
             >
@@ -304,11 +303,6 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
           <div className="absolute top-6 left-1/4 bg-slate-900/90 border border-emerald-500/20 px-3 py-1.5 rounded-2xl flex items-center space-x-1.5 shadow-lg animate-bounce z-10 text-[10px] text-emerald-400 font-extrabold tracking-wider">
             <Video className="w-3.5 h-3.5 text-emerald-400" />
             <span>HD VIDEO</span>
-          </div>
-
-          <div className="absolute bottom-6 right-1/4 bg-slate-900/90 border border-emerald-500/20 px-3 py-1.5 rounded-2xl flex items-center space-x-1.5 shadow-lg animate-[bounce_5s_ease-in-out_infinite_1s] z-10 text-[10px] text-emerald-400 font-extrabold tracking-wider">
-            <Phone className="w-3.5 h-3.5 text-emerald-400" />
-            <span>CLEAR VOICE</span>
           </div>
 
         </div>
@@ -446,7 +440,7 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
 
           {[
             { step: '01', title: 'Choose Your Expert', desc: 'Browse our categories list and pick an online advisor of your preference.', emoji: '🔍' },
-            { step: '02', title: 'Select Chat, Voice or Video', desc: 'Specify consultation duration (10, 15, or 30 minutes) and media format.', emoji: '💬' },
+            { step: '02', title: 'Select chat', desc: 'Specify consultation duration (10, 15, or 30 minutes) and start chatting.', emoji: '💬' },
             { step: '03', title: 'Pay Securely', desc: 'Add balance via secured Razorpay Sandboxed payment gateway seamlessly.', emoji: '💳' },
             { step: '04', title: 'Start One-on-One', desc: 'Get connected instantly in our live responsive custom-built web chatroom.', emoji: '🚀' }
           ].map((item, index) => (
@@ -495,16 +489,14 @@ export function CallMintLandingPage({ consultants, onOpenAuth, onSelectConsultan
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
             { title: 'Verified Consultants', desc: 'Strict verification of professional credentials, identity, and background before approval.', icon: '🛡️' },
-            { title: 'Private Conversations', desc: 'End-to-end encrypted messaging channels and secure private WebRTC voice & video networks.', icon: '🔒' },
+            { title: 'Private Conversations', desc: 'End-to-end encrypted messaging channels and secure private chat networks.', icon: '🔒' },
             { title: 'AI Smart Matching', desc: 'Get matched with perfect available experts based on your budget, reviews, and current problems.', icon: '✨' },
             { title: 'Instant Availability', desc: 'No queue models. Call and speak with online consultants on a single click in real-time.', icon: '⚡' },
-            { title: 'HD Video Calling', desc: 'High-definition WebRTC video connection optimized for low-bandwidth mobile networks.', icon: '📹' },
-            { title: 'Crystal Clear Voice', desc: 'Noise-canceling spatial voice streams that ensure high audio quality on every consultation.', icon: '🎙️' },
             { title: 'Fast Chat', desc: 'Ultra-low-latency persistent Socket.IO chat servers supporting rapid texting, media exchange.', icon: '💬' },
             { title: 'Secure Payments', desc: 'Razorpay Sandbox payments. Secure automated per-minute refund/deduction wallet engine.', icon: '💳' },
             { title: 'Affordable Pricing', desc: 'Transparent pay-per-minute billing from ₹10/min. Know exactly how much you are spending.', icon: '💎' },
             { title: '24×7 Support', desc: 'Dedicated customer support tickets helpdesk managed directly through admin panels.', icon: '🌟' }
-          ].slice(0, 9).map((feat) => (
+          ].map((feat) => (
             <div key={feat.title} className="bg-slate-900/35 backdrop-blur-sm rounded-3xl border border-slate-850 p-6 flex flex-col justify-between h-48 hover:border-slate-700 transition-all group">
               <div className="space-y-3">
                 <div className="w-10 h-10 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-center text-lg shadow-sm">

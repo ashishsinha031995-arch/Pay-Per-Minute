@@ -1331,7 +1331,7 @@ export function ChatRoom({
                 <span className="text-slate-700 font-sans hidden sm:inline">•</span>
                 
                 <span className="text-slate-500 font-mono hidden sm:inline">
-                  Tariff: ₹{sessionInfo?.price_per_minute || '--'}/min
+                  Chat Rate=₹{sessionInfo?.price_per_minute || '--'}/min
                 </span>
               </div>
             )}
@@ -1757,12 +1757,12 @@ export function ChatRoom({
                 </div>
               </div>
             ) : sessionInfo?.status === 'active' ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/25 p-3.5 rounded-xl flex items-start space-x-2.5 text-left">
-                <Sparkles className="w-4.5 h-4.5 text-emerald-400 mt-0.5 flex-shrink-0 animate-pulse" />
+              <div className="bg-amber-500/10 border border-amber-500/25 p-3.5 rounded-xl flex items-start space-x-2.5 text-left">
+                <AlertTriangle className="w-4.5 h-4.5 text-amber-400 mt-0.5 flex-shrink-0 animate-pulse" />
                 <div>
-                  <strong className="text-xs text-emerald-400 block font-sans">Consultation is Live! 🌟</strong>
-                  <p className="text-[10px] text-slate-400 leading-relaxed font-sans mt-0.5">
-                    The billing timer is active and counting down. Speak freely; your chat is secure and private.
+                  <strong className="text-xs text-amber-400 block font-sans">Keep the conversation respectful.</strong>
+                  <p className="text-[10px] text-slate-300 leading-relaxed font-sans mt-0.5">
+                    Using abusive, vulgar, threatening, or inappropriate language violates our Community Guidelines. Violations may result in permanent account suspension.
                   </p>
                 </div>
               </div>

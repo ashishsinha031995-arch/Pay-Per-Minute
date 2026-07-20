@@ -812,12 +812,17 @@ export default function AppPage() {
         currentUser={currentUser}
         currentConsultant={currentConsultant}
         onLogout={handleHeaderLogoutAttempt}
-        onOpenAuth={() => {
+        onOpenAuth={(options) => {
           setAuthError(null);
           setAuthSuccess(null);
-          setAuthTab('login');
+          setAuthTab(options?.tab || 'login');
           setLoginType('choose');
-          setSignUpType('choose');
+          setSignUpType(options?.signUpType || 'choose');
+          if (options?.signUpType === 'consultant') {
+            setAuthRole('consultant');
+          } else {
+            setAuthRole('user');
+          }
           setAuthModalOpen(true);
         }}
         theme={theme}
@@ -859,12 +864,17 @@ export default function AppPage() {
               }}
               currentUser={currentUser}
               setCurrentUser={setCurrentUser}
-              onOpenAuth={() => {
+              onOpenAuth={(options) => {
                 setAuthError(null);
                 setAuthSuccess(null);
-                setAuthTab('login');
+                setAuthTab(options?.tab || 'login');
                 setLoginType('choose');
-                setSignUpType('choose');
+                setSignUpType(options?.signUpType || 'choose');
+                if (options?.signUpType === 'consultant') {
+                  setAuthRole('consultant');
+                } else {
+                  setAuthRole('user');
+                }
                 setAuthModalOpen(true);
               }}
               activeSessionId={activeSession?.sessionId}

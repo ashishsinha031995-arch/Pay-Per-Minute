@@ -14,7 +14,23 @@ export function useAuth() {
       const data = await UserService.getUserProfile(id);
       if (data.success && data.user) {
         if (data.user.is_blocked === 1) {
-          alert('Aapka account block kar diya gaya hai admin dwara. (Your account is blocked.)');
+          if (data.user.suspended_until) {
+            if (data.user.suspended_until === 'permanent') {
+              alert('Your account has been permanently suspended by the admin due to Privacy Breach.');
+            } else {
+              const expiry = new Date(data.user.suspended_until).getTime();
+              if (!isNaN(expiry)) {
+                const diffMs = expiry - Date.now();
+                const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                const unlockDateStr = new Date(data.user.suspended_until).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+                alert(`Your account has been suspended due to Privacy Breach. You will be able to log in again on ${unlockDateStr} (${daysRemaining} days remaining).`);
+              } else {
+                alert('Your account has been suspended by the admin due to Privacy Breach.');
+              }
+            }
+          } else {
+            alert('Your account has been blocked by the admin due to Privacy Breach.');
+          }
           logout();
         } else {
           setCurrentUser(data.user);
