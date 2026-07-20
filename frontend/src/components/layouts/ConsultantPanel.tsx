@@ -565,7 +565,58 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
   };
 
   // Tab Navigation & Mobile Drawer States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules' | 'followers' | 'notifications' | 'blocked'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'status' | 'profile' | 'sessions' | 'kyc' | 'bank' | 'support' | 'schedules' | 'followers' | 'notifications' | 'blocked'>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/consultant-portal/')) {
+        const tab = path.replace('/consultant-portal/', '');
+        if (['dashboard', 'status', 'profile', 'sessions', 'kyc', 'bank', 'support', 'schedules', 'followers', 'notifications', 'blocked'].includes(tab)) {
+          return tab as any;
+        }
+      }
+    }
+    return 'dashboard';
+  });
+
+  // Sync activeTab with URL on back/forward navigation (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/consultant-portal/')) {
+        const tab = path.replace('/consultant-portal/', '');
+        if (['dashboard', 'status', 'profile', 'sessions', 'kyc', 'bank', 'support', 'schedules', 'followers', 'notifications', 'blocked'].includes(tab)) {
+          if (tab !== activeTab) {
+            setActiveTab(tab as any);
+          }
+        }
+      } else if (path === '/consultant-portal') {
+        if (activeTab !== 'dashboard') {
+          setActiveTab('dashboard');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [activeTab]);
+
+  // Synchronize activeTab state to URL pathname
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const currentPath = window.location.pathname;
+    const targetPath = activeTab === 'dashboard'
+      ? '/consultant-portal'
+      : `/consultant-portal/${activeTab}`;
+
+    if (currentPath !== targetPath) {
+      window.history.pushState({}, '', targetPath);
+    }
+  }, [activeTab]);
   const [followersList, setFollowersList] = useState<any[]>([]);
   const [followersLoading, setFollowersLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

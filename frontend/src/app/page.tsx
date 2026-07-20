@@ -50,10 +50,13 @@ export default function AppPage() {
       if (path === '/super-secret-owner-portal' || path.startsWith('/super-secret-owner-portal/')) {
         return 'admin';
       }
-      if (path === '/consultant-portal') {
+      if (path === '/consultant-portal' || path.startsWith('/consultant-portal/')) {
         return 'consultant';
       }
       if (path.startsWith('/u/')) {
+        return 'user';
+      }
+      if (path.startsWith('/section/')) {
         return 'user';
       }
       const savedRole = localStorage.getItem('current_role') as 'user' | 'consultant' | 'admin' | null;
@@ -317,8 +320,10 @@ export default function AppPage() {
     const path = window.location.pathname;
     if (path === '/super-secret-owner-portal' || path.startsWith('/super-secret-owner-portal/')) {
       setCurrentRole('admin');
-    } else if (path === '/consultant-portal') {
+    } else if (path === '/consultant-portal' || path.startsWith('/consultant-portal/')) {
       setCurrentRole('consultant');
+    } else if (path.startsWith('/section/')) {
+      setCurrentRole('user');
     } else if (path.startsWith('/u/')) {
       const username = path.slice(3).trim();
       if (username) {
@@ -357,8 +362,11 @@ export default function AppPage() {
       if (path === '/super-secret-owner-portal' || path.startsWith('/super-secret-owner-portal/')) {
         setCurrentRole('admin');
         setTargetUsername(undefined);
-      } else if (path === '/consultant-portal') {
+      } else if (path === '/consultant-portal' || path.startsWith('/consultant-portal/')) {
         setCurrentRole('consultant');
+        setTargetUsername(undefined);
+      } else if (path.startsWith('/section/')) {
+        setCurrentRole('user');
         setTargetUsername(undefined);
       } else if (path.startsWith('/u/')) {
         const username = path.slice(3).trim();

@@ -387,7 +387,69 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
 
   // Client tabs navigation state
-  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history' | 'support' | 'following' | 'notifications'>('advisors');
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'advisors' | 'profile' | 'wallet' | 'history' | 'support' | 'following' | 'notifications'>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/section/')) {
+        const tab = path.replace('/section/', '');
+        if (['advisors', 'profile', 'wallet', 'history', 'support', 'following', 'notifications'].includes(tab)) {
+          return tab as any;
+        }
+      }
+    }
+    return 'advisors';
+  });
+
+  // Sync activeDashboardTab with URL on back/forward navigation (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/section/')) {
+        const tab = path.replace('/section/', '');
+        if (['advisors', 'profile', 'wallet', 'history', 'support', 'following', 'notifications'].includes(tab)) {
+          if (tab !== activeDashboardTab) {
+            setActiveDashboardTab(tab as any);
+          }
+        }
+      } else if (path === '/') {
+        if (activeDashboardTab !== 'advisors') {
+          setActiveDashboardTab('advisors');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [activeDashboardTab]);
+
+  // Synchronize activeDashboardTab state to URL pathname
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const currentPath = window.location.pathname;
+    const targetPath = activeDashboardTab === 'advisors'
+      ? '/'
+      : `/section/${activeDashboardTab}`;
+
+    if (currentPath !== targetPath && !currentPath.startsWith('/u/')) {
+      window.history.pushState({}, '', targetPath);
+    }
+  }, [activeDashboardTab]);
+
+  // Handle data fetching for other tabs when activeDashboardTab changes (e.g. from refresh or click)
+  useEffect(() => {
+    if (currentUser?.id) {
+      if (activeDashboardTab === 'history') {
+        loadPastHistoryFromLocalStorage();
+      } else if (activeDashboardTab === 'wallet') {
+        fetchWalletTransactions();
+      }
+    }
+  }, [activeDashboardTab, currentUser?.id]);
   const [followingList, setFollowingList] = useState<any[]>([]);
   const [followingLoading, setFollowingLoading] = useState(false);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
