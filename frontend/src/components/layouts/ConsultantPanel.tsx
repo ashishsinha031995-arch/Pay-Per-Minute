@@ -19,6 +19,17 @@ interface ConsultantPanelProps {
   onInstallApp?: () => void;
 }
 
+const formatFollowerNumber = (num: number): string => {
+  if (num === undefined || num === null) return '0';
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return num.toString();
+};
+
 const saveConsultantSession = (consultant: any) => {
   if (!consultant) {
     localStorage.removeItem('consultant_session');
@@ -1462,6 +1473,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
     console.log('[WebSocket] Initializing robust socket connection for background keep-alive...');
     const socket = io({ 
       transports: ['websocket'],
+      auth: { userId: currentConsultant?.id },
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -4088,7 +4100,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                       ₹{currentConsultant.price_per_minute || 0}/min
                     </span>
                   </motion.div>
-                  <span className="text-[10px] font-mono text-emerald-400 block mt-1">👥 {currentConsultant.followers_count || 0} Followers</span>
+                  <span className="text-[10px] font-mono text-emerald-400 block mt-1">👥 {formatFollowerNumber(currentConsultant.followers_count || 0)} Followers</span>
                   <span className="text-[9px] font-sans text-slate-500 block mt-0.5">ID: #{currentConsultant.id}</span>
                 </div>
 

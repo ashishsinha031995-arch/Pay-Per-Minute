@@ -1,18 +1,26 @@
 import { Server } from 'socket.io';
+import cron from 'node-cron';
 import { db, logWalletTransaction } from '../config/database.js';
 import { processNextInQueue } from '../controllers/payment.controller.js';
 import { ChatMemoryService } from '../services/chatMemory.js';
 import { checkAndResetMonthlyWallets } from '../utils/salary.js';
 
 export function startChatExpiryJob(io: Server) {
+  // Separate the Wallet Reset logic completely into an isolated Monthly Cron pattern running on the 1st of every month at midnight ("0 0 1 * *")
+  cron.schedule("0 0 1 * *", () => {
+    try {
+      console.log("[Monthly Wallet Cron] Running scheduled monthly wallet reset...");
+      checkAndResetMonthlyWallets();
+    } catch (err) {
+      console.error("[Monthly Wallet Cron] Error resetting monthly wallets:", err);
+    }
+  });
+
   // Periodically check all active sessions, decrement or check expiry against system clock,
   // handle closing of sessions, wallet credit, and database logging.
   setInterval(() => {
     try {
       const now = new Date();
-
-      // Ensure monthly wallets are reset immediately when midnight of next day of cutoff starts
-      checkAndResetMonthlyWallets();
 
       // Check for missed pending sessions (older than 60 seconds)
       const pendingSessions = db.prepare("SELECT * FROM sessions WHERE status = 'pending'").all() as any[];
@@ -105,9 +113,6 @@ export function startChatExpiryJob(io: Server) {
             // 3. Add earnings to consultant wallet
             const cid = sess.consultant_id;
             const earnings = sess.consultant_earnings;
-            
-            // Check and trigger monthly wallet reset if crossed cutoff day before adding new monthly earnings
-            checkAndResetMonthlyWallets();
 
             db.prepare(`
               UPDATE consultants 
@@ -150,25 +155,25 @@ export function startChatExpiryJob(io: Server) {
     } catch (error) {
       console.error('Error in Server-Authoritative Timer Loop:', error);
     }
-  }, 1000); // Check every 1 second
+  }, 15000); // Check every 15 seconds to minimize heavy CPU and database load
 }
 
 function reconcileConsultantBusyStates(io: Server) {
   try {
-    // 1. Get all consultants who are currently marked as is_busy = 1, but NOT manually busy
+    // 1. Get all active/pending session consultant IDs first - this is highly selective and indexed!
+    const activeOrPendingSessions = db.prepare(`
+      SELECT DISTINCT consultant_id FROM sessions 
+      WHERE status IN ('active', 'pending')
+    `).all() as any[];
+    
+    const activeConsultantIds = new Set(activeOrPendingSessions.map(s => s.consultant_id));
+
+    // 2. Get all consultants who are currently marked as is_busy = 1, but NOT manually busy
     const busyConsultants = db.prepare("SELECT id, display_name FROM consultants WHERE is_busy = 1 AND (manual_busy IS NULL OR manual_busy = 0)").all() as any[];
     
     for (const consultant of busyConsultants) {
       const consultantId = consultant.id;
-      
-      // 2. Check if this consultant has any active or pending session
-      const activeOrPending = db.prepare(`
-        SELECT id FROM sessions 
-        WHERE consultant_id = ? AND status IN ('active', 'pending')
-        LIMIT 1
-      `).get(consultantId);
-      
-      if (!activeOrPending) {
+      if (!activeConsultantIds.has(consultantId)) {
         // No active or pending session found!
         console.log(`[Self-Healing] Consultant ${consultant.display_name} (ID: ${consultantId}) is marked busy but has no active/pending sessions. Reconciling.`);
         
@@ -180,4 +185,3 @@ function reconcileConsultantBusyStates(io: Server) {
     console.error('[Self-Healing] Error reconciling consultant busy states:', err);
   }
 }
-

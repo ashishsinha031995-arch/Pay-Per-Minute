@@ -41,6 +41,17 @@ const normalizeCategory = (cat: string) => {
   return mapping[c] || c;
 };
 
+const formatFollowerNumber = (num: number): string => {
+  if (num === undefined || num === null) return '0';
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return num.toString();
+};
+
 interface ConsultantProfileProps {
   onSelectSession: (sessionId: string, username: string, role: 'user' | 'consultant', isReadOnly?: boolean) => void;
   targetUsername?: string; // If navigated from Consultant Panel profile URL
@@ -3547,7 +3558,7 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                       <span className={`text-[11px] font-bold font-mono shrink-0 ${
                         theme === 'light' ? 'text-slate-600' : 'text-slate-400'
                       }`}>
-                        {totalFollowers}
+                        {formatFollowerNumber(totalFollowers)}
                       </span>
 
                       {/* Action buttons nicely aligned with gap */}

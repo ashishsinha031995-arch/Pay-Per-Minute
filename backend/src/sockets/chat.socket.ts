@@ -5,13 +5,34 @@ import { ChatMemoryService } from '../services/chatMemory.js';
 export function handleChatSocket(io: Server, socket: Socket) {
   // 1. Join Chat Session Room
   socket.on('join:room', async ({ session_id, role, username }) => {
-    await socket.join(session_id);
-    socket.data.role = role;
-    socket.data.session_id = session_id;
-    socket.data.username = username;
-    console.log(`[Socket Server] Client ${username || 'Anonymous'} joined Room: ${session_id} as ${role}`);
-
     try {
+      // Verify if the session exists
+      const sess = db.prepare('SELECT * FROM sessions WHERE id = ?').get(session_id) as any;
+      if (!sess) {
+        console.warn(`[Socket Authorization] Room Join rejected: Session ${session_id} not found.`);
+        socket.emit('error:msg', 'Session not found.');
+        socket.disconnect();
+        return;
+      }
+
+      // Check if authenticated userId belongs to this session
+      const authUserId = socket.data.userId;
+      const isUser = Number(sess.user_id) === Number(authUserId);
+      const isConsultant = Number(sess.consultant_id) === Number(authUserId);
+
+      if (!isUser && !isConsultant) {
+        console.warn(`[Socket Authorization] Unauthorized Room Join attempt! User ID ${authUserId} tried to join session ${session_id} as ${role}.`);
+        socket.emit('error:msg', 'Unauthorized: You are not a participant in this session.');
+        socket.disconnect();
+        return;
+      }
+
+      await socket.join(session_id);
+      socket.data.role = role;
+      socket.data.session_id = session_id;
+      socket.data.username = username;
+      console.log(`[Socket Server] Client ${username || 'Anonymous'} (User ID: ${authUserId}) joined Room: ${session_id} as ${role}`);
+
       // Fetch all sockets currently in this session room
       const roomSockets = await io.in(session_id).fetchSockets();
       const rolesInRoom = roomSockets.map(s => s.data.role);
@@ -28,7 +49,7 @@ export function handleChatSocket(io: Server, socket: Socket) {
         socket.to(session_id).emit('partner:joined', { role, username });
       }
     } catch (err) {
-      console.error('Error starting session countdown on room join:', err);
+      console.error('Error in room join authorization:', err);
     }
   });
 

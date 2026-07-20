@@ -33,6 +33,17 @@ const normalizeCategory = (cat: any) => {
   return mapping[str] || str;
 };
 
+const formatFollowerNumber = (num: number): string => {
+  if (num === undefined || num === null) return '0';
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return num.toString();
+};
+
 export function AdminPanel() {
   const [stats, setStats] = useState<AdminStats>({
     totalRevenue: 0,
@@ -1015,7 +1026,7 @@ export function AdminPanel() {
       let method = 'POST';
 
       if (editingConsultant) {
-        endpoint = `/api/consultants/${editingConsultant.id}/profile`;
+        endpoint = `/api/admin/consultants/${editingConsultant.id}`;
         method = 'PUT';
       }
 
@@ -1644,7 +1655,7 @@ export function AdminPanel() {
     { id: 'followers_leaderboard', label: 'Followers Leaderboard', icon: Award },
     { id: 'revenue_leaderboard', label: 'Revenue Leaderboard', icon: Coins },
     { id: 'user_spends_leaderboard', label: 'User Spends Leaderboard', icon: TrendingUp },
-    { id: 'queues', label: 'Live Queue Manager', icon: Clock },
+    { id: 'queues', label: 'Live Chat Tracking', icon: Clock },
     { id: 'subscriptions', label: 'Subscription Plans', icon: Award, badge: plans.length },
     { id: 'users', label: 'User Accounts', icon: UserCheck, badge: adminUsers.length },
     { id: 'sessions', label: 'Chat Sessions', icon: MessageSquare, badge: sessions.length },
@@ -2224,33 +2235,6 @@ export function AdminPanel() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* View Toggles: Ledger vs Real-time logs */}
-                  <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setShowLogsView(false)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!showLogsView ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                      Experts Ledger
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowLogsView(true);
-                        setSelectedLogConsultantId(null);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 relative ${showLogsView ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                      <span>Real-Time Logs</span>
-                      {loginLogs.filter(l => !l.logout_time).length > 0 && (
-                        <span className="flex h-2 w-2 relative">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                      )}
-                    </button>
-                  </div>
-
                   {/* Refresh Ledger Button */}
                   <button
                     onClick={handleManualRefresh}
@@ -2263,8 +2247,7 @@ export function AdminPanel() {
                 </div>
               </div>
 
-              {!showLogsView ? (
-                <>
+              <>
                   {/* Consultants Ledger */}
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
                 <div className="overflow-x-auto">
@@ -2402,16 +2385,6 @@ export function AdminPanel() {
                                   title="Reset credentials"
                                 >
                                   <Key className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setSelectedLogConsultantId(cons.id);
-                                    setShowLogsView(true);
-                                  }}
-                                  className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-indigo-400 border border-slate-850"
-                                  title="View login logs"
-                                >
-                                  <Clock className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => {
@@ -2810,193 +2783,6 @@ export function AdminPanel() {
                 </div>
               </div>
             </>
-          ) : (
-            /* Real-Time Logs View */
-            <div className="space-y-6">
-              {/* Real-time stats cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex items-center space-x-4">
-                  <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400">
-                    <Activity className="w-5 h-5 animate-pulse" />
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-[10px] block font-mono uppercase tracking-wider">Currently Online</span>
-                    <strong className="text-xl text-slate-100 font-bold font-mono">
-                      {loginLogs.filter(l => !l.logout_time).length}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex items-center space-x-4">
-                  <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 text-indigo-400">
-                    <Clock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-[10px] block font-mono uppercase tracking-wider">Total Sessions Today</span>
-                    <strong className="text-xl text-slate-100 font-bold font-mono">
-                      {(() => {
-                        const today = new Date().toDateString();
-                        return loginLogs.filter(l => new Date(l.login_time).toDateString() === today).length;
-                      })()}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex items-center space-x-4">
-                  <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 text-amber-400">
-                    <Clock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-[10px] block font-mono uppercase tracking-wider">Total Logged Hours</span>
-                    <strong className="text-xl text-slate-100 font-bold font-mono">
-                      {(() => {
-                        const totalS = loginLogs.reduce((acc, l) => acc + (l.duration_seconds || 0), 0);
-                        return (totalS / 3600).toFixed(1);
-                      })()} hrs
-                    </strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Filter details pill */}
-              {selectedLogConsultantId !== null && (
-                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 rounded-2xl">
-                  <div className="flex items-center space-x-2 text-xs text-emerald-400 font-bold">
-                    <span>Showing logs for:</span>
-                    <span className="bg-emerald-500/20 px-2.5 py-1 rounded-lg text-slate-100 font-mono">
-                      {loginLogs.find(l => l.consultant_id === selectedLogConsultantId)?.display_name || `Advisor #${selectedLogConsultantId}`}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setSelectedLogConsultantId(null)}
-                    className="text-xs text-slate-400 hover:text-slate-100 font-mono underline cursor-pointer"
-                  >
-                    Reset Filter
-                  </button>
-                </div>
-              )}
-
-              {/* Table with logs */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px]">
-                        <th className="px-6 py-4">Advisor Profile</th>
-                        <th className="px-6 py-4">Status</th>
-                        <th className="px-6 py-4">Login Time</th>
-                        <th className="px-6 py-4">Logout Time</th>
-                        <th className="px-6 py-4 text-right">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/80 text-slate-300">
-                      {(() => {
-                        const processedLogs = loginLogs.filter(log => {
-                          if (selectedLogConsultantId !== null && log.consultant_id !== selectedLogConsultantId) {
-                            return false;
-                          }
-
-                          const term = searchCons.toLowerCase().trim();
-                          if (term) {
-                            const nameMatch = (log.display_name || '').toLowerCase().includes(term);
-                            const userMatch = (log.username || '').toLowerCase().includes(term);
-                            const catMatch = (log.category || '').toLowerCase().includes(term);
-                            if (!nameMatch && !userMatch && !catMatch) {
-                              return false;
-                            }
-                          }
-
-                          if (filterConsCat !== 'all' && normalizeCategory(log.category) !== filterConsCat) {
-                            return false;
-                          }
-
-                          if (filterConsHours !== 'all') {
-                            if (filterConsHours === 'online' && log.logout_time) return false;
-                            if (filterConsHours === 'daily_1') {
-                              const hrs = log.duration_seconds || 0;
-                              if (hrs === 0 && log.logout_time) return false;
-                            }
-                          }
-
-                          return true;
-                        });
-
-                        if (processedLogs.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-mono">
-                                No real-time login sessions match your search filters.
-                              </td>
-                            </tr>
-                          );
-                        }
-
-                        return processedLogs.map(log => {
-                          const loginDate = new Date(log.login_time);
-                          const isOnline = !log.logout_time;
-                          
-                          let durationText = '';
-                          if (isOnline) {
-                            const elapsedS = Math.floor((Date.now() - loginDate.getTime()) / 1000);
-                            if (elapsedS < 60) durationText = `${elapsedS}s`;
-                            else if (elapsedS < 3600) durationText = `${Math.floor(elapsedS / 60)}m ${elapsedS % 60}s`;
-                            else durationText = `${Math.floor(elapsedS / 3600)}h ${Math.floor((elapsedS % 3600) / 60)}m`;
-                          } else {
-                            const totalS = log.duration_seconds || 0;
-                            if (totalS < 60) durationText = `${totalS}s`;
-                            else if (totalS < 3600) durationText = `${Math.floor(totalS / 60)}m ${totalS % 60}s`;
-                            else durationText = `${Math.floor(totalS / 3600)}h ${Math.floor((totalS % 3600) / 60)}m`;
-                          }
-
-                          return (
-                            <tr key={log.id} className="hover:bg-slate-950/30">
-                              <td className="px-6 py-4 flex items-center space-x-3">
-                                <img src={log.photo_url || 'https://via.placeholder.com/150'} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-800" referrerPolicy="no-referrer" />
-                                <div>
-                                  <strong 
-                                    onClick={() => setSelectedLogConsultantId(log.consultant_id)}
-                                    className="text-slate-100 font-bold block hover:underline cursor-pointer"
-                                  >
-                                    {log.display_name}
-                                  </strong>
-                                  <span className="text-[10px] text-slate-500 font-mono">ID: #{log.consultant_id} | {log.category}</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                {isOnline ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
-                                    Active Now
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-500 bg-slate-950/50 border border-slate-800">
-                                    Logged Out
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 font-mono text-slate-300">
-                                {loginDate.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                              </td>
-                              <td className="px-6 py-4 font-mono text-slate-400">
-                                {isOnline ? (
-                                  <span className="text-emerald-500 italic font-medium animate-pulse">Ongoing Session</span>
-                                ) : (
-                                  new Date(log.logout_time!).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-right font-mono font-bold text-slate-100">
-                                {durationText}
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -3004,7 +2790,8 @@ export function AdminPanel() {
           {/* TAB: FOLLOWERS LEADERBOARD */}
           {activeTab === 'followers_leaderboard' && (() => {
             // Compute some high-level stats
-            const totalFollowersAll = leaderboard.reduce((acc, c) => acc + (c.followers_count || 0), 0);
+            const totalOrganicFollowers = leaderboard.reduce((acc, c) => acc + (c.organic_followers_count || 0), 0);
+            const totalCombinedFollowers = leaderboard.reduce((acc, c) => acc + (c.followers_count || 0), 0);
             const topFollowed = leaderboard[0];
 
             return (
@@ -3028,40 +2815,51 @@ export function AdminPanel() {
                 </div>
 
                 {/* Bento Statistics Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Total Followers */}
-                  <div className="bg-gradient-to-br from-indigo-950/40 via-slate-900 to-indigo-950/20 border border-indigo-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
-                    <div className="bg-indigo-500/15 p-3 rounded-xl text-indigo-400 border border-indigo-500/20">
-                      <Users className="w-6 h-6" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Total Real Followers */}
+                  <div className="bg-gradient-to-br from-indigo-950/40 via-slate-900 to-indigo-950/20 border border-indigo-500/10 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+                    <div className="bg-indigo-500/15 p-2.5 rounded-xl text-indigo-400 border border-indigo-500/20 shrink-0">
+                      <Users className="w-5 h-5" />
                     </div>
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Total Platform Followers</span>
-                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight">{totalFollowersAll}</strong>
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block truncate">Total Real Followers Counts</span>
+                      <strong className="text-xl font-black text-slate-100 font-mono tracking-tight">{formatFollowerNumber(totalOrganicFollowers)}</strong>
+                    </div>
+                  </div>
+
+                  {/* Combined Followers */}
+                  <div className="bg-gradient-to-br from-purple-950/40 via-slate-900 to-purple-950/20 border border-purple-500/10 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+                    <div className="bg-purple-500/15 p-2.5 rounded-xl text-purple-400 border border-purple-500/20 shrink-0">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block truncate">Combined Followers Count</span>
+                      <strong className="text-xl font-black text-slate-100 font-mono tracking-tight">{formatFollowerNumber(totalCombinedFollowers)}</strong>
                     </div>
                   </div>
 
                   {/* Top Creator Spotlight */}
-                  <div className="bg-gradient-to-br from-amber-950/40 via-slate-900 to-amber-950/20 border border-amber-500/15 rounded-2xl p-5 shadow-lg flex items-center gap-4">
-                    <div className="bg-amber-500/15 p-3 rounded-xl text-amber-400 border border-amber-500/20">
-                      <Award className="w-6 h-6" />
+                  <div className="bg-gradient-to-br from-amber-950/40 via-slate-900 to-amber-950/20 border border-amber-500/15 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+                    <div className="bg-amber-500/15 p-2.5 rounded-xl text-amber-400 border border-amber-500/20 shrink-0">
+                      <Award className="w-5 h-5" />
                     </div>
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Top Popular Consultant</span>
-                      <strong className="text-base font-black text-amber-400 truncate block max-w-[200px]">
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block truncate">Top Popular Consultant</span>
+                      <strong className="text-sm font-black text-amber-400 truncate block">
                         {topFollowed ? topFollowed.display_name : 'No consultants'}
                       </strong>
                     </div>
                   </div>
 
                   {/* Average Followers */}
-                  <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-emerald-950/20 border border-emerald-500/10 rounded-2xl p-5 shadow-lg flex items-center gap-4">
-                    <div className="bg-emerald-500/15 p-3 rounded-xl text-emerald-400 border border-emerald-500/20">
-                      <Percent className="w-6 h-6" />
+                  <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-emerald-950/20 border border-emerald-500/10 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+                    <div className="bg-emerald-500/15 p-2.5 rounded-xl text-emerald-400 border border-emerald-500/20 shrink-0">
+                      <Percent className="w-5 h-5" />
                     </div>
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Average Popularity</span>
-                      <strong className="text-2xl font-black text-slate-100 font-mono tracking-tight">
-                        {leaderboard.length > 0 ? Math.round(totalFollowersAll / leaderboard.length) : 0} <span className="text-xs text-slate-400 font-normal">/ expert</span>
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block truncate">Average Popularity</span>
+                      <strong className="text-xl font-black text-slate-100 font-mono tracking-tight">
+                        {formatFollowerNumber(leaderboard.length > 0 ? Math.round(totalCombinedFollowers / leaderboard.length) : 0)} <span className="text-[10px] text-slate-400 font-normal">/ expert</span>
                       </strong>
                     </div>
                   </div>
@@ -3119,15 +2917,15 @@ export function AdminPanel() {
                           <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/60 space-y-1">
                             <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
                               <span>Actual Followers:</span>
-                              <span className="text-slate-300 font-bold">{actualFollows}</span>
+                              <span className="text-slate-300 font-bold">{formatFollowerNumber(actualFollows)}</span>
                             </div>
                             <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
                               <span>Manual Injection:</span>
-                              <span className="text-indigo-400 font-bold">{cons.manual_followers_count || 0}</span>
+                              <span className="text-indigo-400 font-bold">{formatFollowerNumber(cons.manual_followers_count || 0)}</span>
                             </div>
                             <div className="border-t border-slate-850 pt-1 flex items-center justify-between text-[11px] font-mono text-slate-400 font-bold">
                               <span>Total Followers:</span>
-                              <span className="text-emerald-400 font-extrabold">{totalFollows}</span>
+                              <span className="text-emerald-400 font-extrabold">{formatFollowerNumber(totalFollows)}</span>
                             </div>
                           </div>
                         </div>
@@ -3198,7 +2996,7 @@ export function AdminPanel() {
 
                               {/* Actual Followers */}
                               <td className="px-6 py-4 font-mono font-bold text-slate-300">
-                                {actualFollows}
+                                {formatFollowerNumber(actualFollows)}
                               </td>
 
                               {/* Manual Adjustment Field */}
@@ -3235,7 +3033,7 @@ export function AdminPanel() {
                                 ) : (
                                   <div className="flex items-center gap-2 group/btn">
                                     <span className="font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/10">
-                                      {manualFollows}
+                                      {formatFollowerNumber(manualFollows)}
                                     </span>
                                     <button
                                       onClick={() => {
@@ -3255,7 +3053,7 @@ export function AdminPanel() {
                               {/* Total Followers */}
                               <td className="px-6 py-4 text-right font-mono font-black text-slate-100">
                                 <span className="bg-slate-950/80 px-2.5 py-1 rounded-md border border-slate-850 text-emerald-400 text-xs">
-                                  {totalFollows}
+                                  {formatFollowerNumber(totalFollows)}
                                 </span>
                               </td>
                             </tr>
@@ -3884,10 +3682,17 @@ export function AdminPanel() {
           })()}
 
           {/* ========================================================= */}
-          {/* TAB: LIVE QUEUE MANAGER */}
+          {/* TAB: LIVE CHAT TRACKING */}
           {activeTab === 'queues' && (() => {
             // Compute real-time filtered and sorted queues
             const processedQueues = liveQueues.filter(q => {
+              // Only show consultants with an active/pending session OR queue_count > 0
+              const hasActiveSession = q.active_session && (q.active_session.status === 'active' || q.active_session.status === 'pending');
+              const hasQueue = q.queue_count > 0;
+              if (!hasActiveSession && !hasQueue) {
+                return false;
+              }
+
               // Search query filter
               if (searchQueueCons.trim()) {
                 const query = searchQueueCons.toLowerCase();
@@ -3928,7 +3733,7 @@ export function AdminPanel() {
             });
 
             // Calculate operational stats
-            const totalConsultants = liveQueues.length;
+            const activeConsultantsCount = liveQueues.filter(q => (q.active_session && (q.active_session.status === 'active' || q.active_session.status === 'pending')) || q.queue_count > 0).length;
             const activeSessionsCount = liveQueues.filter(q => q.active_session?.status === 'active').length;
             const pendingRequestsCount = liveQueues.filter(q => q.active_session?.status === 'pending').length;
             const totalUsersQueued = liveQueues.reduce((acc, q) => acc + q.queue_count, 0);
@@ -3953,7 +3758,7 @@ export function AdminPanel() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-3xl">
                   <div>
                     <div className="flex items-center space-x-2.5">
-                      <h3 className="text-lg font-extrabold text-slate-100 tracking-tight">Live Queue Command Center</h3>
+                      <h3 className="text-lg font-extrabold text-slate-100 tracking-tight">Live Chat Tracking</h3>
                       <span className="flex h-2.5 w-2.5 relative">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -3983,11 +3788,11 @@ export function AdminPanel() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between hover:border-slate-700 transition-all">
                     <div className="flex justify-between items-start">
-                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Total Advisors</span>
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Active Advisors</span>
                       <Users className="h-4 w-4 text-slate-500" />
                     </div>
-                    <strong className="text-2xl text-slate-100 mt-2 font-mono">{totalConsultants}</strong>
-                    <span className="text-[10px] text-slate-400 mt-1">Configured on platform</span>
+                    <strong className="text-2xl text-slate-100 mt-2 font-mono">{activeConsultantsCount}</strong>
+                    <span className="text-[10px] text-slate-400 mt-1">With active chats or queues</span>
                   </div>
 
                   <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between hover:border-slate-700 transition-all">
@@ -5135,7 +4940,7 @@ export function AdminPanel() {
                                 }}
                                 className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/15 rounded text-[10px] px-2 py-1 font-bold transition-all"
                               >
-                                Inspect Call
+                                View Chat
                               </button>
 
                               {(sess.status === 'completed' || sess.status === 'active') && maxRefundable > 0 ? (
@@ -6607,8 +6412,8 @@ export function AdminPanel() {
       {/* Create / Edit Consultant Modal */}
       {showConsultantModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-4 my-8 shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-4 my-8 shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
               <h3 className="font-bold text-base text-slate-100">
                 {editingConsultant ? 'Modify Expert Parameters' : 'Register New Professional Expert'}
               </h3>
@@ -6620,7 +6425,7 @@ export function AdminPanel() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveConsultant} className="space-y-4">
+            <form onSubmit={handleSaveConsultant} className="space-y-4 overflow-y-auto pr-2 flex-1 max-h-[65vh]">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] text-slate-400 font-mono mb-1">Display Name *</label>

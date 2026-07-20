@@ -717,7 +717,10 @@ export function ChatRoom({
   useEffect(() => {
     if (isReadOnly) return;
     // Connect to current origin
-    const socket = io({ transports: ['websocket'] });
+    const socket = io({ 
+      transports: ['websocket'],
+      auth: { userId: currentUser?.id }
+    });
     socketRef.current = socket;
 
     let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -903,7 +906,7 @@ export function ChatRoom({
         clearInterval(recordingTimerRef.current);
       }
     };
-  }, [sessionId, role, userName]);
+  }, [sessionId, role, userName, currentUser?.id]);
 
   // 2.5 Tab visibility recovery & background state recovery
   useEffect(() => {

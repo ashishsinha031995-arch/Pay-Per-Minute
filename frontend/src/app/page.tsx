@@ -281,22 +281,37 @@ export default function AppPage() {
 
   // Background Socket.IO ping monitoring and Deep Link Parsing
   useEffect(() => {
-    const socket = io({ transports: ['websocket'] });
-
-    socket.on('connect', () => {
-      setSocketConnected(true);
-    });
-
-    socket.on('disconnect', () => {
-      setSocketConnected(false);
-    });
-
-    socket.on('wallet:updated', (data) => {
-      const savedUserId = localStorage.getItem('logged_user_id');
-      if (savedUserId && Number(savedUserId) === Number(data.userId)) {
-        refreshUserProfile(Number(savedUserId));
+    const savedUserId = localStorage.getItem('logged_user_id');
+    let consultantId = null;
+    try {
+      const sess = localStorage.getItem('consultant_session');
+      if (sess) {
+        consultantId = JSON.parse(sess)?.id;
       }
-    });
+    } catch (e) {}
+    const activeUserId = currentUser?.id || currentConsultant?.id || savedUserId || consultantId;
+
+    let socket: any = null;
+    if (activeUserId) {
+      socket = io({ 
+        transports: ['websocket'],
+        auth: { userId: activeUserId }
+      });
+
+      socket.on('connect', () => {
+        setSocketConnected(true);
+      });
+
+      socket.on('disconnect', () => {
+        setSocketConnected(false);
+      });
+
+      socket.on('wallet:updated', (data) => {
+        if (savedUserId && Number(savedUserId) === Number(data.userId)) {
+          refreshUserProfile(Number(savedUserId));
+        }
+      });
+    }
 
     // Parse deep link pathname
     const path = window.location.pathname;
@@ -323,15 +338,16 @@ export default function AppPage() {
     }
 
     // Load active user session if exists
-    const savedUserId = localStorage.getItem('logged_user_id');
     if (savedUserId) {
       refreshUserProfile(parseInt(savedUserId, 10));
     }
 
     return () => {
-      socket.disconnect();
+      if (socket) {
+        socket.disconnect();
+      }
     };
-  }, []);
+  }, [currentUser?.id, currentConsultant?.id]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
