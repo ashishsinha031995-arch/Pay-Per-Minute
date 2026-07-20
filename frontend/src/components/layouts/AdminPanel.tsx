@@ -504,6 +504,28 @@ export function AdminPanel() {
   const [viewingPastSessionMessages, setViewingPastSessionMessages] = useState<any[] | null>(null);
   const [viewingPastSessionInfo, setViewingPastSessionInfo] = useState<any | null>(null);
 
+  // Auto-polling of active messages for live tracking
+  useEffect(() => {
+    if (!viewingPastSessionInfo) return;
+    const isLive = viewingPastSessionInfo.status === 'active' || viewingPastSessionInfo.status === 'pending';
+    if (!isLive) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/sessions/${viewingPastSessionInfo.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setViewingPastSessionMessages(data.messages || []);
+          setViewingPastSessionInfo(data.session);
+        }
+      } catch (err) {
+        console.error('Failed to poll live session:', err);
+      }
+    }, 2000); // Poll every 2 seconds for smooth real-time monitoring
+
+    return () => clearInterval(intervalId);
+  }, [viewingPastSessionInfo]);
+
   const downloadBulkVoiceNotes = () => {
     if (!viewingPastSessionMessages) return;
     const voiceNotes = viewingPastSessionMessages.filter((m: any) => m.text?.startsWith('[VOICE_NOTE]:'));
@@ -3990,6 +4012,26 @@ export function AdminPanel() {
                                   </div>
                                 )}
 
+                                {/* View Live Chat in Real Time */}
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch(`/api/sessions/${activeSessId}`);
+                                      if (res.ok) {
+                                        const data = await res.json();
+                                        setViewingPastSessionMessages(data.messages || []);
+                                        setViewingPastSessionInfo(data.session);
+                                      }
+                                    } catch (err) {
+                                      console.error('Failed to fetch active session chat:', err);
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-semibold tracking-wide transition-all active:scale-[0.98]"
+                                >
+                                  <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
+                                  <span>View & Monitor Live Chat</span>
+                                </button>
+
                                 {/* Admin Action overrides for current call */}
                                 {isActive ? (
                                   <button
@@ -7123,8 +7165,23 @@ export function AdminPanel() {
             
             <div className="p-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
               <div>
-                <h3 className="font-bold text-sm text-slate-100">Super Admin Transcript Audit Monitor</h3>
-                <p className="text-[10px] text-slate-400 font-mono">UUID: {viewingPastSessionInfo?.id}</p>
+                {viewingPastSessionInfo && (viewingPastSessionInfo.status === 'active' || viewingPastSessionInfo.status === 'pending') ? (
+                  <div className="space-y-0.5">
+                    <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                      </span>
+                      <span>Super Admin Live Chat Monitor</span>
+                    </h3>
+                    <p className="text-[9px] text-emerald-400 font-mono animate-pulse">● Active Tracking - Auto-refreshing real-time...</p>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-100">Super Admin Transcript Audit Monitor</h3>
+                    <p className="text-[10px] text-slate-400 font-mono">UUID: {viewingPastSessionInfo?.id}</p>
+                  </div>
+                )}
               </div>
               <div className="flex items-center space-x-2">
                 {viewingPastSessionMessages && viewingPastSessionMessages.some((m: any) => m.text?.startsWith('[VOICE_NOTE]:')) && (
