@@ -446,14 +446,14 @@ export const addConsultantReview = (req: Request, res: Response) => {
       return res.status(403).json({ error: 'You must have a valid session with this consultant to leave a review.' });
     }
 
-    // Check if already reviewed for this session
-    const existing = db.prepare('SELECT id FROM reviews WHERE session_id = ?').get(session_id);
-    if (existing) {
-      return res.status(400).json({ error: 'You have already submitted a review for this session.' });
-    }
-
     const now = new Date().toISOString();
-    db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at, session_id, is_hidden) VALUES (?, ?, ?, ?, ?, ?, 0)').run(id, user_name, rating, text || '', now, session_id);
+    // Check if already reviewed for this session - update it instead of rejecting to keep review system resilient
+    const existing = db.prepare('SELECT id FROM reviews WHERE session_id = ?').get(session_id) as { id: number } | undefined;
+    if (existing) {
+      db.prepare('UPDATE reviews SET user_name = ?, rating = ?, text = ?, created_at = ?, is_hidden = 0 WHERE id = ?').run(user_name, rating, text || '', now, existing.id);
+    } else {
+      db.prepare('INSERT INTO reviews (consultant_id, user_name, rating, text, created_at, session_id, is_hidden) VALUES (?, ?, ?, ?, ?, ?, 0)').run(id, user_name, rating, text || '', now, session_id);
+    }
 
     const ratingRow = db.prepare('SELECT AVG(rating) as avgRating FROM reviews WHERE consultant_id = ? AND (is_hidden IS NULL OR is_hidden = 0)').get(id) as { avgRating: number | null };
     if (ratingRow && ratingRow.avgRating !== null) {
