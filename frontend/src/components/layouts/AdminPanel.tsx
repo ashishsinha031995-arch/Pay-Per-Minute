@@ -1810,18 +1810,31 @@ export function AdminPanel() {
         isSidebarOpen ? 'w-64' : 'w-0 -translate-x-full md:w-16 md:translate-x-0'
       }`}>
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-850 flex items-center justify-between">
-          <div className={`flex items-center space-x-2 overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0'}`}>
-            <Landmark className="w-5 h-5 text-emerald-400" />
-            <span className="font-extrabold text-sm tracking-tight text-slate-100 whitespace-nowrap">Super Admin Portal</span>
+        {isSidebarOpen ? (
+          <div className="p-4 border-b border-slate-850 flex items-center justify-between">
+            <div className="flex items-center space-x-2 overflow-hidden">
+              <Landmark className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span className="font-extrabold text-sm tracking-tight text-slate-100 whitespace-nowrap">Super Admin Portal</span>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-1.5 rounded bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-800 shrink-0 cursor-pointer"
+              title="Hide Sidebar Menu"
+            >
+              <Menu className="w-4 h-4 text-emerald-400" />
+            </button>
           </div>
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1.5 rounded bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-800"
-          >
-            <Menu className="w-4 h-4" />
-          </button>
-        </div>
+        ) : (
+          <div className="py-4 border-b border-slate-850 flex items-center justify-center">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 rounded bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-800 flex items-center justify-center shrink-0 cursor-pointer shadow-md"
+              title="Show Sidebar Menu"
+            >
+              <Menu className="w-5 h-5 text-emerald-400" />
+            </button>
+          </div>
+        )}
 
         {/* Vertical list of features */}
         <div className="flex-1 overflow-y-auto p-3 space-y-1">
@@ -1832,7 +1845,9 @@ export function AdminPanel() {
               <button
                 key={menu.id}
                 onClick={() => setActiveTab(menu.id)}
-                className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center p-2.5 rounded-xl text-xs font-bold transition-all ${
+                  isSidebarOpen ? 'justify-between' : 'justify-center'
+                } ${
                   isActive 
                     ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/5' 
                     : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
@@ -1841,7 +1856,7 @@ export function AdminPanel() {
               >
                 <div className="flex items-center space-x-2.5 min-w-0">
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : 'text-slate-400'}`} />
-                  <span className={`truncate ${isSidebarOpen ? 'inline' : 'hidden md:hidden'}`}>{menu.label}</span>
+                  {isSidebarOpen && <span className="truncate">{menu.label}</span>}
                 </div>
                 {isSidebarOpen && menu.badge && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
@@ -1907,6 +1922,18 @@ export function AdminPanel() {
           {/* 2.1 TAB: OVERVIEW / DASHBOARD OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              
+              {/* Dashboard Tab Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-3xl">
+                <div>
+                  <h3 className="text-lg font-black text-slate-100 flex items-center space-x-2">
+                    <LayoutDashboard className="w-5 h-5 text-emerald-400" />
+                    <span>Dashboard Overview</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">Live system health, KPI performance, and transactional analytics</p>
+                </div>
+              </div>
+
               {stats.is_mongodb_connected === false && (
                 <div className="bg-amber-950/40 border border-amber-900/50 rounded-2xl p-4 text-amber-200 text-sm flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md text-left">
                   <div className="flex items-start gap-3">

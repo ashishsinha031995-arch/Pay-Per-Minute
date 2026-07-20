@@ -91,7 +91,7 @@ function getAffectedIds(sql: string, params: any[], primaryKey: string): any[] {
 
 async function syncRowidToMongo(tableName: string, rowid: number, primaryKey: string) {
   try {
-    if (!mongoose.connection.readyState) return;
+    if (mongoose.connection.readyState !== 1) return;
     const row = originalDb.prepare(`SELECT * FROM ${tableName} WHERE rowid = ?`).get(rowid) as any;
     if (!row) return;
 
@@ -109,7 +109,7 @@ async function syncRowidToMongo(tableName: string, rowid: number, primaryKey: st
 
 export async function syncIdsToMongo(tableName: string, ids: any[], primaryKey: string) {
   try {
-    if (!mongoose.connection.readyState) return;
+    if (mongoose.connection.readyState !== 1) return;
     const Model = mongoModels[tableName];
     if (!Model) return;
 
@@ -128,7 +128,7 @@ export async function syncIdsToMongo(tableName: string, ids: any[], primaryKey: 
 
 async function deleteIdsFromMongo(tableName: string, ids: any[], primaryKey: string) {
   try {
-    if (!mongoose.connection.readyState) return;
+    if (mongoose.connection.readyState !== 1) return;
     const Model = mongoModels[tableName];
     if (!Model) return;
 
@@ -139,7 +139,7 @@ async function deleteIdsFromMongo(tableName: string, ids: any[], primaryKey: str
 }
 
 async function syncFromMongoToSQLite() {
-  if (!mongoose.connection.readyState) return;
+  if (mongoose.connection.readyState !== 1) return;
   if (isSyncing) {
     console.log('[MongoDB Sync] Another sync operation is already in progress. Skipping to prevent server overload.');
     return;
@@ -323,7 +323,7 @@ async function syncFromMongoToSQLite() {
 }
 
 async function syncFromSQLiteToMongo() {
-  if (!mongoose.connection.readyState) return;
+  if (mongoose.connection.readyState !== 1) return;
   if (isSyncing) {
     console.log('[MongoDB Sync] Another sync operation is already in progress. Skipping to prevent server overload.');
     return;
