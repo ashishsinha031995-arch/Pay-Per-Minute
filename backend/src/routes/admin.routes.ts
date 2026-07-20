@@ -26,6 +26,7 @@ import {
   updateClassicAvatarsByAdmin,
   refundSessionBySuperAdmin,
   addMoneyToWallet,
+  addMoneyToWalletBulk,
   getManualWalletAdjustments,
   getAdminLiveQueues,
   updateConsultantManualFollowers,
@@ -80,6 +81,7 @@ router.delete('/plans/:id', deletePlanBySuperAdmin);
 
 // Manual wallet adjustments
 router.post('/wallet/add-money', addMoneyToWallet);
+router.post('/wallet/add-money-bulk', addMoneyToWalletBulk);
 router.get('/wallet/adjustments', getManualWalletAdjustments);
 
 // Admin Notifications management

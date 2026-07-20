@@ -61,7 +61,54 @@ export function AdminPanel() {
   const [liveQueues, setLiveQueues] = useState<any[]>([]);
   
   // Navigation states (18 sections)
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/super-secret-owner-portal/')) {
+        const tab = path.replace('/super-secret-owner-portal/', '');
+        if (tab) return tab;
+      }
+    }
+    return 'overview';
+  });
+
+  // Sync activeTab with URL on back/forward navigation (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/super-secret-owner-portal/')) {
+        const tab = path.replace('/super-secret-owner-portal/', '');
+        if (tab && tab !== activeTab) {
+          setActiveTab(tab);
+        }
+      } else if (path === '/super-secret-owner-portal') {
+        if (activeTab !== 'overview') {
+          setActiveTab('overview');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [activeTab]);
+
+  // Synchronize activeTab state to URL pathname
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const currentPath = window.location.pathname;
+    const targetPath = activeTab === 'overview'
+      ? '/super-secret-owner-portal'
+      : `/super-secret-owner-portal/${activeTab}`;
+
+    if (currentPath !== targetPath) {
+      window.history.pushState({}, '', targetPath);
+    }
+  }, [activeTab]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   // Create / Edit Consultant form states
@@ -600,6 +647,10 @@ export function AdminPanel() {
   const [totalManualUsers, setTotalManualUsers] = useState<number>(0);
   const [totalManualConsultants, setTotalManualConsultants] = useState<number>(0);
   const [submittingManualAdjust, setSubmittingManualAdjust] = useState<boolean>(false);
+  const [walletAdjustmentMode, setWalletAdjustmentMode] = useState<'single' | 'bulk_select' | 'bulk_input'>('single');
+  const [bulkWalletSelectedIds, setBulkWalletSelectedIds] = useState<number[]>([]);
+  const [bulkWalletSelectSearch, setBulkWalletSelectSearch] = useState<string>('');
+  const [bulkWalletInputText, setBulkWalletInputText] = useState<string>('');
 
   // Load backend datasets
   const loadAdminData = async (silent = false, customRefDate?: string) => {
@@ -813,10 +864,62 @@ export function AdminPanel() {
 
   const handleApplyManualAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualTargetId) {
-      setError('Please select a target ' + (manualTargetType === 'user' ? 'client' : 'expert') + '.');
-      return;
+    
+    let targetIdsToCredit: number[] = [];
+    
+    if (walletAdjustmentMode === 'single') {
+      if (!manualTargetId) {
+        setError('Please select a target ' + (manualTargetType === 'user' ? 'client' : 'expert') + '.');
+        return;
+      }
+      targetIdsToCredit = [Number(manualTargetId)];
+    } else if (walletAdjustmentMode === 'bulk_select') {
+      if (bulkWalletSelectedIds.length === 0) {
+        setError('Please select at least one ' + (manualTargetType === 'user' ? 'client' : 'expert') + ' account using checkboxes.');
+        return;
+      }
+      targetIdsToCredit = [...bulkWalletSelectedIds];
+    } else { // bulk_input
+      const rawInput = bulkWalletInputText;
+      const items = rawInput.split(/[\n,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+      
+      if (items.length === 0) {
+        setError('Please enter some comma-separated or line-separated IDs or Usernames.');
+        return;
+      }
+      
+      const matchedIds: number[] = [];
+      if (manualTargetType === 'user') {
+        items.forEach(item => {
+          const user = adminUsers.find(u => 
+            String(u.id) === item || 
+            u.username?.toLowerCase() === item || 
+            u.display_name?.toLowerCase() === item
+          );
+          if (user && !matchedIds.includes(user.id)) {
+            matchedIds.push(user.id);
+          }
+        });
+      } else {
+        items.forEach(item => {
+          const cons = consultants.find(c => 
+            String(c.id) === item || 
+            c.username?.toLowerCase() === item || 
+            c.display_name?.toLowerCase() === item
+          );
+          if (cons && !matchedIds.includes(cons.id)) {
+            matchedIds.push(cons.id);
+          }
+        });
+      }
+      
+      if (matchedIds.length === 0) {
+        setError('No valid matching accounts were found for your inputs. Check the names or IDs.');
+        return;
+      }
+      targetIdsToCredit = matchedIds;
     }
+
     const parsedAmt = parseFloat(manualAmount);
     if (isNaN(parsedAmt) || parsedAmt <= 0) {
       setError('Please enter a valid amount greater than ₹0.');
@@ -832,12 +935,12 @@ export function AdminPanel() {
       setError(null);
       setSuccessMsg(null);
 
-      const res = await fetch('/api/admin/wallet/add-money', {
+      const res = await fetch('/api/admin/wallet/add-money-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           target_type: manualTargetType,
-          target_id: Number(manualTargetId),
+          target_ids: targetIdsToCredit,
           amount: parsedAmt,
           reason: manualReason.trim()
         })
@@ -852,11 +955,13 @@ export function AdminPanel() {
       setManualAmount('');
       setManualReason('');
       setManualTargetId('');
+      setBulkWalletSelectedIds([]);
+      setBulkWalletInputText('');
       
       // Refresh datasets
       await loadAdminData(true);
 
-      setTimeout(() => setSuccessMsg(null), 4000);
+      setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -5276,6 +5381,8 @@ export function AdminPanel() {
                         onClick={() => {
                           setManualTargetType('user');
                           setManualTargetId('');
+                          setBulkWalletSelectedIds([]);
+                          setBulkWalletInputText('');
                         }}
                         className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
                           manualTargetType === 'user'
@@ -5290,6 +5397,8 @@ export function AdminPanel() {
                         onClick={() => {
                           setManualTargetType('consultant');
                           setManualTargetId('');
+                          setBulkWalletSelectedIds([]);
+                          setBulkWalletInputText('');
                         }}
                         className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
                           manualTargetType === 'consultant'
@@ -5302,33 +5411,286 @@ export function AdminPanel() {
                     </div>
                   </div>
 
-                  {/* Target Account Selector */}
+                  {/* Mode Picker (Single vs. Bulk Select vs. Bulk Input) */}
                   <div>
-                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1.5">
-                      Select {manualTargetType === 'user' ? 'Client' : 'Expert'} Account
-                    </label>
-                    <select
-                      value={manualTargetId}
-                      onChange={(e) => setManualTargetId(e.target.value)}
-                      required
-                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
-                    >
-                      <option value="">-- Choose Account --</option>
-                      {manualTargetType === 'user' ? (
-                        adminUsers.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.display_name} (ID: {u.id} • Bal: ₹{(u.wallet_balance || 0).toFixed(2)})
-                          </option>
-                        ))
-                      ) : (
-                        consultants.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.display_name} (ID: {c.id} • Bal: ₹{(c.wallet_withdrawable || 0).toFixed(2)})
-                          </option>
-                        ))
-                      )}
-                    </select>
+                    <label className="block text-[10px] font-mono text-slate-400 uppercase mb-2">Adjustment Mode</label>
+                    <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWalletAdjustmentMode('single');
+                          setBulkWalletSelectedIds([]);
+                        }}
+                        className={`py-1.5 rounded-lg text-[10px] font-bold transition-all text-center ${
+                          walletAdjustmentMode === 'single'
+                            ? 'bg-slate-800 text-slate-100 border border-slate-700 shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Single
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWalletAdjustmentMode('bulk_select');
+                          setManualTargetId('');
+                        }}
+                        className={`py-1.5 rounded-lg text-[10px] font-bold transition-all text-center ${
+                          walletAdjustmentMode === 'bulk_select'
+                            ? 'bg-slate-800 text-slate-100 border border-slate-700 shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Bulk (List)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWalletAdjustmentMode('bulk_input');
+                          setManualTargetId('');
+                          setBulkWalletSelectedIds([]);
+                        }}
+                        className={`py-1.5 rounded-lg text-[10px] font-bold transition-all text-center ${
+                          walletAdjustmentMode === 'bulk_input'
+                            ? 'bg-slate-800 text-slate-100 border border-slate-700 shadow font-black'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Bulk (Input)
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Target Account Selector */}
+                  {walletAdjustmentMode === 'single' && (
+                    <div>
+                      <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1.5">
+                        Select {manualTargetType === 'user' ? 'Client' : 'Expert'} Account
+                      </label>
+                      <select
+                        value={manualTargetId}
+                        onChange={(e) => setManualTargetId(e.target.value)}
+                        required
+                        className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                      >
+                        <option value="">-- Choose Account --</option>
+                        {manualTargetType === 'user' ? (
+                          adminUsers.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.display_name} (ID: {u.id} • Bal: ₹{(u.wallet_balance || 0).toFixed(2)})
+                            </option>
+                          ))
+                        ) : (
+                          consultants.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.display_name} (ID: {c.id} • Bal: ₹{(c.wallet_withdrawable || 0).toFixed(2)})
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  )}
+
+                  {walletAdjustmentMode === 'bulk_select' && (() => {
+                    const searchLower = bulkWalletSelectSearch.toLowerCase().trim();
+                    const filteredAccounts = (manualTargetType === 'user' ? adminUsers : consultants).filter(acc => {
+                      if (!searchLower) return true;
+                      return (
+                        acc.display_name?.toLowerCase().includes(searchLower) ||
+                        acc.username?.toLowerCase().includes(searchLower) ||
+                        String(acc.id).includes(searchLower)
+                      );
+                    });
+
+                    return (
+                      <div className="space-y-2.5">
+                        <div className="flex justify-between items-center">
+                          <label className="block text-[10px] font-mono text-slate-400 uppercase">
+                            Select Accounts ({bulkWalletSelectedIds.length} Selected)
+                          </label>
+                          <span className="text-[10px] font-mono text-slate-500">
+                            Found: {filteredAccounts.length}
+                          </span>
+                        </div>
+
+                        {/* Search Input */}
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="Search name, username, or ID..."
+                            value={bulkWalletSelectSearch}
+                            onChange={(e) => setBulkWalletSelectSearch(e.target.value)}
+                            className="bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                          />
+                          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allIds = filteredAccounts.map(a => a.id);
+                              setBulkWalletSelectedIds(prev => {
+                                const newIds = [...prev];
+                                allIds.forEach(id => {
+                                  if (!newIds.includes(id)) newIds.push(id);
+                                });
+                                return newIds;
+                              });
+                            }}
+                            className="flex-1 py-1 px-2 text-[10px] font-bold border border-slate-800 bg-slate-900 rounded-lg text-slate-300 hover:text-slate-100 transition-colors"
+                          >
+                            ✓ Select All Filtered
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBulkWalletSelectedIds([]);
+                            }}
+                            className="flex-1 py-1 px-2 text-[10px] font-bold border border-slate-800 bg-slate-900 rounded-lg text-slate-400 hover:text-rose-400 transition-colors"
+                          >
+                            ✗ Clear Selection
+                          </button>
+                        </div>
+
+                        {/* Scrollable list of checkboxes */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl max-h-[180px] overflow-y-auto p-2 space-y-1 divide-y divide-slate-850/40">
+                          {filteredAccounts.length === 0 ? (
+                            <div className="text-center py-6 text-[11px] text-slate-500">
+                              No matching accounts found.
+                            </div>
+                          ) : (
+                            filteredAccounts.map((acc) => {
+                              const isChecked = bulkWalletSelectedIds.includes(acc.id);
+                              const balance = manualTargetType === 'user' ? (acc.wallet_balance || 0) : (acc.wallet_withdrawable || 0);
+                              return (
+                                <label
+                                  key={acc.id}
+                                  className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors text-left ${
+                                    isChecked ? 'bg-emerald-500/5' : 'hover:bg-slate-850/50'
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2.5 min-w-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        setBulkWalletSelectedIds(prev => 
+                                          prev.includes(acc.id)
+                                            ? prev.filter(id => id !== acc.id)
+                                            : [...prev, acc.id]
+                                        );
+                                      }}
+                                      className="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-0 w-3.5 h-3.5 cursor-pointer shrink-0"
+                                    />
+                                    <div className="text-xs truncate">
+                                      <span className="font-bold text-slate-200">{acc.display_name}</span>
+                                      <span className="text-[10px] text-slate-500 block font-mono">
+                                        ID: #{acc.id} {acc.username ? `• @${acc.username}` : ''}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] font-mono text-emerald-400 font-bold bg-slate-950 px-1.5 py-0.5 rounded">
+                                    ₹{Number(balance).toFixed(1)}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {walletAdjustmentMode === 'bulk_input' && (() => {
+                    const rawInput = bulkWalletInputText;
+                    const parsedItems = rawInput.split(/[\n,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+
+                    const matchedList: any[] = [];
+                    const unrecognizedList: string[] = [];
+
+                    parsedItems.forEach(item => {
+                      let match: any = null;
+                      if (manualTargetType === 'user') {
+                        match = adminUsers.find(u => 
+                          String(u.id) === item || 
+                          u.username?.toLowerCase() === item || 
+                          u.display_name?.toLowerCase() === item
+                        );
+                      } else {
+                        match = consultants.find(c => 
+                          String(c.id) === item || 
+                          c.username?.toLowerCase() === item || 
+                          c.display_name?.toLowerCase() === item
+                        );
+                      }
+
+                      if (match) {
+                        if (!matchedList.some(m => m.id === match.id)) {
+                          matchedList.push(match);
+                        }
+                      } else {
+                        if (!unrecognizedList.includes(item)) {
+                          unrecognizedList.push(item);
+                        }
+                      }
+                    });
+
+                    return (
+                      <div className="space-y-2.5">
+                        <label className="block text-[10px] font-mono text-slate-400 uppercase">
+                          Enter comma or line separated IDs or Usernames
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={bulkWalletInputText}
+                          onChange={(e) => setBulkWalletInputText(e.target.value)}
+                          placeholder={manualTargetType === 'user' ? "Example: 101, rahul, 105\nOr paste lines of IDs/Usernames..." : "Example: 5, astro_aditya, 12\nOr paste lines..."}
+                          className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full leading-relaxed font-mono resize-none"
+                        />
+
+                        {/* Interactive Preview Panel */}
+                        {parsedItems.length > 0 && (
+                          <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 space-y-2 text-[11px]">
+                            {/* Matches */}
+                            <div>
+                              <span className="font-bold text-slate-400 block mb-1">
+                                Match Preview ({matchedList.length}):
+                              </span>
+                              {matchedList.length === 0 ? (
+                                <span className="text-rose-400 italic block">No matching accounts found.</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1 max-h-[80px] overflow-y-auto">
+                                  {matchedList.map(m => (
+                                    <span key={m.id} className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 font-sans px-1.5 py-0.5 rounded flex items-center gap-1 font-semibold">
+                                      {m.display_name} (#{m.id})
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Unrecognized */}
+                            {unrecognizedList.length > 0 && (
+                              <div className="border-t border-slate-850 pt-1.5">
+                                <span className="font-bold text-slate-500 block mb-1">
+                                  Not Found ({unrecognizedList.length}):
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {unrecognizedList.map((un, idx) => (
+                                    <span key={idx} className="bg-rose-500/10 text-rose-400 border border-rose-500/15 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                                      {un}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Amount Input */}
                   <div>
@@ -5376,7 +5738,11 @@ export function AdminPanel() {
                         <span>Applying...</span>
                       </>
                     ) : (
-                      <span>Add Money to {manualTargetType === 'user' ? 'Client' : 'Expert'} Wallet</span>
+                      <span>
+                        {walletAdjustmentMode === 'single'
+                          ? `Add Money to ${manualTargetType === 'user' ? 'Client' : 'Expert'} Wallet`
+                          : `Bulk Add Money to Selected ${manualTargetType === 'user' ? 'Clients' : 'Experts'}`}
+                      </span>
                     )}
                   </button>
                 </form>

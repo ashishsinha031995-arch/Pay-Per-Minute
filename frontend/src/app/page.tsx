@@ -47,7 +47,7 @@ export default function AppPage() {
   const [currentRole, setCurrentRole] = useState<'user' | 'consultant' | 'admin'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
-      if (path === '/super-secret-owner-portal') {
+      if (path === '/super-secret-owner-portal' || path.startsWith('/super-secret-owner-portal/')) {
         return 'admin';
       }
       if (path === '/consultant-portal') {
@@ -315,7 +315,7 @@ export default function AppPage() {
 
     // Parse deep link pathname
     const path = window.location.pathname;
-    if (path === '/super-secret-owner-portal') {
+    if (path === '/super-secret-owner-portal' || path.startsWith('/super-secret-owner-portal/')) {
       setCurrentRole('admin');
     } else if (path === '/consultant-portal') {
       setCurrentRole('consultant');
@@ -354,7 +354,7 @@ export default function AppPage() {
 
     const handlePopState = () => {
       const path = window.location.pathname;
-      if (path === '/super-secret-owner-portal') {
+      if (path === '/super-secret-owner-portal' || path.startsWith('/super-secret-owner-portal/')) {
         setCurrentRole('admin');
         setTargetUsername(undefined);
       } else if (path === '/consultant-portal') {

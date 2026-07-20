@@ -879,6 +879,105 @@ export const addMoneyToWallet = (req: Request, res: Response) => {
   }
 };
 
+// Manually Bulk Add Money to Users or Consultants Wallet
+export const addMoneyToWalletBulk = (req: Request, res: Response) => {
+  try {
+    const { target_type, target_ids, amount, reason } = req.body;
+
+    if (!target_type || !['user', 'consultant'].includes(target_type)) {
+      return res.status(400).json({ error: 'Invalid target type. Must be user or consultant.' });
+    }
+
+    if (!target_ids || !Array.isArray(target_ids) || target_ids.length === 0) {
+      return res.status(400).json({ error: 'Please select or provide at least one target account.' });
+    }
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Amount must be greater than zero.' });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Reason is required for manual adjustments.' });
+    }
+
+    const trimmedReason = reason.trim();
+    const now = new Date().toISOString();
+    const io = req.app.get('io');
+
+    const processedNames: string[] = [];
+
+    for (const id of target_ids) {
+      const numId = Number(id);
+      if (isNaN(numId) || numId <= 0) continue;
+
+      if (target_type === 'user') {
+        const user = db.prepare('SELECT display_name, id FROM users WHERE id = ?').get(numId) as any;
+        if (!user) continue;
+
+        processedNames.push(user.display_name);
+
+        // Update User Wallet
+        db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(numAmount, numId);
+
+        // Insert transaction into wallet_transactions
+        db.prepare(`
+          INSERT INTO wallet_transactions (user_id, type, amount, description, gst_rate, gst_amount, total_paid, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(numId, 'admin_credit', numAmount, `Special Bulk Admin Credit: ${trimmedReason}`, 0, 0, numAmount, now);
+
+        // Log manual adjustments
+        db.prepare(`
+          INSERT INTO manual_wallet_adjustments (target_type, target_id, target_name, amount, reason, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run('user', numId, user.display_name, numAmount, trimmedReason, now);
+
+        // Emit live update
+        if (io) {
+          io.emit('wallet:updated', { userId: numId, amount: numAmount });
+        }
+
+      } else {
+        const consultant = db.prepare('SELECT display_name, id FROM consultants WHERE id = ?').get(numId) as any;
+        if (!consultant) continue;
+
+        processedNames.push(consultant.display_name);
+
+        // Update Consultant Wallet
+        db.prepare(`
+          UPDATE consultants 
+          SET wallet_withdrawable = wallet_withdrawable + ?,
+              wallet_total = wallet_total + ?,
+              wallet_monthly = wallet_monthly + ?
+          WHERE id = ?
+        `).run(numAmount, numAmount, numAmount, numId);
+
+        // Log manual adjustments
+        db.prepare(`
+          INSERT INTO manual_wallet_adjustments (target_type, target_id, target_name, amount, reason, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run('consultant', numId, consultant.display_name, numAmount, trimmedReason, now);
+
+        // Emit live update
+        if (io) {
+          io.emit('wallet:updated', { consultantId: numId, amount: numAmount });
+        }
+      }
+    }
+
+    if (processedNames.length === 0) {
+      return res.status(404).json({ error: 'No matching valid accounts found to credit.' });
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully bulk credited ₹${numAmount.toFixed(2)} to ${processedNames.length} accounts: ${processedNames.join(', ')}.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Fetch list of all Manual Wallet Adjustments with summary counts
 export const getManualWalletAdjustments = (req: Request, res: Response) => {
   try {
