@@ -58,7 +58,7 @@ for (const table of tables) {
   // Define _id explicitly as Mixed and disable default ObjectId generator
   const schema = new mongoose.Schema({
     _id: mongoose.Schema.Types.Mixed
-  }, { strict: false, versionKey: false, _id: false });
+  }, { strict: false, versionKey: false, _id: false, bufferCommands: false });
   mongoSchemas[table] = schema;
   mongoModels[table] = mongoose.models[table] || mongoose.model(table, schema, table);
 }
@@ -152,20 +152,151 @@ async function syncFromMongoToSQLite() {
     originalDb.pragma('foreign_keys = OFF');
 
     for (const table of tables) {
-      const Model = mongoModels[table];
-      const docs = await Model.find({}).lean();
+      try {
+        const Model = mongoModels[table];
+        const docs = await Model.find({}).lean();
 
-      if (docs.length === 0) {
-        const countInSQLite = (originalDb.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as any).count;
-        if (countInSQLite > 0) {
-          console.log(`[MongoDB Sync] Table '${table}' is empty in MongoDB but has ${countInSQLite} rows in SQLite. Syncing SQLite to MongoDB...`);
-          const primaryKey = table === 'admin_settings' ? 'key' : 'id';
-          const rows = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
-          const docsToInsert = rows.map(row => ({
-            _id: row[primaryKey],
-            ...row
-          }));
-          if (docsToInsert.length > 0) {
+        if (docs.length === 0) {
+          const countInSQLite = (originalDb.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as any).count;
+          if (countInSQLite > 0) {
+            console.log(`[MongoDB Sync] Table '${table}' is empty in MongoDB but has ${countInSQLite} rows in SQLite. Syncing SQLite to MongoDB...`);
+            const primaryKey = table === 'admin_settings' ? 'key' : 'id';
+            const rows = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+            const docsToInsert = rows.map(row => ({
+              _id: row[primaryKey],
+              ...row
+            }));
+            if (docsToInsert.length > 0) {
+              await Model.bulkWrite(
+                docsToInsert.map(doc => ({
+                  updateOne: {
+                    filter: { _id: doc._id },
+                    update: { $set: doc },
+                    upsert: true
+                  }
+                }))
+              );
+            }
+          }
+          continue;
+        }
+
+        const primaryKey = table === 'admin_settings' ? 'key' : 'id';
+
+        // Fetch actual columns that exist in the local SQLite table schema
+        const tableInfo = originalDb.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+        const existingColumns = new Set(tableInfo.map(c => c.name));
+
+        const allKeys = Array.from(existingColumns);
+
+        const columns = allKeys.map(k => `"${k}"`).join(', ');
+        const placeholders = allKeys.map(() => '?').join(', ');
+        const insertSql = `INSERT OR REPLACE INTO ${table} (${columns}) VALUES (${placeholders})`;
+
+        const stmt = originalDb.prepare(insertSql);
+
+        const transaction = originalDb.transaction((rows: any[]) => {
+          for (const row of rows) {
+            const values = allKeys.map(k => {
+              let val = row[k];
+              if (k === primaryKey && (val === undefined || val === null)) {
+                val = row._id;
+              }
+              if (val === undefined || val === null) return null;
+              if (typeof val === 'object') return JSON.stringify(val);
+              return val;
+            });
+            stmt.run(...values);
+          }
+        });
+
+        // 1. Fetch current SQLite rows and identify any rows missing from the MongoDB sync batch BEFORE writing new entries
+        let missingInMongo: any[] = [];
+        const sqliteRowMap = new Map<string, any>();
+        try {
+          const sqliteRowsBefore = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+          for (const r of sqliteRowsBefore) {
+            sqliteRowMap.set(String(r[primaryKey]), r);
+          }
+          const mongoIds = new Set(docs.map(doc => String(doc._id || doc[primaryKey])));
+          missingInMongo = sqliteRowsBefore.filter(row => !mongoIds.has(String(row[primaryKey])));
+        } catch (e) {
+          console.error(`[MongoDB Sync] Error identifying missing rows for table '${table}' before sync:`, e);
+        }
+
+        // Merge existing SQLite data to prevent losing updates (e.g., bio, bank, KYC details, wallet balances)
+        const docsToSaveToMongo: any[] = [];
+        for (const doc of docs) {
+          const pkVal = String(doc._id || doc[primaryKey]);
+          const localRow = sqliteRowMap.get(pkVal);
+          if (localRow) {
+            let docIsMerged = false;
+            for (const k of allKeys) {
+              const mongoVal = doc[k];
+              const localVal = localRow[k];
+
+              const isMongoEmpty = mongoVal === undefined || mongoVal === null || mongoVal === '';
+              const isLocalFilled = localVal !== undefined && localVal !== null && localVal !== '';
+
+              // If MongoDB value is empty and SQLite is filled, merge it
+              if (isMongoEmpty && isLocalFilled) {
+                doc[k] = localVal;
+                docIsMerged = true;
+              }
+            }
+            if (docIsMerged) {
+              docsToSaveToMongo.push(doc);
+            }
+          }
+        }
+
+        if (docsToSaveToMongo.length > 0) {
+          console.log(`[MongoDB Sync] Merging local SQLite updates for ${docsToSaveToMongo.length} rows in table '${table}' back to MongoDB...`);
+          try {
+            await Model.bulkWrite(
+              docsToSaveToMongo.map(doc => ({
+                updateOne: {
+                  filter: { _id: doc._id || doc[primaryKey] },
+                  update: { $set: doc },
+                  upsert: true
+                }
+              }))
+            );
+          } catch (mongoErr) {
+            console.error(`[MongoDB Sync] Failed to write merged docs back to MongoDB for table '${table}':`, mongoErr);
+          }
+        }
+
+        // 2. Safely load the MongoDB records into SQLite using INSERT OR REPLACE
+        // We do NOT run DELETE FROM to prevent deleting local-only rows if MongoDB was empty or partially populated.
+        transaction(docs);
+
+        // 3. Restore and sync back any locally created/updated records that were missing from MongoDB to avoid losing any registration data
+        if (missingInMongo.length > 0) {
+          console.log(`[MongoDB Sync] Preserving and back-syncing ${missingInMongo.length} local rows of table '${table}' missing in MongoDB...`);
+          try {
+            // Restore back to SQLite
+            const reinsertTransaction = originalDb.transaction((rowsToRestore: any[]) => {
+              for (const row of rowsToRestore) {
+                const values = allKeys.map(k => {
+                  let val = row[k];
+                  if (k === primaryKey && (val === undefined || val === null)) {
+                    val = row._id;
+                  }
+                  if (val === undefined || val === null) return null;
+                  if (typeof val === 'object') return JSON.stringify(val);
+                  return val;
+                });
+                stmt.run(...values);
+              }
+            });
+            reinsertTransaction(missingInMongo);
+
+            // Sync back to MongoDB
+            const docsToInsert = missingInMongo.map(row => ({
+              _id: row[primaryKey],
+              ...row
+            }));
             await Model.bulkWrite(
               docsToInsert.map(doc => ({
                 updateOne: {
@@ -175,139 +306,12 @@ async function syncFromMongoToSQLite() {
                 }
               }))
             );
+          } catch (e) {
+            console.error(`[MongoDB Sync] Error preserving/back-syncing missing rows for table '${table}':`, e);
           }
         }
-        continue;
-      }
-
-      const primaryKey = table === 'admin_settings' ? 'key' : 'id';
-
-      // Fetch actual columns that exist in the local SQLite table schema
-      const tableInfo = originalDb.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
-      const existingColumns = new Set(tableInfo.map(c => c.name));
-
-      const allKeys = Array.from(existingColumns);
-
-      const columns = allKeys.map(k => `"${k}"`).join(', ');
-      const placeholders = allKeys.map(() => '?').join(', ');
-      const insertSql = `INSERT OR REPLACE INTO ${table} (${columns}) VALUES (${placeholders})`;
-
-      const stmt = originalDb.prepare(insertSql);
-
-      const transaction = originalDb.transaction((rows: any[]) => {
-        for (const row of rows) {
-          const values = allKeys.map(k => {
-            let val = row[k];
-            if (k === primaryKey && (val === undefined || val === null)) {
-              val = row._id;
-            }
-            if (val === undefined || val === null) return null;
-            if (typeof val === 'object') return JSON.stringify(val);
-            return val;
-          });
-          stmt.run(...values);
-        }
-      });
-
-      // 1. Fetch current SQLite rows and identify any rows missing from the MongoDB sync batch BEFORE wiping the table
-      let missingInMongo: any[] = [];
-      const sqliteRowMap = new Map<string, any>();
-      try {
-        const sqliteRowsBefore = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
-        for (const r of sqliteRowsBefore) {
-          sqliteRowMap.set(String(r[primaryKey]), r);
-        }
-        const mongoIds = new Set(docs.map(doc => String(doc._id || doc[primaryKey])));
-        missingInMongo = sqliteRowsBefore.filter(row => !mongoIds.has(String(row[primaryKey])));
-      } catch (e) {
-        console.error(`[MongoDB Sync] Error identifying missing rows for table '${table}' before sync:`, e);
-      }
-
-      // Merge existing SQLite data to prevent losing updates (e.g., bio, bank, KYC details, wallet balances)
-      const docsToSaveToMongo: any[] = [];
-      for (const doc of docs) {
-        const pkVal = String(doc._id || doc[primaryKey]);
-        const localRow = sqliteRowMap.get(pkVal);
-        if (localRow) {
-          let docIsMerged = false;
-          for (const k of allKeys) {
-            const mongoVal = doc[k];
-            const localVal = localRow[k];
-
-            const isMongoEmpty = mongoVal === undefined || mongoVal === null || mongoVal === '';
-            const isLocalFilled = localVal !== undefined && localVal !== null && localVal !== '';
-
-            // If MongoDB value is empty and SQLite is filled, merge it
-            if (isMongoEmpty && isLocalFilled) {
-              doc[k] = localVal;
-              docIsMerged = true;
-            }
-          }
-          if (docIsMerged) {
-            docsToSaveToMongo.push(doc);
-          }
-        }
-      }
-
-      if (docsToSaveToMongo.length > 0) {
-        console.log(`[MongoDB Sync] Merging local SQLite updates for ${docsToSaveToMongo.length} rows in table '${table}' back to MongoDB...`);
-        try {
-          await Model.bulkWrite(
-            docsToSaveToMongo.map(doc => ({
-              updateOne: {
-                filter: { _id: doc._id || doc[primaryKey] },
-                update: { $set: doc },
-                upsert: true
-              }
-            }))
-          );
-        } catch (mongoErr) {
-          console.error(`[MongoDB Sync] Failed to write merged docs back to MongoDB for table '${table}':`, mongoErr);
-        }
-      }
-
-      // 2. Safely wipe and load the MongoDB records into SQLite
-      originalDb.prepare(`DELETE FROM ${table}`).run();
-      transaction(docs);
-
-      // 3. Restore and sync back any locally created/updated records that were missing from MongoDB to avoid losing any registration data
-      if (missingInMongo.length > 0) {
-        console.log(`[MongoDB Sync] Preserving and back-syncing ${missingInMongo.length} local rows of table '${table}' missing in MongoDB...`);
-        try {
-          // Restore back to SQLite
-          const reinsertTransaction = originalDb.transaction((rowsToRestore: any[]) => {
-            for (const row of rowsToRestore) {
-              const values = allKeys.map(k => {
-                let val = row[k];
-                if (k === primaryKey && (val === undefined || val === null)) {
-                  val = row._id;
-                }
-                if (val === undefined || val === null) return null;
-                if (typeof val === 'object') return JSON.stringify(val);
-                return val;
-              });
-              stmt.run(...values);
-            }
-          });
-          reinsertTransaction(missingInMongo);
-
-          // Sync back to MongoDB
-          const docsToInsert = missingInMongo.map(row => ({
-            _id: row[primaryKey],
-            ...row
-          }));
-          await Model.bulkWrite(
-            docsToInsert.map(doc => ({
-              updateOne: {
-                filter: { _id: doc._id },
-                update: { $set: doc },
-                upsert: true
-              }
-            }))
-          );
-        } catch (e) {
-          console.error(`[MongoDB Sync] Error preserving/back-syncing missing rows for table '${table}':`, e);
-        }
+      } catch (tableErr) {
+        console.error(`[MongoDB Sync] Critical error during table sync for '${table}':`, tableErr);
       }
     }
 
@@ -327,14 +331,21 @@ async function syncFromSQLiteToMongo() {
   isSyncing = true;
 
   try {
-    console.log('[MongoDB] MongoDB is empty. Seeding MongoDB with initial database data...');
+    console.log('[MongoDB] Syncing local SQLite data to MongoDB non-destructively...');
 
     for (const table of tables) {
       const Model = mongoModels[table];
-      await Model.deleteMany({});
-
       const primaryKey = table === 'admin_settings' ? 'key' : 'id';
       const rows = originalDb.prepare(`SELECT * FROM ${table}`).all() as any[];
+
+      // Safely delete only documents in MongoDB that are NOT present in SQLite anymore (avoids total data loss on failure)
+      const localIds = rows.map(row => row[primaryKey]);
+      if (localIds.length > 0) {
+        await Model.deleteMany({ _id: { $nin: localIds } });
+      } else {
+        await Model.deleteMany({});
+      }
+
       if (rows.length === 0) continue;
 
       const docs = rows.map(row => ({
@@ -354,7 +365,9 @@ async function syncFromSQLiteToMongo() {
         );
       }
     }
-    console.log('[MongoDB] Database seeding to MongoDB completed successfully.');
+    console.log('[MongoDB] Non-destructive database sync to MongoDB completed successfully.');
+  } catch (err: any) {
+    console.error('[MongoDB Sync] Error syncing local SQLite to MongoDB:', err);
   } finally {
     isSyncing = false;
   }

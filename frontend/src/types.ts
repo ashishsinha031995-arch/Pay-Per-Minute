@@ -119,4 +119,6 @@ export interface AdminStats {
   salaryCutoffDay?: number;
   salaryPayoutDay?: number;
   plansStats?: any[];
+  is_mongodb_connected?: boolean;
+  mongodb_status_message?: string;
 }

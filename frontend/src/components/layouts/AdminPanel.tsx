@@ -1769,6 +1769,25 @@ export function AdminPanel() {
           {/* 2.1 TAB: OVERVIEW / DASHBOARD OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {stats.is_mongodb_connected === false && (
+                <div className="bg-amber-950/40 border border-amber-900/50 rounded-2xl p-4 text-amber-200 text-sm flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md text-left">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">⚠️</span>
+                    <div>
+                      <p className="font-bold text-amber-300">Database Running in Ephemeral Mode (MongoDB Atlas Disconnected)</p>
+                      <p className="text-xs text-amber-400/90 mt-1">
+                        The server was unable to connect to your MongoDB Atlas cluster. All user accounts, chat sessions, and settings are currently stored in a local temporary SQLite cache. <strong>Any changes you make now will be permanently deleted when the server automatically restarts or redeploys!</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/60 border border-amber-900/30 rounded-xl p-3 text-xs md:max-w-xs shrink-0 space-y-1 font-mono text-slate-300">
+                    <p className="font-bold text-amber-300 text-[10px] uppercase tracking-wide">💡 How to fix:</p>
+                    <p>1. Check if <code className="bg-slate-950 px-1 rounded text-amber-200">MONGODB_URI</code> is correctly configured in your settings.</p>
+                    <p>2. Whitelist <code className="bg-slate-950 px-1 rounded text-amber-200">0.0.0.0/0</code> (Allow Access From Anywhere) in MongoDB Atlas firewall settings to let Cloud Run connect.</p>
+                  </div>
+                </div>
+              )}
+
               {/* KPI Cards Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-sm relative overflow-hidden">

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { db, logWalletTransaction, calculateConsultantLoginHours, syncIdsToMongo } from '../config/database.js';
 import { getSalaryCycleInfo } from '../utils/salary.js';
 
@@ -40,6 +41,16 @@ export const getAdminDashboardStats = (req: Request, res: Response) => {
       };
     });
 
+    const isMongoConnected = mongoose.connection.readyState === 1;
+    let mongoStatusMsg = 'Connected to MongoDB Atlas ✅';
+    if (mongoose.connection.readyState === 0) {
+      mongoStatusMsg = 'Disconnected from MongoDB ❌. All changes are temporary (ephemeral SQLite fallback) and will be lost on server restart!';
+    } else if (mongoose.connection.readyState === 2) {
+      mongoStatusMsg = 'Connecting to MongoDB... ⏳';
+    } else if (mongoose.connection.readyState === 3) {
+      mongoStatusMsg = 'Disconnecting from MongoDB...';
+    }
+
     res.json({
       totalRevenue: totalRevRow.total || 0,
       totalSessions: totalSessionsRow.count,
@@ -49,7 +60,9 @@ export const getAdminDashboardStats = (req: Request, res: Response) => {
       commissionRate: parseFloat(commRateRow.value || '20'),
       salaryCutoffDay: cutoffDayRow ? parseInt(cutoffDayRow.value) : 25,
       salaryPayoutDay: payoutDayRow ? parseInt(payoutDayRow.value) : 7,
-      plansStats: plansWithStats
+      plansStats: plansWithStats,
+      is_mongodb_connected: isMongoConnected,
+      mongodb_status_message: mongoStatusMsg
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
