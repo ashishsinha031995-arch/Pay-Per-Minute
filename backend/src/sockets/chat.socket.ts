@@ -60,12 +60,34 @@ export function handleChatSocket(io: Server, socket: Socket) {
         socket.to(room).emit('partner:left');
       }
     }
+
+    try {
+      const userId = socket.data.userId;
+      if (userId) {
+        // Check if the authenticated socket belongs to a consultant
+        const consultant = db.prepare('SELECT id FROM consultants WHERE id = ?').get(userId) as any;
+        if (consultant) {
+          db.prepare('UPDATE consultants SET is_online = 0 WHERE id = ?').run(userId);
+          io.emit('consultant:status_change', { consultant_id: userId, is_online: 0 });
+          console.log(`[Socket Server] Consultant ${userId} disconnecting. Set is_online = 0 and broadcasted status change.`);
+        }
+      }
+    } catch (err) {
+      console.error('[Socket Server] Error during consultant disconnect offline handling:', err);
+    }
   });
 
   // 2. Real-time Messages exchange
   socket.on('send:message', ({ session_id, sender_type, sender_name, text, reply_to_id, reply_to_text, reply_to_sender }) => {
     console.log(`[Socket Server] Received send:message from ${sender_name} (${sender_type}) in session ${session_id}: "${text}"`);
     try {
+      // Sender Validation
+      if (!socket.rooms.has(session_id)) {
+        console.warn(`[Socket Security Warning] Unauthorized send:message emission! Socket ${socket.id} (User ID: ${socket.data.userId}) attempted to emit message to session ${session_id} but is not active in this session room.`);
+        socket.emit('error:msg', 'Unauthorized: You are not active in this session room.');
+        return;
+      }
+
       // Ensure session is active or pending before allowing messages
       let sess = db.prepare('SELECT * FROM sessions WHERE id = ?').get(session_id) as any;
       if (!sess) {
