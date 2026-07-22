@@ -111,6 +111,8 @@ export interface Review {
 
 export interface AdminStats {
   totalRevenue: number;
+  todayRevenue?: number;
+  monthlyRevenue?: number;
   totalSessions: number;
   totalConsultants: number;
   totalCommission: number;

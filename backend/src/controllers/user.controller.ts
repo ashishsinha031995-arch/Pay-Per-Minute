@@ -211,9 +211,10 @@ export const updateConsultantProfile = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Consultant not found' });
     }
 
-    if (phone !== undefined && phone !== null && phone.trim() !== '') {
-      const cleanPhone = phone.trim();
-      if (existingConsultant.phone && existingConsultant.phone !== cleanPhone) {
+    if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+      const cleanPhone = String(phone).trim();
+      const existingPhone = existingConsultant.phone ? String(existingConsultant.phone).trim() : '';
+      if (existingPhone && existingPhone !== cleanPhone) {
         return res.status(400).json({ error: 'Phone number change nahi kiya ja sakta. (Phone number cannot be changed.)' });
       }
     }
@@ -577,9 +578,10 @@ export const updateUserProfile = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Display Name is required' });
     }
 
-    if (phone !== undefined && phone !== null && phone.trim() !== '') {
-      const cleanPhone = phone.trim();
-      if (existingUser.phone && existingUser.phone !== cleanPhone) {
+    if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+      const cleanPhone = String(phone).trim();
+      const existingPhone = existingUser.phone ? String(existingUser.phone).trim() : '';
+      if (existingPhone && existingPhone !== cleanPhone) {
         return res.status(400).json({ error: 'Phone number change nahi kiya ja sakta. (Phone number cannot be changed.)' });
       }
     }

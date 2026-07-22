@@ -12,7 +12,8 @@ import {
 import { 
   revenueTrendData, growthTrendData, packageSalesData, 
   mockAuditLogs, mockSupportTickets, initialCoupons, mockBlogPages, systemRolesList,
-  dailyRevenueTrendData, weeklyRevenueTrendData, dailySubscriptionSalesData
+  dailyRevenueTrendData, weeklyRevenueTrendData, dailySubscriptionSalesData,
+  DailyRevenueData, WeeklyRevenueData
 } from './AdminMockData';
 import { compressImageBase64 } from '../../utils/helpers';
 
@@ -46,7 +47,96 @@ export function DashboardGraphs({ consultants = [], sessions = [], users = [] }:
   const [dataTableTab, setDataTableTab] = useState<'revenue' | 'subscriptions'>('revenue');
 
   // --- REVENUE FILTERING LOGIC ---
-  const rawRevData = revenueTimeframe === 'daily' ? dailyRevenueTrendData : weeklyRevenueTrendData;
+  const dynamicDailyRevenueTrend: DailyRevenueData[] = React.useMemo(() => {
+    const map = new Map<string, { date: string; revenue: number; commission: number; payouts: number; transactionsCount: number }>();
+    
+    // Sort sessions chronologically by default
+    const sortedSessions = [...sessions].sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    
+    sortedSessions.forEach((s: any) => {
+      if (s.status === 'completed' && s.created_at) {
+        // Extract YYYY-MM-DD
+        const dateStr = s.created_at.slice(0, 10);
+        const rev = Number(s.total_paid || 0);
+        const comm = Number(s.commission_amount || 0);
+        const pay = Number(s.consultant_earnings || 0);
+        
+        const existing = map.get(dateStr);
+        if (existing) {
+          existing.revenue += rev;
+          existing.commission += comm;
+          existing.payouts += pay;
+          existing.transactionsCount += 1;
+        } else {
+          map.set(dateStr, {
+            date: dateStr,
+            revenue: rev,
+            commission: comm,
+            payouts: pay,
+            transactionsCount: 1
+          });
+        }
+      }
+    });
+    
+    if (map.size === 0) {
+      return dailyRevenueTrendData;
+    }
+    
+    return Array.from(map.values());
+  }, [sessions]);
+
+  const dynamicWeeklyRevenueTrend: WeeklyRevenueData[] = React.useMemo(() => {
+    const map = new Map<string, { week: string; revenue: number; commission: number; payouts: number; transactionsCount: number }>();
+    
+    // Group sessions by week
+    const sortedSessions = [...sessions].sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    
+    sortedSessions.forEach((s: any) => {
+      if (s.status === 'completed' && s.created_at) {
+        const d = new Date(s.created_at);
+        const day = d.getDay();
+        // Calculate Monday of the week
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d.setDate(diff));
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        
+        const formatOption: Intl.DateTimeFormatOptions = { month: 'short', day: '2-digit' };
+        const mondayStr = monday.toLocaleDateString('en-US', formatOption);
+        const sundayStr = sunday.toLocaleDateString('en-US', formatOption);
+        const weekLabel = `Wk ${mondayStr} - ${sundayStr}`;
+        
+        const rev = Number(s.total_paid || 0);
+        const comm = Number(s.commission_amount || 0);
+        const pay = Number(s.consultant_earnings || 0);
+        
+        const existing = map.get(weekLabel);
+        if (existing) {
+          existing.revenue += rev;
+          existing.commission += comm;
+          existing.payouts += pay;
+          existing.transactionsCount += 1;
+        } else {
+          map.set(weekLabel, {
+            week: weekLabel,
+            revenue: rev,
+            commission: comm,
+            payouts: pay,
+            transactionsCount: 1
+          });
+        }
+      }
+    });
+    
+    if (map.size === 0) {
+      return weeklyRevenueTrendData;
+    }
+    
+    return Array.from(map.values());
+  }, [sessions]);
+
+  const rawRevData = revenueTimeframe === 'daily' ? dynamicDailyRevenueTrend : dynamicWeeklyRevenueTrend;
   
   const filteredRevData = rawRevData.filter((item, index) => {
     // A. Apply Date Range Filter

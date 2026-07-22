@@ -4411,7 +4411,30 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                   )}
                 </button>
 
-                <div className="border-t border-slate-800/80 pt-4 mt-4">
+                <div className="border-t border-slate-800/80 pt-4 mt-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onInstallApp?.()}
+                      className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-[11px] font-bold text-slate-950 rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-500/10 flex-1 justify-center"
+                      title="Download CallMint Web App"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      <span>Download App</span>
+                    </button>
+
+                    <button
+                      onClick={() => onToggleTheme?.()}
+                      className="flex items-center justify-center p-2 bg-slate-950 hover:bg-slate-850 rounded-xl border border-slate-800 text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 h-8 w-8 shrink-0"
+                      title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                    >
+                      {theme === 'dark' ? (
+                        <Sun className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <Moon className="w-3.5 h-3.5 text-sky-400" />
+                      )}
+                    </button>
+                  </div>
+
                   <button
                     onClick={triggerLogout}
                     className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition-all border border-rose-500/15"

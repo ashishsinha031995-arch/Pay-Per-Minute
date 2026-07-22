@@ -47,6 +47,8 @@ const formatFollowerNumber = (num: number): string => {
 export function AdminPanel() {
   const [stats, setStats] = useState<AdminStats>({
     totalRevenue: 0,
+    todayRevenue: 0,
+    monthlyRevenue: 0,
     totalSessions: 0,
     totalConsultants: 0,
     totalCommission: 0,
@@ -598,6 +600,8 @@ export function AdminPanel() {
   const [filterConsStatus, setFilterConsStatus] = useState('all');
   const [filterConsRate, setFilterConsRate] = useState('all');
   const [filterConsHours, setFilterConsHours] = useState('all');
+  const [filterConsStartDate, setFilterConsStartDate] = useState('');
+  const [filterConsEndDate, setFilterConsEndDate] = useState('');
 
   // Real-time login logs state
   const [loginLogs, setLoginLogs] = useState<any[]>([]);
@@ -609,6 +613,8 @@ export function AdminPanel() {
   const [filterUsrStatus, setFilterUsrStatus] = useState('all');
   const [filterUsrSpend, setFilterUsrSpend] = useState('all');
   const [filterUsrGender, setFilterUsrGender] = useState('all');
+  const [filterUsrStartDate, setFilterUsrStartDate] = useState('');
+  const [filterUsrEndDate, setFilterUsrEndDate] = useState('');
 
   // Search & Filter state for Sessions ledger
   const [searchSess, setSearchSess] = useState('');
@@ -1605,6 +1611,24 @@ export function AdminPanel() {
       if (filterConsHours === 'monthly_20' && hours.monthly < 20) return false;
     }
 
+    if (filterConsStartDate || filterConsEndDate) {
+      if (!c.created_at) return false;
+      const dateVal = new Date(c.created_at);
+      if (isNaN(dateVal.getTime())) return false;
+
+      if (filterConsStartDate) {
+        const start = new Date(filterConsStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (dateVal < start) return false;
+      }
+
+      if (filterConsEndDate) {
+        const end = new Date(filterConsEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (dateVal > end) return false;
+      }
+    }
+
     return true;
   });
 
@@ -1629,6 +1653,24 @@ export function AdminPanel() {
     }
 
     if (filterUsrGender !== 'all' && (u.gender || '').toLowerCase() !== filterUsrGender.toLowerCase()) return false;
+
+    if (filterUsrStartDate || filterUsrEndDate) {
+      if (!u.created_at) return false;
+      const dateVal = new Date(u.created_at);
+      if (isNaN(dateVal.getTime())) return false;
+
+      if (filterUsrStartDate) {
+        const start = new Date(filterUsrStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (dateVal < start) return false;
+      }
+
+      if (filterUsrEndDate) {
+        const end = new Date(filterUsrEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (dateVal > end) return false;
+      }
+    }
 
     return true;
   });
@@ -1958,17 +2000,21 @@ export function AdminPanel() {
                 <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-sm relative overflow-hidden">
                   <p className="text-[10px] font-mono text-slate-400 uppercase">Total Revenue</p>
                   <p className="text-2xl font-black mt-1 text-slate-100">₹{stats.totalRevenue.toFixed(2)}</p>
-                  <span className="text-[9px] text-emerald-400 font-mono">+12.4% today</span>
+                  <span className="text-[9px] text-emerald-400 font-mono">Real-time ledger value</span>
                 </div>
                 <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-sm relative overflow-hidden">
                   <p className="text-[10px] font-mono text-slate-400 uppercase">Today's Revenue</p>
-                  <p className="text-2xl font-black mt-1 text-slate-100">₹{(stats.totalRevenue * 0.15).toFixed(2)}</p>
-                  <span className="text-[9px] text-emerald-400 font-mono">15.0% volume</span>
+                  <p className="text-2xl font-black mt-1 text-slate-100">₹{(stats.todayRevenue || 0).toFixed(2)}</p>
+                  <span className="text-[9px] text-emerald-400 font-mono">
+                    {stats.totalRevenue && stats.todayRevenue ? ((stats.todayRevenue / stats.totalRevenue) * 100).toFixed(1) : '0.0'}% of total
+                  </span>
                 </div>
                 <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-sm relative overflow-hidden">
                   <p className="text-[10px] font-mono text-slate-400 uppercase">Monthly Revenue</p>
-                  <p className="text-2xl font-black mt-1 text-slate-100">₹{(stats.totalRevenue * 0.85).toFixed(2)}</p>
-                  <span className="text-[9px] text-slate-400 font-mono">85.0% volume</span>
+                  <p className="text-2xl font-black mt-1 text-slate-100">₹{(stats.monthlyRevenue || 0).toFixed(2)}</p>
+                  <span className="text-[9px] text-emerald-400 font-mono">
+                    {stats.totalRevenue && stats.monthlyRevenue ? ((stats.monthlyRevenue / stats.totalRevenue) * 100).toFixed(1) : '100.0'}% of total
+                  </span>
                 </div>
                 <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-sm relative overflow-hidden">
                   <p className="text-[10px] font-mono text-slate-400 uppercase">Platform Share</p>
@@ -2293,7 +2339,7 @@ export function AdminPanel() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-100">Consultant Management Panel</h3>
-                  <p className="text-xs text-slate-400 font-mono">Audit credentials, call rates, assigned categories, and wallet balances</p>
+                  <p className="text-xs text-slate-400 font-mono">Showing {filteredConsultants.length} of {consultants.length} experts matched by active filters</p>
                 </div>
                 <button
                   onClick={() => {
@@ -2386,6 +2432,37 @@ export function AdminPanel() {
                     <option value="weekly_5">📈 Weekly Peak (Hours &ge; 5h)</option>
                     <option value="monthly_20">🏆 Monthly Legend (Hours &ge; 20h)</option>
                   </select>
+
+                  {/* Filter 5: Registration Date Range */}
+                  <div className="flex flex-wrap items-center gap-1.5 border border-slate-800 bg-slate-950 px-3 py-1.5 rounded-xl text-slate-300">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-[10px] uppercase font-mono font-bold text-slate-400 mr-1">Join Date:</span>
+                    <input
+                      type="date"
+                      value={filterConsStartDate}
+                      onChange={e => setFilterConsStartDate(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-[120px]"
+                    />
+                    <span className="text-slate-500 text-xs">-</span>
+                    <input
+                      type="date"
+                      value={filterConsEndDate}
+                      onChange={e => setFilterConsEndDate(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-[120px]"
+                    />
+                    {(filterConsStartDate || filterConsEndDate) && (
+                      <button
+                        onClick={() => {
+                          setFilterConsStartDate('');
+                          setFilterConsEndDate('');
+                        }}
+                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-rose-400 hover:text-rose-300 px-2 py-1 rounded font-mono font-black"
+                        title="Reset Date Range"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -4433,7 +4510,7 @@ export function AdminPanel() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-100">Registered Client Accounts</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">Suspend user accounts or verify lifetime recharges</p>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">Showing {filteredUsers.length} of {adminUsers.length} clients matched by active filters</p>
                 </div>
               </div>
 
@@ -4486,6 +4563,37 @@ export function AdminPanel() {
                     <option value="female">Female</option>
                     <option value="other">Other</option>
                   </select>
+
+                  {/* Filter 4: Registration Date Range */}
+                  <div className="flex flex-wrap items-center gap-1.5 border border-slate-800 bg-slate-900/60 px-3 py-1.5 rounded-xl text-slate-300">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-[10px] uppercase font-mono font-bold text-slate-400 mr-1">Join Date:</span>
+                    <input
+                      type="date"
+                      value={filterUsrStartDate}
+                      onChange={e => setFilterUsrStartDate(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-[120px]"
+                    />
+                    <span className="text-slate-500 text-xs">-</span>
+                    <input
+                      type="date"
+                      value={filterUsrEndDate}
+                      onChange={e => setFilterUsrEndDate(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-[120px]"
+                    />
+                    {(filterUsrStartDate || filterUsrEndDate) && (
+                      <button
+                        onClick={() => {
+                          setFilterUsrStartDate('');
+                          setFilterUsrEndDate('');
+                        }}
+                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-rose-400 hover:text-rose-300 px-2 py-1 rounded font-mono font-black"
+                        title="Reset Date Range"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Refresh Ledger Button */}
@@ -7162,8 +7270,8 @@ export function AdminPanel() {
       {/* Edit User Profile Modal */}
       {showUserModal && editingUser && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-4 my-8 shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-4 my-8 shadow-2xl text-left animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
               <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-sky-400" />
                 <span>Modify Client Profile & Wallet</span>
@@ -7176,7 +7284,7 @@ export function AdminPanel() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveUserEdit} className="space-y-4">
+            <form onSubmit={handleSaveUserEdit} className="space-y-4 overflow-y-auto pr-2 flex-1 max-h-[65vh]">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] text-slate-400 font-mono mb-1">Display Name *</label>

@@ -37,6 +37,7 @@ export function getSalaryCycleInfo(consultantId: number, refDate: Date = new Dat
     }
 
     const sessions = db.prepare("SELECT consultant_earnings, created_at FROM sessions WHERE consultant_id = ? AND status = 'completed'").all(consultantId) as any[];
+    const adjustments = db.prepare("SELECT amount, created_at FROM manual_wallet_adjustments WHERE target_type = 'consultant' AND target_id = ?").all(consultantId) as any[];
 
     let prevCycleEarnings = 0;
     let currentCycleEarnings = 0;
@@ -51,8 +52,20 @@ export function getSalaryCycleInfo(consultantId: number, refDate: Date = new Dat
       }
     }
 
-    let payoutMonthIndex = currentDay > cutoffDay ? currentMonth + 1 : currentMonth;
-    const payoutDate = new Date(currentYear, payoutMonthIndex, payoutDay);
+    for (const adj of adjustments) {
+      const adjDate = new Date(adj.created_at);
+      if (adjDate >= prevCycleStart && adjDate <= prevCycleEnd) {
+        prevCycleEarnings += adj.amount;
+      }
+      if (adjDate >= currentCycleStart && adjDate <= currentCycleEnd) {
+        currentCycleEarnings += adj.amount;
+      }
+    }
+
+    const targetPayoutMonthIndex = currentMonth + 1;
+    const payoutYear = currentYear + Math.floor(targetPayoutMonthIndex / 12);
+    const payoutMonth = targetPayoutMonthIndex % 12;
+    const payoutDate = new Date(payoutYear, payoutMonth, payoutDay);
     
     return {
       cutoffDay,
@@ -140,8 +153,8 @@ export function recalculateConsultantWallet(consultantId: number) {
       }
     }
 
-    // 5. If consultant has real completed sessions, we set their wallet columns directly to the absolute math!
-    if (actualCompletedSessionsCount > 0) {
+    // 5. If consultant has real completed sessions or manual adjustments, we set their wallet columns directly to the absolute math!
+    if (actualCompletedSessionsCount > 0 || totalAdjustments !== 0) {
       const newLifetimeRevenue = actualLifetimeRevenue;
       const newWalletTotal = actualLifetimeRevenue + totalAdjustments;
       const newWalletWithdrawable = Math.max(0, newWalletTotal - totalPayouts);
@@ -167,12 +180,20 @@ export function recalculateConsultantWallet(consultantId: number) {
     const todayIST = istFormatter.format(now);
 
     const completedSessions = db.prepare("SELECT consultant_earnings, created_at FROM sessions WHERE consultant_id = ? AND status = 'completed'").all(consultantId) as any[];
+    const adjustments = db.prepare("SELECT amount, created_at FROM manual_wallet_adjustments WHERE target_type = 'consultant' AND target_id = ?").all(consultantId) as any[];
     
     let wallet_today = 0;
     for (const s of completedSessions) {
       const sDate = new Date(s.created_at);
       if (istFormatter.format(sDate) === todayIST) {
         wallet_today += s.consultant_earnings;
+      }
+    }
+
+    for (const adj of adjustments) {
+      const adjDate = new Date(adj.created_at);
+      if (istFormatter.format(adjDate) === todayIST) {
+        wallet_today += adj.amount;
       }
     }
 

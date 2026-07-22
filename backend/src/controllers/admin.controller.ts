@@ -6,7 +6,7 @@ import { getSalaryCycleInfo } from '../utils/salary.js';
 export const getAdminDashboardStats = (req: Request, res: Response) => {
   try {
     const totalRevRow = db.prepare("SELECT SUM(total_paid) as total FROM sessions WHERE status = 'completed'").get() as { total: number | null };
-    const totalSessionsRow = db.prepare('SELECT COUNT(*) as count FROM sessions').get() as { count: number };
+    const completedSessionsRow = db.prepare("SELECT COUNT(*) as count FROM sessions WHERE status = 'completed'").get() as { count: number };
     const totalConsRow = db.prepare('SELECT COUNT(*) as count FROM consultants').get() as { count: number };
     const totalCommissionRow = db.prepare("SELECT SUM(commission_amount) as total FROM sessions WHERE status = 'completed'").get() as { total: number | null };
     const commRateRow = db.prepare("SELECT value FROM admin_settings WHERE key = 'commission_percentage'").get() as { value: string };
@@ -15,6 +15,13 @@ export const getAdminDashboardStats = (req: Request, res: Response) => {
     const payoutDayRow = db.prepare("SELECT value FROM admin_settings WHERE key = 'salary_payout_day'").get() as { value: string } | undefined;
 
     const totalRefundedRow = db.prepare("SELECT SUM(refunded_amount) as total FROM sessions").get() as { total: number | null };
+
+    // Calculate real today and monthly revenue from completed sessions
+    const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const monthStr = new Date().toISOString().slice(0, 7);   // YYYY-MM
+    
+    const todayRevRow = db.prepare("SELECT SUM(total_paid) as total FROM sessions WHERE status = 'completed' AND created_at LIKE ?").get(todayStr + '%') as { total: number | null };
+    const monthRevRow = db.prepare("SELECT SUM(total_paid) as total FROM sessions WHERE status = 'completed' AND created_at LIKE ?").get(monthStr + '%') as { total: number | null };
 
     // Fetch all plans dynamically and calculate enrolment + earnings metrics
     const plansList = db.prepare('SELECT * FROM plans').all() as any[];
@@ -53,7 +60,9 @@ export const getAdminDashboardStats = (req: Request, res: Response) => {
 
     res.json({
       totalRevenue: totalRevRow.total || 0,
-      totalSessions: totalSessionsRow.count,
+      todayRevenue: todayRevRow.total || 0,
+      monthlyRevenue: monthRevRow.total || 0,
+      totalSessions: completedSessionsRow.count,
       totalConsultants: totalConsRow.count,
       totalCommission: totalCommissionRow.total || 0,
       totalRefunded: totalRefundedRow.total || 0,

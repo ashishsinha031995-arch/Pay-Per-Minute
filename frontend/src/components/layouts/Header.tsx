@@ -147,6 +147,19 @@ export function Header({ currentRole, onChangeRole, socketConnected, currentUser
               </button>
             ) : null}
 
+            {/* Universal Desktop Theme Toggle */}
+            <button
+              onClick={onToggleTheme}
+              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-xl bg-slate-950 hover:bg-slate-850 border border-slate-800 text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
+              title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-sky-400" />
+              )}
+            </button>
+
             {/* Desktop-only Role Switcher */}
             {currentRole === 'admin' && (
               <div className="hidden lg:flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
