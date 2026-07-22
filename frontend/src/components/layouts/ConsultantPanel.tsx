@@ -312,6 +312,7 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
 
   // Profile Form States
   const [photoUrl, setPhotoUrl] = useState('');
+  const [classicAvatars, setClassicAvatars] = useState<string[]>([]);
   const [consultantGender, setConsultantGender] = useState('Male');
   const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
   const [editorImageBase64, setEditorImageBase64] = useState<string | undefined>(undefined);
@@ -1429,7 +1430,19 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
         }
       }
     };
+    const fetchClassicAvatars = async () => {
+      try {
+        const res = await fetch('/api/settings/avatars');
+        if (res.ok) {
+          const data = await res.json();
+          setClassicAvatars(data);
+        }
+      } catch (err: any) {
+        console.error('Failed to load classic avatars:', err);
+      }
+    };
     fetchPlans();
+    fetchClassicAvatars();
 
     // Check if consultant already logged in during active session
     const saved = localStorage.getItem('consultant_session');
@@ -6330,6 +6343,26 @@ export function ConsultantPanel({ onSelectSession, onNavigateToUserView, activeS
                             <div>
                               <span className="text-[10px] text-slate-400 block font-semibold">Live Profile Picture Preview</span>
                               <span className="text-[9px] text-emerald-400 font-mono block truncate max-w-[200px]">{photoUrl}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Classic Static Avatars presets */}
+                        {classicAvatars.length > 0 && (
+                          <div className="pt-2">
+                            <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-wider mb-1.5">Or Select From Classic Static Avatars</span>
+                            <div className="flex flex-wrap gap-2">
+                              {classicAvatars.map((preset, idx) => (
+                                <button
+                                  key={`classic-${idx}`}
+                                  type="button"
+                                  onClick={() => setPhotoUrl(preset)}
+                                  className={`w-9 h-9 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 active:scale-95 ${photoUrl === preset ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-800'}`}
+                                  title="Click to select avatar"
+                                >
+                                  <img src={preset} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                </button>
+                              ))}
                             </div>
                           </div>
                         )}

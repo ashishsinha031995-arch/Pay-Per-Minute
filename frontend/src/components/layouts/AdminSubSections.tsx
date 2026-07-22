@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Edit, Check, X, Shield, Lock, Trash, HelpCircle, 
   Send, Bell, Mail, Phone, MessageSquare, AlertCircle, RefreshCw, Sparkles, AlertTriangle,
   Filter, Calendar, TrendingUp, CreditCard, ChevronRight, ShoppingCart, Percent, Layers, Landmark, Info,
-  Award, Search, Users, Wallet, Coins, Eye, Clock, CheckCircle, Upload, Image
+  Award, Search, Users, Wallet, Coins, Eye, Clock, CheckCircle, Upload, Image, Save
 } from 'lucide-react';
 import { 
   revenueTrendData, growthTrendData, packageSalesData, 
@@ -2905,12 +2905,23 @@ export function SettingsPanel() {
 
           {/* Classic Static Avatars management section */}
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-            <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
-              <Users className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Classic Static Avatars Management</h3>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center space-x-2">
+                <Users className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-mono text-slate-300 uppercase tracking-wider">Classic Static Avatars Management</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSaveAvatarsList(avatarsList)}
+                disabled={savingAvatars || uploadingAvatarFile}
+                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shrink-0 shadow-sm active:scale-95"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{savingAvatars ? 'Saving...' : 'Save Avatars List'}</span>
+              </button>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Super Admin panel se classic static avatars add aur delete karein. Aap local computer se direct photo upload kar sakte hain ya custom URL link paste kar sakte hain.
+              Super Admin panel se classic static avatars upload, add aur delete karein. Local computer se image file choose karke upload karein ya direct HTTP/HTTPS image link enter karein. Uploded/added avatars tab tak save rahenge jab tak aap explicitly delete na karein, aur sabhi users & consultants profile settings me inko select kar sakenge.
             </p>
 
             {/* Error & Success Feedback banners (Prevents blocking browser alerts in iFrame) */}
@@ -2933,13 +2944,16 @@ export function SettingsPanel() {
               <div className="space-y-4">
                 {/* List of current avatars */}
                 <div>
-                  <span className="block text-[10px] text-slate-400 font-mono mb-2 uppercase tracking-wider">Current Live Avatars ({avatarsList.length})</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="block text-[10px] text-slate-400 font-mono uppercase tracking-wider">Current Live Avatars ({avatarsList.length})</span>
+                    <span className="text-[10px] text-slate-500 italic">Hover image and click Red Trash icon to remove</span>
+                  </div>
                   {avatarsList.length === 0 ? (
                     <div className="bg-slate-950/40 border border-dashed border-slate-800/80 p-6 rounded-xl text-center text-xs text-slate-500">
                       No classic avatars registered. Please upload or add at least one avatar.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 bg-slate-950/55 p-3 rounded-xl border border-slate-800/60">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 bg-slate-950/55 p-3 rounded-xl border border-slate-800/60 max-h-60 overflow-y-auto">
                       {avatarsList.map((avatarUrl, index) => (
                         <div key={index} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-800 bg-slate-900">
                           <img src={avatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -2974,7 +2988,7 @@ export function SettingsPanel() {
                       <span className="text-xs font-bold text-slate-300">
                         {uploadingAvatarFile ? 'Uploading and saving image...' : 'Choose Avatar Image File'}
                       </span>
-                      <span className="text-[10px] text-slate-500 mt-0.5 font-mono">PNG, JPG, JPEG (Max 5MB)</span>
+                      <span className="text-[10px] text-slate-500 mt-0.5 font-mono">PNG, JPG, JPEG (Max 5MB) - Processed & saved automatically</span>
                     </label>
                   </div>
 
@@ -3002,6 +3016,22 @@ export function SettingsPanel() {
                         Add URL
                       </button>
                     </div>
+                  </div>
+
+                  {/* Explicit Save Button */}
+                  <div className="pt-3 flex items-center justify-between border-t border-slate-800/60">
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {avatarsList.length} avatar(s) saved in system database
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveAvatarsList(avatarsList)}
+                      disabled={savingAvatars || uploadingAvatarFile}
+                      className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md active:scale-95"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{savingAvatars ? 'Saving Changes...' : 'Save All Avatars List'}</span>
+                    </button>
                   </div>
                 </div>
               </div>

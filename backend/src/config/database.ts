@@ -269,7 +269,7 @@ async function syncFromMongoToSQLite() {
               if (isMongoEmpty && isLocalFilled) {
                 doc[k] = localVal;
                 docIsMerged = true;
-              } else if (k === 'manual_followers_count' || k === 'manual_busy') {
+              } else if (table === 'admin_settings' || k === 'manual_followers_count' || k === 'manual_busy') {
                 if (localVal !== undefined && localVal !== null && localVal !== doc[k]) {
                   doc[k] = localVal;
                   docIsMerged = true;
