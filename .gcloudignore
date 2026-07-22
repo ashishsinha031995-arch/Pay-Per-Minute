@@ -8,8 +8,8 @@ node_modules/
 **/node_modules/
 
 # Ignore local builds - Cloud Build will run its own build
-# dist/
-# **/dist/
+dist/
+**/dist/
 
 # Ignore active/locked SQLite databases and journal files to avoid file corruption during archive packaging
 *.sqlite*

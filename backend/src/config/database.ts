@@ -21,8 +21,23 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(sourceDbPath) && !fs.
 
 const originalDb = new Database(targetDbPath);
 
-// Enable WAL mode for performance
+// Enable WAL mode and autocheckpoint for performance and small file footprint
 originalDb.pragma('journal_mode = WAL');
+originalDb.pragma('wal_autocheckpoint = 100');
+
+// Periodically truncate WAL and vacuum database if freelist grows
+setInterval(() => {
+  try {
+    originalDb.pragma('wal_checkpoint(TRUNCATE)');
+    const freeRes = originalDb.prepare('PRAGMA freelist_count').get() as { freelist_count: number } | undefined;
+    if (freeRes && freeRes.freelist_count > 100) {
+      originalDb.exec('VACUUM;');
+      originalDb.pragma('wal_checkpoint(TRUNCATE)');
+    }
+  } catch (e) {
+    // ignore
+  }
+}, 2 * 60 * 1000);
 
 // Global synchronization and seeding flags to handle restart merges safely and prevent high server load
 let isSyncing = false;
@@ -99,9 +114,15 @@ async function syncRowidToMongo(tableName: string, rowid: number, primaryKey: st
     if (!Model) return;
 
     const pkValue = row[primaryKey];
-    const query = { _id: pkValue };
+    const query = {
+      $or: [
+        { _id: pkValue },
+        { _id: String(pkValue) },
+        { _id: Number(pkValue) }
+      ].filter(q => q._id !== undefined && q._id !== null && !isNaN(Number(q._id) || 0))
+    };
 
-    await Model.updateOne(query, { $set: row }, { upsert: true });
+    await Model.updateMany(query, { $set: row }, { upsert: true });
   } catch (err) {
     console.error(`[MongoDB Sync] Error syncing rowid ${rowid} for table ${tableName}:`, err);
   }
@@ -117,8 +138,14 @@ export async function syncIdsToMongo(tableName: string, ids: any[], primaryKey: 
       const row = originalDb.prepare(`SELECT * FROM ${tableName} WHERE ${primaryKey} = ?`).get(id) as any;
       if (row) {
         const pkValue = row[primaryKey];
-        const query = { _id: pkValue };
-        await Model.updateOne(query, { $set: row }, { upsert: true });
+        const query = {
+          $or: [
+            { _id: pkValue },
+            { _id: String(pkValue) },
+            { _id: Number(pkValue) }
+          ].filter(q => q._id !== undefined && q._id !== null)
+        };
+        await Model.updateMany(query, { $set: row }, { upsert: true });
       }
     }
   } catch (err) {
@@ -132,7 +159,8 @@ async function deleteIdsFromMongo(tableName: string, ids: any[], primaryKey: str
     const Model = mongoModels[tableName];
     if (!Model) return;
 
-    await Model.deleteMany({ _id: { $in: ids } });
+    const allIds = ids.flatMap(id => [id, String(id), Number(id)]).filter(x => x !== undefined && x !== null);
+    await Model.deleteMany({ _id: { $in: allIds } });
   } catch (err) {
     console.error(`[MongoDB Sync] Error deleting IDs for table ${tableName}:`, err);
   }
@@ -224,11 +252,11 @@ async function syncFromMongoToSQLite() {
           console.error(`[MongoDB Sync] Error identifying missing rows for table '${table}' before sync:`, e);
         }
 
-        // Merge existing SQLite data to prevent losing updates (e.g., bio, bank, KYC details, wallet balances)
+        // Merge existing SQLite data to prevent losing updates (e.g., bio, bank, KYC details, wallet balances, manual followers)
         const docsToSaveToMongo: any[] = [];
         for (const doc of docs) {
           const pkVal = String(doc._id || doc[primaryKey]);
-          const localRow = sqliteRowMap.get(pkVal);
+          const localRow = sqliteRowMap.get(pkVal) || (doc[primaryKey] !== undefined ? sqliteRowMap.get(String(doc[primaryKey])) : undefined);
           if (localRow) {
             let docIsMerged = false;
             for (const k of allKeys) {
@@ -238,8 +266,15 @@ async function syncFromMongoToSQLite() {
               const isMongoEmpty = mongoVal === undefined || mongoVal === null || mongoVal === '';
               const isLocalFilled = localVal !== undefined && localVal !== null && localVal !== '';
 
-              // If MongoDB value is empty and SQLite is filled, merge it
               if (isMongoEmpty && isLocalFilled) {
+                doc[k] = localVal;
+                docIsMerged = true;
+              } else if (k === 'manual_followers_count' || k === 'manual_busy') {
+                if (localVal !== undefined && localVal !== null && localVal !== doc[k]) {
+                  doc[k] = localVal;
+                  docIsMerged = true;
+                }
+              } else if (typeof localVal === 'number' && typeof mongoVal === 'number' && localVal > mongoVal) {
                 doc[k] = localVal;
                 docIsMerged = true;
               }
@@ -393,6 +428,11 @@ function archiveRowState(tableName: string, ids: any[], primaryKey: string, acti
         const rowid = result.lastInsertRowid;
         if (rowid) {
           syncRowidToMongo('archived_history', Number(rowid), 'id');
+        }
+
+        // Keep archived_history bounded to prevent SQLite bloat
+        if (Math.random() < 0.05) {
+          originalDb.prepare('DELETE FROM archived_history WHERE id NOT IN (SELECT id FROM archived_history ORDER BY id DESC LIMIT 100)').run();
         }
       }
     }

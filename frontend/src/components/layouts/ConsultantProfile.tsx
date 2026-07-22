@@ -4352,7 +4352,11 @@ export function ConsultantProfile({ onSelectSession, targetUsername, onClearTarg
                                 </div>
                               </div>
                               <p className={`text-xs ${theme === 'dark' ? 'text-white' : 'text-sky-500'} leading-relaxed italic pl-9`}>
-                                {rev.text || 'Excellent consultation session. Very satisfied!'}
+                                {rev.text && rev.text.trim() ? (
+                                  rev.text
+                                ) : (
+                                  <span className="not-italic text-slate-400 opacity-70">(No written comment)</span>
+                                )}
                               </p>
                             </div>
                           ));
